@@ -10,13 +10,12 @@
 #include "dsr-opt.h"
 #include "dsr.h"
 
-char *
-dsr_pkt_alloc_opts(struct dsr_pkt *dp, int len)
+char *dsr_pkt_alloc_opts(struct dsr_pkt *dp, int len)
 {
 	if (!dp && len)
 		return NULL;
 
-	dp->dsr_opts = (char *) MALLOC(len + DEFAULT_TAILROOM, GFP_ATOMIC);
+	dp->dsr_opts = (char *)MALLOC(len + DEFAULT_TAILROOM, GFP_ATOMIC);
 
 	if (!dp->dsr_opts)
 		return NULL;
@@ -27,8 +26,7 @@ dsr_pkt_alloc_opts(struct dsr_pkt *dp, int len)
 	return dp->dsr_opts;
 }
 
-char *
-dsr_pkt_alloc_opts_expand(struct dsr_pkt *dp, int len)
+char *dsr_pkt_alloc_opts_expand(struct dsr_pkt *dp, int len)
 {
 	char *tmp;
 	int old_len;
@@ -55,8 +53,7 @@ dsr_pkt_alloc_opts_expand(struct dsr_pkt *dp, int len)
 	return (dp->dsr_opts + old_len);
 }
 
-int
-dsr_pkt_free_opts(struct dsr_pkt *dp)
+int dsr_pkt_free_opts(struct dsr_pkt *dp)
 {
 	int len;
 
@@ -70,28 +67,27 @@ dsr_pkt_free_opts(struct dsr_pkt *dp)
 	dp->dh.raw = dp->dsr_opts = dp->end = dp->tail = NULL;
 	dp->srt_opt = NULL;
 	dp->rreq_opt = NULL;
-	memset(dp->rrep_opt, 0, sizeof (struct dsr_rrep_opt *) * MAX_RREP_OPTS);
-	memset(dp->rerr_opt, 0, sizeof (struct dsr_rerr_opt *) * MAX_RERR_OPTS);
-	memset(dp->ack_opt, 0, sizeof (struct dsr_ack_opt *) * MAX_ACK_OPTS);
+	memset(dp->rrep_opt, 0, sizeof(struct dsr_rrep_opt *) * MAX_RREP_OPTS);
+	memset(dp->rerr_opt, 0, sizeof(struct dsr_rerr_opt *) * MAX_RERR_OPTS);
+	memset(dp->ack_opt, 0, sizeof(struct dsr_ack_opt *) * MAX_ACK_OPTS);
 	dp->num_rrep_opts = dp->num_rerr_opts = dp->num_ack_opts = 0;
 
 	return len;
 }
 
 #ifdef NS2
-struct dsr_pkt *
-dsr_pkt_alloc(Packet * p)
+struct dsr_pkt *dsr_pkt_alloc(Packet * p)
 {
 	struct dsr_pkt *dp;
 	struct hdr_cmn *cmh;
 	int dsr_opts_len = 0;
 
-	dp = (struct dsr_pkt *) MALLOC(sizeof (struct dsr_pkt), GFP_ATOMIC);
+	dp = (struct dsr_pkt *)MALLOC(sizeof(struct dsr_pkt), GFP_ATOMIC);
 
 	if (!dp)
 		return NULL;
 
-	memset(dp, 0, sizeof (struct dsr_pkt));
+	memset(dp, 0, sizeof(struct dsr_pkt));
 
 	if (p) {
 		cmh = hdr_cmn::access(p);
@@ -133,18 +129,17 @@ dsr_pkt_alloc(Packet * p)
 
 #else
 
-struct dsr_pkt *
-dsr_pkt_alloc(struct sk_buff *skb)
+struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb)
 {
 	struct dsr_pkt *dp;
 	int dsr_opts_len = 0;
 
-	dp = (struct dsr_pkt *) MALLOC(sizeof (struct dsr_pkt), GFP_ATOMIC);
+	dp = (struct dsr_pkt *)MALLOC(sizeof(struct dsr_pkt), GFP_ATOMIC);
 
 	if (!dp)
 		return NULL;
 
-	memset(dp, 0, sizeof (struct dsr_pkt));
+	memset(dp, 0, sizeof(struct dsr_pkt));
 
 	if (skb) {
 		dp->skb = skb;
@@ -183,8 +178,7 @@ dsr_pkt_alloc(struct sk_buff *skb)
 
 #endif
 
-void
-dsr_pkt_free(struct dsr_pkt *dp)
+void dsr_pkt_free(struct dsr_pkt *dp)
 {
 
 	if (!dp)

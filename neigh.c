@@ -54,18 +54,17 @@ struct neighbor_query {
 	struct neighbor_info *info;
 };
 
-static inline int
-crit_addr(void *pos, void *query)
+static inline int crit_addr(void *pos, void *query)
 {
-	struct neighbor_query *q = (struct neighbor_query *) query;
-	struct neighbor *n = (struct neighbor *) pos;
+	struct neighbor_query *q = (struct neighbor_query *)query;
+	struct neighbor *n = (struct neighbor *)pos;
 
 	if (n->addr.s_addr == q->addr->s_addr) {
 		if (q->info) {
 			q->info->id = n->id;
 			q->info->last_ack_req = n->last_ack_req;
 			memcpy(&q->info->hw_addr, &n->hw_addr,
-			       sizeof (struct sockaddr));
+			       sizeof(struct sockaddr));
 
 			/* TODO: Calculate RTO */
 			q->info->rto = n->t_rtt;
@@ -75,11 +74,10 @@ crit_addr(void *pos, void *query)
 	return 0;
 }
 
-static inline int
-crit_addr_id_inc(void *pos, void *addr)
+static inline int crit_addr_id_inc(void *pos, void *addr)
 {
-	struct in_addr *a = (struct in_addr *) addr;
-	struct neighbor *n = (struct neighbor *) pos;
+	struct in_addr *a = (struct in_addr *)addr;
+	struct neighbor *n = (struct neighbor *)pos;
 
 	if (n->addr.s_addr == a->s_addr) {
 		n->id++;
@@ -89,8 +87,7 @@ crit_addr_id_inc(void *pos, void *addr)
 	return 0;
 }
 
-void NSCLASS
-neigh_tbl_garbage_timeout(unsigned long data)
+void NSCLASS neigh_tbl_garbage_timeout(unsigned long data)
 {
 	/* tbl_for_each_del(&neigh_tbl, NULL, crit_garbage); */
 
@@ -101,19 +98,18 @@ neigh_tbl_garbage_timeout(unsigned long data)
 	/* } */
 }
 
-static struct neighbor *
-neigh_tbl_create(struct in_addr addr,
-		 struct sockaddr *hw_addr, unsigned short id)
+static struct neighbor *neigh_tbl_create(struct in_addr addr,
+					 struct sockaddr *hw_addr,
+					 unsigned short id)
 {
 	struct neighbor *neigh;
 
-	neigh =
-	    (struct neighbor *) MALLOC(sizeof (struct neighbor), GFP_ATOMIC);
+	neigh = (struct neighbor *)MALLOC(sizeof(struct neighbor), GFP_ATOMIC);
 
 	if (!neigh)
 		return NULL;
 
-	memset(neigh, 0, sizeof (struct neighbor));
+	memset(neigh, 0, sizeof(struct neighbor));
 
 	neigh->id = id;
 	neigh->addr = addr;
@@ -122,7 +118,7 @@ neigh_tbl_create(struct in_addr addr,
 	neigh->t_rttmin = DSRTV_MIN;
 	neigh->t_rtt = RTT_DEF;
 	gettime(&neigh->last_ack_req);
-	memcpy(&neigh->hw_addr, hw_addr, sizeof (struct sockaddr));
+	memcpy(&neigh->hw_addr, hw_addr, sizeof(struct sockaddr));
 
 /* 	garbage_timer.expires = TimeNow + NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT / 1000*HZ; */
 /* 	add_timer(&garbage_timer); */
@@ -131,11 +127,9 @@ neigh_tbl_create(struct in_addr addr,
 }
 
 #ifdef NS2
-int NSCLASS
-neigh_tbl_add(struct in_addr neigh_addr, struct hdr_mac *mach)
+int NSCLASS neigh_tbl_add(struct in_addr neigh_addr, struct hdr_mac *mach)
 #else
-int NSCLASS
-neigh_tbl_add(struct in_addr neigh_addr, struct ethhdr *ethh)
+int NSCLASS neigh_tbl_add(struct in_addr neigh_addr, struct ethhdr *ethh)
 #endif
 {
 	struct sockaddr hw_addr;
@@ -152,11 +146,11 @@ neigh_tbl_add(struct in_addr neigh_addr, struct ethhdr *ethh)
 	 * dynamically in case the simulation is run over a non 802.11
 	 * mac layer... Or is there a uniform way to get hold of the mac
 	 * source for all mac headers? */
-	struct hdr_mac802_11 *mh_802_11 = (struct hdr_mac802_11 *) mach;
+	struct hdr_mac802_11 *mh_802_11 = (struct hdr_mac802_11 *)mach;
 
 	int mac_src = ETHER_ADDR(mh_802_11->dh_ta);
 
-	inttoeth(&mac_src, (char *) &hw_addr);
+	inttoeth(&mac_src, (char *)&hw_addr);
 #else
 	memcpy(hw_addr.sa_data, ethh->h_source, ETH_ALEN);
 #endif
@@ -172,8 +166,7 @@ neigh_tbl_add(struct in_addr neigh_addr, struct ethhdr *ethh)
 	return 1;
 }
 
-int NSCLASS
-neigh_tbl_del(struct in_addr neigh_addr)
+int NSCLASS neigh_tbl_del(struct in_addr neigh_addr)
 {
 	return tbl_for_each_del(&neigh_tbl, &neigh_addr, crit_addr);
 }
@@ -213,15 +206,13 @@ neigh_tbl_query(struct in_addr neigh_addr, struct neighbor_info *neigh_info)
 	return in_tbl(&neigh_tbl, &q, crit_addr);
 }
 
-int NSCLASS
-neigh_tbl_id_inc(struct in_addr neigh_addr)
+int NSCLASS neigh_tbl_id_inc(struct in_addr neigh_addr)
 {
 	return in_tbl(&neigh_tbl, &neigh_addr, crit_addr_id_inc);
 }
 
 #ifdef __KERNEL__
-static int
-neigh_tbl_print(char *buf)
+static int neigh_tbl_print(char *buf)
 {
 	list_t *pos;
 	int len = 0;
@@ -233,7 +224,7 @@ neigh_tbl_print(char *buf)
 		    "RTT (usec)", "Id" /*, "AckRxTime","AckTxTime" */ );
 
 	list_for_each(pos, &neigh_tbl.head) {
-		struct neighbor *neigh = (struct neighbor *) pos;
+		struct neighbor *neigh = (struct neighbor *)pos;
 
 		len += sprintf(buf + len, "  %-15s %-17s %-10lu %-6u\n",
 			       print_ip(neigh->addr),
@@ -264,8 +255,7 @@ neigh_tbl_proc_info(char *buffer, char **start, off_t offset, int length)
 
 #endif				/* __KERNEL__ */
 
-int __init NSCLASS
-neigh_tbl_init(void)
+int __init NSCLASS neigh_tbl_init(void)
 {
 	INIT_TBL(&neigh_tbl, NEIGH_TBL_MAX_LEN);
 
@@ -279,8 +269,7 @@ neigh_tbl_init(void)
 	return 0;
 }
 
-void __exit NSCLASS
-neigh_tbl_cleanup(void)
+void __exit NSCLASS neigh_tbl_cleanup(void)
 {
 	tbl_flush(&neigh_tbl, crit_none);
 

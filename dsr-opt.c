@@ -15,15 +15,14 @@
 #include "dsr-srt.h"
 #include "dsr-ack.h"
 
-struct dsr_opt_hdr *
-dsr_opt_hdr_add(char *buf, int len, unsigned int protocol)
+struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, int len, unsigned int protocol)
 {
 	struct dsr_opt_hdr *opt_hdr;
 
 	if (len < DSR_OPT_HDR_LEN)
 		return NULL;
 
-	opt_hdr = (struct dsr_opt_hdr *) buf;
+	opt_hdr = (struct dsr_opt_hdr *)buf;
 
 	opt_hdr->nh = protocol;
 	opt_hdr->f = 0;
@@ -34,13 +33,13 @@ dsr_opt_hdr_add(char *buf, int len, unsigned int protocol)
 }
 
 #ifdef __KERNEL__
-struct iphdr *
-dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, struct in_addr dst,
-	     int ip_len, int tot_len, int protocol, int ttl)
+struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src,
+			   struct in_addr dst, int ip_len, int tot_len,
+			   int protocol, int ttl)
 {
 	struct iphdr *iph;
 
-	dp->nh.iph = iph = (struct iphdr *) dp->ip_data;
+	dp->nh.iph = iph = (struct iphdr *)dp->ip_data;
 
 	iph->version = IPVERSION;
 	iph->ihl = (ip_len >> 2);
@@ -59,8 +58,7 @@ dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, struct in_addr dst,
 }
 #endif
 
-struct dsr_opt *
-dsr_opt_find_opt(struct dsr_pkt *dp, int type)
+struct dsr_opt *dsr_opt_find_opt(struct dsr_pkt *dp, int type)
 {
 	int dsr_len, l;
 	struct dsr_opt *dopt;
@@ -80,8 +78,7 @@ dsr_opt_find_opt(struct dsr_pkt *dp, int type)
 	return NULL;
 }
 
-int NSCLASS
-dsr_opts_remove(struct dsr_pkt *dp)
+int NSCLASS dsr_opts_remove(struct dsr_pkt *dp)
 {
 	int len, ip_len, prot, ttl;
 
@@ -105,8 +102,7 @@ dsr_opts_remove(struct dsr_pkt *dp)
 	return len;
 }
 
-int NSCLASS
-dsr_opt_recv(struct dsr_pkt *dp)
+int NSCLASS dsr_opt_recv(struct dsr_pkt *dp)
 {
 	int dsr_len, l;
 	int action = 0;
@@ -150,16 +146,16 @@ dsr_opt_recv(struct dsr_pkt *dp)
 				DEBUG("More than one RREQ opt!!! - Ignoring\n");
 				return DSR_PKT_ERROR;
 			}
-			dp->rreq_opt = (struct dsr_rreq_opt *) dopt;
+			dp->rreq_opt = (struct dsr_rreq_opt *)dopt;
 			action |=
-			    dsr_rreq_opt_recv(dp, (struct dsr_rreq_opt *) dopt);
+			    dsr_rreq_opt_recv(dp, (struct dsr_rreq_opt *)dopt);
 			break;
 		case DSR_OPT_RREP:
 			if (dp->flags & PKT_PROMISC_RECV)
 				break;
 			if (dp->num_rrep_opts < MAX_RREP_OPTS) {
 				dp->rrep_opt[dp->num_rrep_opts++] =
-				    (struct dsr_rrep_opt *) dopt;
+				    (struct dsr_rrep_opt *)dopt;
 				action |=
 				    dsr_rrep_opt_recv(dp,
 						      (struct dsr_rrep_opt *)
@@ -171,7 +167,7 @@ dsr_opt_recv(struct dsr_pkt *dp)
 				break;
 			if (dp->num_rerr_opts < MAX_RERR_OPTS) {
 				dp->rerr_opt[dp->num_rerr_opts++] =
-				    (struct dsr_rerr_opt *) dopt;
+				    (struct dsr_rerr_opt *)dopt;
 				action |=
 				    dsr_rerr_opt_recv((struct dsr_rerr_opt *)
 						      dopt);
@@ -186,14 +182,14 @@ dsr_opt_recv(struct dsr_pkt *dp)
 
 			if (dp->num_ack_opts < MAX_ACK_OPTS) {
 				dp->ack_opt[dp->num_ack_opts++] =
-				    (struct dsr_ack_opt *) dopt;
+				    (struct dsr_ack_opt *)dopt;
 				action |=
 				    dsr_ack_opt_recv((struct dsr_ack_opt *)
 						     dopt);
 			}
 			break;
 		case DSR_OPT_SRT:
-			dp->srt_opt = (struct dsr_srt_opt *) dopt;
+			dp->srt_opt = (struct dsr_srt_opt *)dopt;
 			action |= dsr_srt_opt_recv(dp);
 			break;
 		case DSR_OPT_TIMEOUT:
@@ -202,8 +198,7 @@ dsr_opt_recv(struct dsr_pkt *dp)
 			break;
 		case DSR_OPT_ACK_REQ:
 			action |=
-			    dsr_ack_req_opt_recv(dp,
-						 (struct dsr_ack_req_opt *)
+			    dsr_ack_req_opt_recv(dp, (struct dsr_ack_req_opt *)
 						 dopt);
 			break;
 		case DSR_OPT_PAD1:

@@ -56,28 +56,26 @@ struct rreq_tbl_query {
 	unsigned int *id;
 };
 
-static inline int
-crit_addr(void *pos, void *data)
+static inline int crit_addr(void *pos, void *data)
 {
-	struct rreq_tbl_entry *e = (struct rreq_tbl_entry *) pos;
-	struct in_addr *a = (struct in_addr *) data;
+	struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)pos;
+	struct in_addr *a = (struct in_addr *)data;
 
 	if (e->node_addr.s_addr == a->s_addr)
 		return 1;
 	return 0;
 }
 
-static inline int
-crit_duplicate(void *pos, void *data)
+static inline int crit_duplicate(void *pos, void *data)
 {
-	struct rreq_tbl_entry *e = (struct rreq_tbl_entry *) pos;
-	struct rreq_tbl_query *q = (struct rreq_tbl_query *) data;
+	struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)pos;
+	struct rreq_tbl_query *q = (struct rreq_tbl_query *)data;
 
 	if (e->node_addr.s_addr == q->initiator->s_addr) {
 		list_t *p;
 
 		list_for_each(p, &e->rreq_id_tbl.head) {
-			struct id_entry *id_e = (struct id_entry *) p;
+			struct id_entry *id_e = (struct id_entry *)p;
 
 			if (id_e->trg_addr.s_addr == q->target->s_addr &&
 			    id_e->id == *(q->id))
@@ -87,14 +85,12 @@ crit_duplicate(void *pos, void *data)
 	return 0;
 }
 
-void NSCLASS
-rreq_tbl_set_max_len(unsigned int max_len)
+void NSCLASS rreq_tbl_set_max_len(unsigned int max_len)
 {
 	rreq_tbl.max_len = max_len;
 }
 
-static int
-rreq_tbl_print(struct tbl *t, char *buf)
+static int rreq_tbl_print(struct tbl *t, char *buf)
 {
 	list_t *pos1, *pos2;
 	int len = 0;
@@ -110,7 +106,7 @@ rreq_tbl_print(struct tbl *t, char *buf)
 		    "TargetIPAddr", "ID");
 
 	list_for_each(pos1, &t->head) {
-		struct rreq_tbl_entry *e = (struct rreq_tbl_entry *) pos1;
+		struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)pos1;
 		struct id_entry *id_e;
 
 		if (TBL_EMPTY(&e->rreq_id_tbl))
@@ -120,7 +116,7 @@ rreq_tbl_print(struct tbl *t, char *buf)
 				    timeval_diff(&now, &e->last_used) / 1000000,
 				    "-", "-");
 		else {
-			id_e = (struct id_entry *) TBL_FIRST(&e->rreq_id_tbl);
+			id_e = (struct id_entry *)TBL_FIRST(&e->rreq_id_tbl);
 			len +=
 			    sprintf(buf + len, "  %-15s %-6u %-8lu %15s:%u\n",
 				    print_ip(e->node_addr), e->ttl,
@@ -128,7 +124,7 @@ rreq_tbl_print(struct tbl *t, char *buf)
 				    print_ip(id_e->trg_addr), id_e->id);
 		}
 		list_for_each(pos2, &e->rreq_id_tbl.head) {
-			id_e = (struct id_entry *) pos2;
+			id_e = (struct id_entry *)pos2;
 			if (!first)
 				len +=
 				    sprintf(buf + len, "%49s:%u\n",
@@ -142,10 +138,9 @@ rreq_tbl_print(struct tbl *t, char *buf)
 
 }
 
-void NSCLASS
-rreq_tbl_timeout(unsigned long data)
+void NSCLASS rreq_tbl_timeout(unsigned long data)
 {
-	struct rreq_tbl_entry *e = (struct rreq_tbl_entry *) data;
+	struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)data;
 	struct timeval expires;
 
 	if (!e)
@@ -194,13 +189,12 @@ rreq_tbl_timeout(unsigned long data)
 	set_timer(e->timer, &expires);
 }
 
-struct rreq_tbl_entry *NSCLASS
-__rreq_tbl_entry_create(struct in_addr node_addr)
+struct rreq_tbl_entry *NSCLASS __rreq_tbl_entry_create(struct in_addr node_addr)
 {
 	struct rreq_tbl_entry *e;
 
-	e = (struct rreq_tbl_entry *) MALLOC(sizeof (struct rreq_tbl_entry),
-					     GFP_ATOMIC);
+	e = (struct rreq_tbl_entry *)MALLOC(sizeof(struct rreq_tbl_entry),
+					    GFP_ATOMIC);
 
 	if (!e)
 		return NULL;
@@ -208,12 +202,12 @@ __rreq_tbl_entry_create(struct in_addr node_addr)
 	e->state = STATE_IDLE;
 	e->node_addr = node_addr;
 	e->ttl = 0;
-	memset(&e->tx_time, 0, sizeof (struct timeval));;
+	memset(&e->tx_time, 0, sizeof(struct timeval));;
 	e->num_rexmts = 0;
 #ifdef NS2
 	e->timer = new DSRUUTimer(this, "RREQTblTimer");
 #else
-	e->timer = MALLOC(sizeof (DSRUUTimer), GFP_ATOMIC);
+	e->timer = MALLOC(sizeof(DSRUUTimer), GFP_ATOMIC);
 #endif
 
 	if (!e->timer) {
@@ -224,15 +218,14 @@ __rreq_tbl_entry_create(struct in_addr node_addr)
 	init_timer(e->timer);
 
 	e->timer->function = &NSCLASS rreq_tbl_timeout;
-	e->timer->data = (unsigned long) e;
+	e->timer->data = (unsigned long)e;
 
 	INIT_TBL(&e->rreq_id_tbl, ConfVal(RequestTableIds));
 
 	return e;
 }
 
-struct rreq_tbl_entry *NSCLASS
-__rreq_tbl_add(struct in_addr node_addr)
+struct rreq_tbl_entry *NSCLASS __rreq_tbl_add(struct in_addr node_addr)
 {
 	struct rreq_tbl_entry *e;
 
@@ -244,7 +237,7 @@ __rreq_tbl_add(struct in_addr node_addr)
 	if (TBL_FULL(&rreq_tbl)) {
 		struct rreq_tbl_entry *f;
 
-		f = (struct rreq_tbl_entry *) TBL_FIRST(&rreq_tbl);
+		f = (struct rreq_tbl_entry *)TBL_FIRST(&rreq_tbl);
 
 		__tbl_detach(&rreq_tbl, &f->l);
 
@@ -273,8 +266,8 @@ rreq_tbl_add_id(struct in_addr initiator, struct in_addr target,
 
 	DSR_WRITE_LOCK(&rreq_tbl);
 
-	e = (struct rreq_tbl_entry *) __tbl_find(&rreq_tbl, &initiator,
-						 crit_addr);
+	e = (struct rreq_tbl_entry *)__tbl_find(&rreq_tbl, &initiator,
+						crit_addr);
 
 	if (!e)
 		e = __rreq_tbl_add(initiator);
@@ -294,7 +287,7 @@ rreq_tbl_add_id(struct in_addr initiator, struct in_addr target,
 	if (TBL_FULL(&e->rreq_id_tbl))
 		tbl_del_first(&e->rreq_id_tbl);
 
-	id_e = (struct id_entry *) MALLOC(sizeof (struct id_entry), GFP_ATOMIC);
+	id_e = (struct id_entry *)MALLOC(sizeof(struct id_entry), GFP_ATOMIC);
 
 	if (!id_e) {
 		res = -ENOMEM;
@@ -311,15 +304,14 @@ rreq_tbl_add_id(struct in_addr initiator, struct in_addr target,
 	return 1;
 }
 
-int NSCLASS
-rreq_tbl_route_discovery_cancel(struct in_addr dst)
+int NSCLASS rreq_tbl_route_discovery_cancel(struct in_addr dst)
 {
 	struct rreq_tbl_entry *e;
 
 /* 	DSR_WRITE_LOCK(&rreq_tbl); */
 
-	e = (struct rreq_tbl_entry *) tbl_find_detach(&rreq_tbl, &dst,
-						      crit_addr);
+	e = (struct rreq_tbl_entry *)tbl_find_detach(&rreq_tbl, &dst,
+						     crit_addr);
 
 	if (!e) {
 		DEBUG("%s not in RREQ table\n", print_ip(dst));
@@ -339,8 +331,7 @@ rreq_tbl_route_discovery_cancel(struct in_addr dst)
 
 	return 1;
 }
-int NSCLASS
-dsr_rreq_route_discovery(struct in_addr target)
+int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
 {
 	struct rreq_tbl_entry *e;
 	int ttl, res = 0;
@@ -351,7 +342,7 @@ dsr_rreq_route_discovery(struct in_addr target)
 
 	DSR_WRITE_LOCK(&rreq_tbl);
 
-	e = (struct rreq_tbl_entry *) __tbl_find(&rreq_tbl, &target, crit_addr);
+	e = (struct rreq_tbl_entry *)__tbl_find(&rreq_tbl, &target, crit_addr);
 
 	if (!e)
 		e = __rreq_tbl_add(target);
@@ -420,15 +411,16 @@ dsr_rreq_duplicate(struct in_addr initiator, struct in_addr target,
 	return in_tbl(&rreq_tbl, &d, crit_duplicate);
 }
 
-static struct dsr_rreq_opt *
-dsr_rreq_opt_add(char *buf, int len, struct in_addr target, unsigned int seqno)
+static struct dsr_rreq_opt *dsr_rreq_opt_add(char *buf, int len,
+					     struct in_addr target,
+					     unsigned int seqno)
 {
 	struct dsr_rreq_opt *rreq_opt;
 
 	if (!buf || len < DSR_RREQ_HDR_LEN)
 		return NULL;
 
-	rreq_opt = (struct dsr_rreq_opt *) buf;
+	rreq_opt = (struct dsr_rreq_opt *)buf;
 
 	rreq_opt->type = DSR_OPT_RREQ;
 	rreq_opt->length = 6;
@@ -438,8 +430,7 @@ dsr_rreq_opt_add(char *buf, int len, struct in_addr target, unsigned int seqno)
 	return rreq_opt;
 }
 
-int NSCLASS
-dsr_rreq_send(struct in_addr target, int ttl)
+int NSCLASS dsr_rreq_send(struct in_addr target, int ttl)
 {
 	struct dsr_pkt *dp;
 	char *buf;
@@ -503,8 +494,7 @@ dsr_rreq_send(struct in_addr target, int ttl)
 	return -1;
 }
 
-int NSCLASS
-dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
+int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 {
 	struct in_addr myaddr;
 	struct in_addr trg;
@@ -529,7 +519,7 @@ dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 	rreq_tbl_add_id(dp->src, trg, ntohs(rreq_opt->id));
 
 	dp->srt = dsr_srt_new(dp->src, myaddr, DSR_RREQ_ADDRS_LEN(rreq_opt),
-			      (char *) rreq_opt->addrs);
+			      (char *)rreq_opt->addrs);
 
 	if (!dp->srt) {
 		DEBUG("Could not extract source route\n");
@@ -580,7 +570,7 @@ dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		int i, n;
 		struct in_addr myaddr = my_addr();
 
-		n = DSR_RREQ_ADDRS_LEN(rreq_opt) / sizeof (struct in_addr);
+		n = DSR_RREQ_ADDRS_LEN(rreq_opt) / sizeof(struct in_addr);
 
 		/* Examine source route if this node already exists in it */
 		for (i = 0; i < n; i++)
@@ -589,25 +579,25 @@ dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 				goto out;
 			}
 
-		dsr_pkt_alloc_opts_expand(dp, sizeof (struct in_addr));
+		dsr_pkt_alloc_opts_expand(dp, sizeof(struct in_addr));
 
 		if (!DSR_LAST_OPT(dp, rreq_opt)) {
 			char *to, *from;
-			to = (char *) rreq_opt + rreq_opt->length + 2 +
-			    sizeof (struct in_addr);
-			from = (char *) rreq_opt + rreq_opt->length + 2;
+			to = (char *)rreq_opt + rreq_opt->length + 2 +
+			    sizeof(struct in_addr);
+			from = (char *)rreq_opt + rreq_opt->length + 2;
 
-			memmove(to, from, sizeof (struct in_addr));
+			memmove(to, from, sizeof(struct in_addr));
 		}
 		rreq_opt->addrs[n] = myaddr.s_addr;
-		rreq_opt->length += sizeof (struct in_addr);
+		rreq_opt->length += sizeof(struct in_addr);
 
 		dp->dh.opth->p_len = htons(ntohs(dp->dh.opth->p_len) +
-					   sizeof (struct in_addr));
+					   sizeof(struct in_addr));
 #ifdef __KERNEL__
 		dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN,
 			     ntohs(dp->nh.iph->tot_len) +
-			     sizeof (struct in_addr), IPPROTO_DSR,
+			     sizeof(struct in_addr), IPPROTO_DSR,
 			     dp->nh.iph->ttl);
 #endif
 		/* Forward RREQ */
@@ -638,26 +628,24 @@ rreq_tbl_proc_info(char *buffer, char **start, off_t offset, int length)
 
 #endif				/* __KERNEL__ */
 
-int __init NSCLASS
-rreq_tbl_init(void)
+int __init NSCLASS rreq_tbl_init(void)
 {
 	INIT_TBL(&rreq_tbl, RREQ_TBL_MAX_LEN);
 
 #ifdef __KERNEL__
 	proc_net_create(RREQ_TBL_PROC_NAME, 0, rreq_tbl_proc_info);
-	get_random_bytes(&rreq_seqno, sizeof (unsigned int));
+	get_random_bytes(&rreq_seqno, sizeof(unsigned int));
 #else
 	rreq_seqno = 0;
 #endif
 	return 0;
 }
 
-void __exit NSCLASS
-rreq_tbl_cleanup(void)
+void __exit NSCLASS rreq_tbl_cleanup(void)
 {
 	struct rreq_tbl_entry *e;
 
-	while ((e = (struct rreq_tbl_entry *) tbl_detach_first(&rreq_tbl))) {
+	while ((e = (struct rreq_tbl_entry *)tbl_detach_first(&rreq_tbl))) {
 		del_timer_sync(e->timer);
 #ifdef NS2
 		delete e->timer;

@@ -37,25 +37,23 @@ struct send_buf_entry {
 
 static int send_buf_print(struct tbl *t, char *buffer);
 
-static inline int
-crit_addr(void *pos, void *addr)
+static inline int crit_addr(void *pos, void *addr)
 {
-	struct in_addr *a = (struct in_addr *) addr;
-	struct send_buf_entry *e = (struct send_buf_entry *) pos;
+	struct in_addr *a = (struct in_addr *)addr;
+	struct send_buf_entry *e = (struct send_buf_entry *)pos;
 
 	if (e->dp->dst.s_addr == a->s_addr)
 		return 1;
 	return 0;
 }
 
-static inline int
-crit_garbage(void *pos, void *n)
+static inline int crit_garbage(void *pos, void *n)
 {
-	struct timeval *now = (struct timeval *) n;
-	struct send_buf_entry *e = (struct send_buf_entry *) pos;
+	struct timeval *now = (struct timeval *)n;
+	struct send_buf_entry *e = (struct send_buf_entry *)pos;
 
 	if (timeval_diff(now, &e->qtime) >=
-	    (int) ConfValToUsecs(SendBufferTimeout) - 1000) {
+	    (int)ConfValToUsecs(SendBufferTimeout) - 1000) {
 		if (e->dp)
 			dsr_pkt_free(e->dp);
 		return 1;
@@ -63,14 +61,12 @@ crit_garbage(void *pos, void *n)
 	return 0;
 }
 
-void NSCLASS
-send_buf_set_max_len(unsigned int max_len)
+void NSCLASS send_buf_set_max_len(unsigned int max_len)
 {
 	send_buf.max_len = max_len;
 }
 
-void NSCLASS
-send_buf_timeout(unsigned long data)
+void NSCLASS send_buf_timeout(unsigned long data)
 {
 	struct send_buf_entry *e;
 	int pkts;
@@ -88,7 +84,7 @@ send_buf_timeout(unsigned long data)
 
 	DSR_READ_LOCK(&send_buf.lock);
 	/* Get first packet in maintenance buffer */
-	e = (struct send_buf_entry *) __tbl_find(&send_buf, NULL, crit_none);
+	e = (struct send_buf_entry *)__tbl_find(&send_buf, NULL, crit_none);
 
 	if (!e) {
 		DEBUG("No packet to set timeout for\n");
@@ -105,12 +101,12 @@ send_buf_timeout(unsigned long data)
 	set_timer(&send_buf_timer, &expires);
 }
 
-static struct send_buf_entry *
-send_buf_entry_create(struct dsr_pkt *dp, xmit_fct_t okfn)
+static struct send_buf_entry *send_buf_entry_create(struct dsr_pkt *dp,
+						    xmit_fct_t okfn)
 {
 	struct send_buf_entry *e;
 
-	e = (struct send_buf_entry *) MALLOC(sizeof (*e), GFP_ATOMIC);
+	e = (struct send_buf_entry *)MALLOC(sizeof(*e), GFP_ATOMIC);
 
 	if (!e)
 		return NULL;
@@ -122,8 +118,7 @@ send_buf_entry_create(struct dsr_pkt *dp, xmit_fct_t okfn)
 	return e;
 }
 
-int NSCLASS
-send_buf_enqueue_packet(struct dsr_pkt *dp, xmit_fct_t okfn)
+int NSCLASS send_buf_enqueue_packet(struct dsr_pkt *dp, xmit_fct_t okfn)
 {
 	struct send_buf_entry *e;
 	struct timeval expires;
@@ -145,7 +140,7 @@ send_buf_enqueue_packet(struct dsr_pkt *dp, xmit_fct_t okfn)
 		struct send_buf_entry *f;
 
 		DEBUG("buffer full, removing first\n");
-		f = (struct send_buf_entry *) tbl_detach_first(&send_buf);
+		f = (struct send_buf_entry *)tbl_detach_first(&send_buf);
 
 		if (f) {
 			dsr_pkt_free(f->dp);
@@ -170,8 +165,7 @@ send_buf_enqueue_packet(struct dsr_pkt *dp, xmit_fct_t okfn)
 	return res;
 }
 
-int NSCLASS
-send_buf_set_verdict(int verdict, struct in_addr dst)
+int NSCLASS send_buf_set_verdict(int verdict, struct in_addr dst)
 {
 	struct send_buf_entry *e;
 	int pkts = 0;
@@ -180,9 +174,9 @@ send_buf_set_verdict(int verdict, struct in_addr dst)
 	case SEND_BUF_DROP:
 
 		while ((e =
-			(struct send_buf_entry *) tbl_find_detach(&send_buf,
-								  &dst,
-								  crit_addr))) {
+			(struct send_buf_entry *)tbl_find_detach(&send_buf,
+								 &dst,
+								 crit_addr))) {
 			/* Only send one ICMP message */
 #ifdef __KERNEL__
 			if (pkts == 0)
@@ -198,9 +192,9 @@ send_buf_set_verdict(int verdict, struct in_addr dst)
 	case SEND_BUF_SEND:
 
 		while ((e =
-			(struct send_buf_entry *) tbl_find_detach(&send_buf,
-								  &dst,
-								  crit_addr))) {
+			(struct send_buf_entry *)tbl_find_detach(&send_buf,
+								 &dst,
+								 crit_addr))) {
 			DEBUG("Send packet\n");
 			/* Get source route */
 			e->dp->srt = dsr_rtc_find(e->dp->src, e->dp->dst);
@@ -235,15 +229,13 @@ send_buf_set_verdict(int verdict, struct in_addr dst)
 	return pkts;
 }
 
-static inline int
-send_buf_flush(struct tbl *t)
+static inline int send_buf_flush(struct tbl *t)
 {
 	struct send_buf_entry *e;
 	int pkts = 0;
 	/* Flush send buffer */
 	while ((e =
-		(struct send_buf_entry *) tbl_find_detach(t, NULL,
-							  crit_none))) {
+		(struct send_buf_entry *)tbl_find_detach(t, NULL, crit_none))) {
 		dsr_pkt_free(e->dp);
 		FREE(e);
 		pkts++;
@@ -251,8 +243,7 @@ send_buf_flush(struct tbl *t)
 	return pkts;
 }
 
-static int
-send_buf_print(struct tbl *t, char *buffer)
+static int send_buf_print(struct tbl *t, char *buffer)
 {
 	list_t *p;
 	int len;
@@ -265,7 +256,7 @@ send_buf_print(struct tbl *t, char *buffer)
 	DSR_READ_LOCK(&t->lock);
 
 	list_for_each(p, &t->head) {
-		struct send_buf_entry *e = (struct send_buf_entry *) p;
+		struct send_buf_entry *e = (struct send_buf_entry *)p;
 
 		if (e && e->dp)
 			len += sprintf(buffer + len, "  %-15s %-8lu\n",
@@ -302,8 +293,7 @@ send_buf_get_info(char *buffer, char **start, off_t offset, int length)
 
 #endif				/* __KERNEL__ */
 
-int __init NSCLASS
-send_buf_init(void)
+int __init NSCLASS send_buf_init(void)
 {
 #ifdef __KERNEL__
 	struct proc_dir_entry *proc;
@@ -326,8 +316,7 @@ send_buf_init(void)
 	return 1;
 }
 
-void __exit NSCLASS
-send_buf_cleanup(void)
+void __exit NSCLASS send_buf_cleanup(void)
 {
 	int pkts;
 #ifdef KERNEL26

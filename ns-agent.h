@@ -68,7 +68,8 @@ struct hdr_test {
 	static int offset_;
 	inline static int &offset() {
 		return offset_;
-	} inline static hdr_test *access(const Packet * p) {
+	}
+	inline static hdr_test *access(const Packet * p) {
 		return (hdr_test *) p->access(offset_);
 	}
 	int size() {
@@ -100,7 +101,7 @@ class DSRUU:public Tap, public Agent {
 		//printf("Setting timer %s to %f\n", t->get_name(), t->expires - Scheduler::instance().clock());
 		t->resched(t->expires - Scheduler::instance().clock());
 	}
-/* 	void mod_timer (DSRUUTimer *t, unsinged long expires_)  *//* 		{ t->expires = expires_ ; t->resched(t->expires); } */
+	/*      void mod_timer (DSRUUTimer *t, unsinged long expires_)  *//*            { t->expires = expires_ ; t->resched(t->expires); } */
 	    void del_timer(DSRUUTimer * t) {
 		//printf("Cancelling timer %s\n", t->get_name());
 		t->cancel();
@@ -169,11 +170,11 @@ class DSRUU:public Tap, public Agent {
 	}
 	int arpset(struct in_addr addr, unsigned int mac_addr);
 	inline void ethtoint(char *eth, int *num) {
-		memcpy((char *) num, eth, ETH_ALEN);
+		memcpy((char *)num, eth, ETH_ALEN);
 		return;
 	}
 	inline void inttoeth(int *num, char *eth) {
-		memcpy(eth, (char *) num, ETH_ALEN);
+		memcpy(eth, (char *)num, ETH_ALEN);
 		return;
 	}
       private:

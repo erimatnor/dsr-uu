@@ -56,8 +56,7 @@ struct dsr_srt {
 	struct in_addr addrs[0];	/* Intermediate nodes */
 };
 
-static inline char *
-print_srt(struct dsr_srt *srt)
+static inline char *print_srt(struct dsr_srt *srt)
 {
 #define BUFLEN 256
 	static char buf[BUFLEN];
@@ -68,7 +67,7 @@ print_srt(struct dsr_srt *srt)
 
 	len = sprintf(buf, "%s<->", print_ip(srt->src));
 
-	for (i = 0; i < (srt->laddrs / sizeof (u_int32_t)) &&
+	for (i = 0; i < (srt->laddrs / sizeof(u_int32_t)) &&
 	     (len + 16) < BUFLEN; i++)
 		len += sprintf(buf + len, "%s<->", print_ip(srt->addrs[i]));
 

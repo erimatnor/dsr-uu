@@ -43,8 +43,7 @@ static struct packet_type dsr_packet_type = {
 	.func = dsr_dev_llrecv,
 };
 
-struct sk_buff *
-dsr_skb_create(struct dsr_pkt *dp, struct net_device *dev)
+struct sk_buff *dsr_skb_create(struct dsr_pkt *dp, struct net_device *dev)
 {
 	struct sk_buff *skb;
 	char *buf;
@@ -98,8 +97,7 @@ dsr_skb_create(struct dsr_pkt *dp, struct net_device *dev)
 	return skb;
 }
 
-int
-dsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb)
+int dsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb)
 {
 
 	struct sockaddr broadcast =
@@ -132,7 +130,7 @@ static int
 dsr_dev_inetaddr_event(struct notifier_block *this,
 		       unsigned long event, void *ptr)
 {
-	struct in_ifaddr *ifa = (struct in_ifaddr *) ptr;
+	struct in_ifaddr *ifa = (struct in_ifaddr *)ptr;
 	struct in_device *indev;
 	struct in_addr addr, bc;
 
@@ -187,7 +185,7 @@ static int
 dsr_dev_netdev_event(struct notifier_block *this,
 		     unsigned long event, void *ptr)
 {
-	struct net_device *dev = (struct net_device *) ptr;
+	struct net_device *dev = (struct net_device *)ptr;
 	struct dsr_node *dnode = dsr_dev->priv;
 	int slave_change = 0;
 
@@ -266,8 +264,7 @@ dsr_dev_netdev_event(struct notifier_block *this,
 static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev);
 static struct net_device_stats *dsr_dev_get_stats(struct net_device *dev);
 
-static int
-dsr_dev_set_address(struct net_device *dev, void *p)
+static int dsr_dev_set_address(struct net_device *dev, void *p)
 {
 	struct sockaddr *sa = p;
 
@@ -279,8 +276,7 @@ dsr_dev_set_address(struct net_device *dev, void *p)
 }
 
 /* fake multicast ability */
-static void
-set_multicast_list(struct net_device *dev)
+static void set_multicast_list(struct net_device *dev)
 {
 }
 
@@ -291,27 +287,24 @@ dsr_dev_accept_fastpath(struct net_device *dev, struct dst_entry *dst)
 	return -1;
 }
 #endif
-static int
-dsr_dev_open(struct net_device *dev)
+static int dsr_dev_open(struct net_device *dev)
 {
 	netif_start_queue(dev);
 	return 0;
 }
 
-static int
-dsr_dev_stop(struct net_device *dev)
+static int dsr_dev_stop(struct net_device *dev)
 {
 	netif_stop_queue(dev);
 	return 0;
 }
 
-static void
-dsr_dev_uninit(struct net_device *dev)
+static void dsr_dev_uninit(struct net_device *dev)
 {
 	struct dsr_node *dnode = dev->priv;
 
 	DEBUG("Calling dev_put on interfaces dnode->slave_dev=%u dsr_dev=%u\n",
-	      (unsigned int) dnode->slave_dev, (unsigned int) dsr_dev);
+	      (unsigned int)dnode->slave_dev, (unsigned int)dsr_dev);
 
 	dsr_node_lock(dnode);
 
@@ -324,11 +317,9 @@ dsr_dev_uninit(struct net_device *dev)
 }
 
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(2,4,20)
-static int __init
-dsr_dev_setup(struct net_device *dev)
+static int __init dsr_dev_setup(struct net_device *dev)
 #else
-static void __init
-dsr_dev_setup(struct net_device *dev)
+static void __init dsr_dev_setup(struct net_device *dev)
 #endif
 {
 	/* Fill in device structure with ethernet-generic values. */
@@ -374,8 +365,7 @@ dsr_dev_llrecv(struct sk_buff *skb,
 	return 0;
 }
 
-int
-dsr_dev_deliver(struct dsr_pkt *dp)
+int dsr_dev_deliver(struct dsr_pkt *dp)
 {
 	struct sk_buff *skb = NULL;
 	struct ethhdr *ethh;
@@ -397,7 +387,7 @@ dsr_dev_deliver(struct dsr_pkt *dp)
 	skb->mac.raw = skb->data - dsr_dev->hard_header_len;
 	skb->ip_summed = CHECKSUM_UNNECESSARY;
 
-	ethh = (struct ethhdr *) skb->mac.raw;
+	ethh = (struct ethhdr *)skb->mac.raw;
 
 	memcpy(ethh->h_dest, dsr_dev->dev_addr, ETH_ALEN);
 	memset(ethh->h_source, 0, ETH_ALEN);
@@ -415,8 +405,7 @@ dsr_dev_deliver(struct dsr_pkt *dp)
 	return 0;
 }
 
-int
-dsr_dev_xmit(struct dsr_pkt *dp)
+int dsr_dev_xmit(struct dsr_pkt *dp)
 {
 	struct sk_buff *skb;
 	struct net_device *slave_dev;
@@ -465,8 +454,7 @@ dsr_dev_xmit(struct dsr_pkt *dp)
 }
 
 /* Main receive function for packets originated in user space */
-static int
-dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
+static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	/* struct dsr_node *dnode = (struct dsr_node *)dev->priv; */
 	struct ethhdr *ethh;
@@ -474,13 +462,13 @@ dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 #ifdef DEBUG
 	atomic_inc(&num_pkts);
 #endif
-	ethh = (struct ethhdr *) skb->data;
+	ethh = (struct ethhdr *)skb->data;
 
 	switch (ntohs(ethh->h_proto)) {
 	case ETH_P_IP:
 
 		DEBUG("dst=%s len=%d\n",
-		      print_ip(*((struct in_addr *) &skb->nh.iph->daddr)),
+		      print_ip(*((struct in_addr *)&skb->nh.iph->daddr)),
 		      skb->len);
 
 		dp = dsr_pkt_alloc(skb);
@@ -493,10 +481,9 @@ dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	return 0;
 }
 
-static struct net_device_stats *
-dsr_dev_get_stats(struct net_device *dev)
+static struct net_device_stats *dsr_dev_get_stats(struct net_device *dev)
 {
-	return &(((struct dsr_node *) dev->priv)->stats);
+	return &(((struct dsr_node *)dev->priv)->stats);
 }
 
 static struct notifier_block netdev_notifier = {
@@ -508,14 +495,13 @@ static struct notifier_block inetaddr_notifier = {
 	.notifier_call = dsr_dev_inetaddr_event,
 };
 
-int
-dsr_dev_init(char *ifname)
+int dsr_dev_init(char *ifname)
 {
 	int res = 0;
 	struct dsr_node *dnode;
 
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(2,4,20)
-	dsr_dev = alloc_etherdev(sizeof (struct dsr_node));
+	dsr_dev = alloc_etherdev(sizeof(struct dsr_node));
 
 	if (!dsr_dev)
 		return -ENOMEM;
@@ -525,12 +511,11 @@ dsr_dev_init(char *ifname)
 	dev_alloc_name(dsr_dev, "dsr%d");
 	dsr_dev->init = &dsr_dev_setup;
 #else
-	dsr_dev = alloc_netdev(sizeof (struct dsr_node),
-			       "dsr%d", dsr_dev_setup);
+	dsr_dev = alloc_netdev(sizeof(struct dsr_node), "dsr%d", dsr_dev_setup);
 	if (!dsr_dev)
 		return -ENOMEM;
 #endif
-	dnode = dsr_node = (struct dsr_node *) dsr_dev->priv;
+	dnode = dsr_node = (struct dsr_node *)dsr_dev->priv;
 
 	dsr_node_init(dnode);
 
@@ -613,8 +598,7 @@ dsr_dev_init(char *ifname)
 	return res;
 }
 
-void __exit
-dsr_dev_cleanup(void)
+void __exit dsr_dev_cleanup(void)
 {
 	if (dsr_packet_type.func)
 		dev_remove_pack(&dsr_packet_type);

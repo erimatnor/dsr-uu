@@ -16,10 +16,9 @@
 #include "dsr-rrep.h"
 #include "debug.h"
 
-struct in_addr
-dsr_srt_next_hop(struct dsr_srt *srt, int sleft)
+struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, int sleft)
 {
-	int n = srt->laddrs / sizeof (struct in_addr);
+	int n = srt->laddrs / sizeof(struct in_addr);
 	struct in_addr nxt_hop;
 
 	if (sleft <= 0)
@@ -30,11 +29,10 @@ dsr_srt_next_hop(struct dsr_srt *srt, int sleft)
 	return nxt_hop;
 }
 
-struct in_addr
-dsr_srt_prev_hop(struct dsr_srt *srt, int sleft)
+struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt, int sleft)
 {
 	struct in_addr prev_hop;
-	int n = srt->laddrs / sizeof (u_int32_t);
+	int n = srt->laddrs / sizeof(u_int32_t);
 
 	if (n - 1 == sleft)
 		prev_hop = srt->src;
@@ -47,7 +45,7 @@ dsr_srt_prev_hop(struct dsr_srt *srt, int sleft)
 static int
 dsr_srt_find_addr(struct dsr_srt *srt, struct in_addr addr, int index)
 {
-	int n = srt->laddrs / sizeof (struct in_addr);
+	int n = srt->laddrs / sizeof(struct in_addr);
 
 	if (n == 0 || index >= n)
 		return 0;
@@ -62,14 +60,13 @@ dsr_srt_find_addr(struct dsr_srt *srt, struct in_addr addr, int index)
 	return 0;
 }
 
-struct dsr_srt *
-dsr_srt_new(struct in_addr src, struct in_addr dst,
-	    unsigned int length, char *addrs)
+struct dsr_srt *dsr_srt_new(struct in_addr src, struct in_addr dst,
+			    unsigned int length, char *addrs)
 {
 	struct dsr_srt *sr;
 
-	sr = (struct dsr_srt *) MALLOC(sizeof (struct dsr_srt) + length,
-				       GFP_ATOMIC);
+	sr = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) + length,
+				      GFP_ATOMIC);
 
 	if (!sr)
 		return NULL;
@@ -85,8 +82,7 @@ dsr_srt_new(struct in_addr src, struct in_addr dst,
 	return sr;
 }
 
-struct dsr_srt *
-dsr_srt_new_rev(struct dsr_srt *srt)
+struct dsr_srt *dsr_srt_new_rev(struct dsr_srt *srt)
 {
 	struct dsr_srt *srt_rev;
 	int i, n;
@@ -94,8 +90,8 @@ dsr_srt_new_rev(struct dsr_srt *srt)
 	if (!srt)
 		return NULL;
 
-	srt_rev = (struct dsr_srt *) MALLOC(sizeof (struct dsr_srt) +
-					    srt->laddrs, GFP_ATOMIC);
+	srt_rev = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) +
+					   srt->laddrs, GFP_ATOMIC);
 
 	if (!srt_rev)
 		return NULL;
@@ -104,7 +100,7 @@ dsr_srt_new_rev(struct dsr_srt *srt)
 	srt_rev->dst.s_addr = srt->src.s_addr;
 	srt_rev->laddrs = srt->laddrs;
 
-	n = srt->laddrs / sizeof (struct in_addr);
+	n = srt->laddrs / sizeof(struct in_addr);
 
 	for (i = 0; i < n; i++)
 		srt_rev->addrs[i].s_addr = srt->addrs[n - 1 - i].s_addr;
@@ -112,8 +108,7 @@ dsr_srt_new_rev(struct dsr_srt *srt)
 	return srt_rev;
 }
 
-struct dsr_srt *
-dsr_srt_new_split(struct dsr_srt *srt, struct in_addr addr)
+struct dsr_srt *dsr_srt_new_split(struct dsr_srt *srt, struct in_addr addr)
 {
 	struct dsr_srt *srt_split;
 	int i, n;
@@ -121,7 +116,7 @@ dsr_srt_new_split(struct dsr_srt *srt, struct in_addr addr)
 	if (!srt)
 		return NULL;
 
-	n = srt->laddrs / sizeof (struct in_addr);
+	n = srt->laddrs / sizeof(struct in_addr);
 
 	if (n == 0)
 		return NULL;
@@ -133,23 +128,22 @@ dsr_srt_new_split(struct dsr_srt *srt, struct in_addr addr)
 	/* Nothing to split */
 	return NULL;
       split:
-	srt_split = (struct dsr_srt *) MALLOC(sizeof (struct dsr_srt) +
-					      (i * sizeof (struct in_addr)),
-					      GFP_ATOMIC);
+	srt_split = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) +
+					     (i * sizeof(struct in_addr)),
+					     GFP_ATOMIC);
 
 	if (!srt_split)
 		return NULL;
 
 	srt_split->src.s_addr = srt->src.s_addr;
 	srt_split->dst.s_addr = srt->addrs[i].s_addr;
-	srt_split->laddrs = sizeof (struct in_addr) * i;
+	srt_split->laddrs = sizeof(struct in_addr) * i;
 
-	memcpy(srt_split->addrs, srt->addrs, sizeof (struct in_addr) * i);
+	memcpy(srt_split->addrs, srt->addrs, sizeof(struct in_addr) * i);
 
 	return srt_split;
 }
-struct dsr_srt *
-dsr_srt_new_split_rev(struct dsr_srt *srt, struct in_addr addr)
+struct dsr_srt *dsr_srt_new_split_rev(struct dsr_srt *srt, struct in_addr addr)
 {
 	struct dsr_srt *srt_split, *srt_split_rev;
 
@@ -165,8 +159,8 @@ dsr_srt_new_split_rev(struct dsr_srt *srt, struct in_addr addr)
 	return srt_split_rev;
 }
 
-struct dsr_srt *
-dsr_srt_shortcut(struct dsr_srt *srt, struct in_addr a1, struct in_addr a2)
+struct dsr_srt *dsr_srt_shortcut(struct dsr_srt *srt, struct in_addr a1,
+				 struct in_addr a2)
 {
 	struct dsr_srt *srt_cut;
 	int i, j, n, n_cut, a1_num, a2_num;
@@ -176,7 +170,7 @@ dsr_srt_shortcut(struct dsr_srt *srt, struct in_addr a1, struct in_addr a2)
 
 	a1_num = a2_num = -1;
 
-	n = srt->laddrs / sizeof (struct in_addr);
+	n = srt->laddrs / sizeof(struct in_addr);
 
 	if (srt->src.s_addr == a1.s_addr)
 		a1_num = 0;
@@ -194,16 +188,16 @@ dsr_srt_shortcut(struct dsr_srt *srt, struct in_addr a1, struct in_addr a2)
 
 	n_cut = n - (a2_num - a1_num - 1);
 
-	srt_cut = (struct dsr_srt *) MALLOC(sizeof (struct dsr_srt) +
-					    (n_cut * sizeof (struct in_addr)),
-					    GFP_ATOMIC);
+	srt_cut = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) +
+					   (n_cut * sizeof(struct in_addr)),
+					   GFP_ATOMIC);
 
 	if (!srt_cut)
 		return NULL;
 
 	srt_cut->src = srt->src;
 	srt_cut->dst = srt->dst;
-	srt_cut->laddrs = n_cut * sizeof (struct in_addr);
+	srt_cut->laddrs = n_cut * sizeof(struct in_addr);
 
 	if (srt_cut->laddrs == 0)
 		return srt_cut;
@@ -219,15 +213,14 @@ dsr_srt_shortcut(struct dsr_srt *srt, struct in_addr a1, struct in_addr a2)
 	return srt_cut;
 }
 
-struct dsr_srt_opt *
-dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt)
+struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt)
 {
 	struct dsr_srt_opt *srt_opt;
 
-	if (len < (int) DSR_SRT_OPT_LEN(srt))
+	if (len < (int)DSR_SRT_OPT_LEN(srt))
 		return NULL;
 
-	srt_opt = (struct dsr_srt_opt *) buf;
+	srt_opt = (struct dsr_srt_opt *)buf;
 
 	srt_opt->type = DSR_OPT_SRT;
 	srt_opt->length = srt->laddrs + 2;
@@ -235,15 +228,14 @@ dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt)
 	srt_opt->l = 0;
 	srt_opt->res = 0;
 	SET_SALVAGE(srt_opt, 0);
-	srt_opt->sleft = (srt->laddrs / sizeof (struct in_addr));
+	srt_opt->sleft = (srt->laddrs / sizeof(struct in_addr));
 
 	memcpy(srt_opt->addrs, srt->addrs, srt->laddrs);
 
 	return srt_opt;
 }
 
-int NSCLASS
-dsr_srt_add(struct dsr_pkt *dp)
+int NSCLASS dsr_srt_add(struct dsr_pkt *dp)
 {
 	char *buf;
 	int n, len, ttl, tot_len, ip_len;
@@ -252,7 +244,7 @@ dsr_srt_add(struct dsr_pkt *dp)
 	if (!dp || !dp->srt)
 		return -1;
 
-	n = dp->srt->laddrs / sizeof (struct in_addr);
+	n = dp->srt->laddrs / sizeof(struct in_addr);
 
 	dp->nxt_hop = dsr_srt_next_hop(dp->srt, n);
 
@@ -315,8 +307,7 @@ dsr_srt_add(struct dsr_pkt *dp)
 	return 0;
 }
 
-int NSCLASS
-dsr_srt_opt_recv(struct dsr_pkt *dp)
+int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp)
 {
 	struct in_addr next_hop_intended;
 	struct in_addr myaddr = my_addr();
@@ -327,13 +318,13 @@ dsr_srt_opt_recv(struct dsr_pkt *dp)
 
 	/* We should add this source route info to the cache... */
 	dp->srt = dsr_srt_new(dp->src, dp->dst, dp->srt_opt->length,
-			      (char *) dp->srt_opt->addrs);
+			      (char *)dp->srt_opt->addrs);
 
 	if (!dp->srt) {
 		DEBUG("Create source route failed\n");
 		return DSR_PKT_ERROR;
 	}
-	n = dp->srt->laddrs / sizeof (struct in_addr);
+	n = dp->srt->laddrs / sizeof(struct in_addr);
 
 	DEBUG("SR: %s sleft=%d\n", print_srt(dp->srt), dp->srt_opt->sleft);
 

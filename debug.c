@@ -35,8 +35,7 @@ static unsigned long logged_chars;	/* Number of chars produced since last read+c
 
 DECLARE_WAIT_QUEUE_HEAD(dbg_log_wait);
 
-int
-do_dbglog(int type, char *buf, int len)
+int do_dbglog(int type, char *buf, int len)
 {
 	unsigned long i, j, limit, count;
 	int do_clear = 0;
@@ -154,8 +153,7 @@ do_dbglog(int type, char *buf, int len)
       out:
 	return error;
 }
-static void
-dsr_emit_log_char(char c)
+static void dsr_emit_log_char(char c)
 {
 	DBG_LOG_BUF(dbg_log_end) = c;
 	dbg_log_end++;
@@ -165,8 +163,7 @@ dsr_emit_log_char(char c)
 		logged_chars++;
 }
 
-int
-dsr_vprintk(const char *func, const char *fmt, va_list args)
+int dsr_vprintk(const char *func, const char *fmt, va_list args)
 {
 	unsigned long flags;
 	int printed_len, prefix_len;
@@ -185,7 +182,7 @@ dsr_vprintk(const char *func, const char *fmt, va_list args)
 
 	/* Emit the output into the temporary buffer */
 	printed_len = vsnprintf(printk_buf + prefix_len,
-				sizeof (printk_buf) - prefix_len, fmt, args);
+				sizeof(printk_buf) - prefix_len, fmt, args);
 
 	for (p = printk_buf; *p; p++)
 		dsr_emit_log_char(*p);
@@ -194,8 +191,7 @@ dsr_vprintk(const char *func, const char *fmt, va_list args)
 	return printed_len;
 }
 
-int
-trace(const char *func, const char *fmt, ...)
+int trace(const char *func, const char *fmt, ...)
 {
 	va_list args;
 	int r;
@@ -207,16 +203,14 @@ trace(const char *func, const char *fmt, ...)
 	return r;
 }
 
-static int
-dbg_log_open(struct inode *inode, struct file *file)
+static int dbg_log_open(struct inode *inode, struct file *file)
 {
 	return do_dbglog(1, NULL, 0);
 }
 
-static int
-dbg_log_release(struct inode *inode, struct file *file)
+static int dbg_log_release(struct inode *inode, struct file *file)
 {
-	(void) do_dbglog(0, NULL, 0);
+	(void)do_dbglog(0, NULL, 0);
 	return 0;
 }
 
@@ -229,8 +223,7 @@ dbg_log_read(struct file *file, char *buf, size_t count, loff_t * ppos)
 	return do_dbglog(2, buf, count);
 }
 
-static unsigned int
-dbg_log_poll(struct file *file, poll_table * wait)
+static unsigned int dbg_log_poll(struct file *file, poll_table * wait)
 {
 	poll_wait(file, &dbg_log_wait, wait);
 	if (do_dbglog(6, NULL, 0))
@@ -245,8 +238,7 @@ struct file_operations proc_dbg_operations = {
 	.release = dbg_log_release,
 };
 
-int __init
-dbg_init(void)
+int __init dbg_init(void)
 {
 	struct proc_dir_entry *entry;
 
@@ -258,8 +250,7 @@ dbg_init(void)
 	return 0;
 }
 
-void __exit
-dbg_cleanup(void)
+void __exit dbg_cleanup(void)
 {
 	proc_net_remove("dsr_dbg");
 }

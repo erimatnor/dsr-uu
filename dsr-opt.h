@@ -35,12 +35,13 @@ struct dsr_opt_hdr {
 
 	inline static int &offset() {
 		return offset_;
-	} inline static dsr_opt_hdr *access(const Packet * p) {
+	}
+	inline static dsr_opt_hdr *access(const Packet * p) {
 		return (dsr_opt_hdr *) p->access(offset_);
 	}
 
 	int size() {
-		return p_len + sizeof (struct dsr_opt_hdr);
+		return p_len + sizeof(struct dsr_opt_hdr);
 	}
 #endif				/* NS2 */
 	struct dsr_opt option[0];

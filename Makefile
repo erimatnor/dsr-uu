@@ -71,7 +71,7 @@ KINC=-nostdinc $(shell $(CC) -print-search-dirs | sed -ne 's/install: \(.*\)/-I 
 KCFLAGS=-Wall -fno-strict-aliasing -O2 $(KDEFS) $(KINC)
 MIPSDEFS=-mips2 -fno-pic -mno-abicalls -mlong-calls -G0 -msoft-float $(KDEFS)
 
-.PHONY: mips default depend clean ns
+.PHONY: mips default depend clean ns clean-2.4 clean-2.6 indent
 
 # Check for kernel version
 ifeq ($(PATCHLEVEL),6)
@@ -133,7 +133,7 @@ TAGS: *.c *.h
 	etags.emacs $(SRC) *.h
 
 indent:
-	indent -kr -i8 -ts8 -sob -l80 -ss -bs -psl *.c *.h 
+	indent -kr -i8 -ts8 -sob -l80 -ss -ncs *.c *.h
 
 clean-2.6:
 	$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) clean

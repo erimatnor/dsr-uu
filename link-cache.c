@@ -66,8 +66,7 @@ struct cheapest_node {
 
 static int lc_print(struct lc_graph *LC, char *buf);
 
-static inline void
-__lc_link_del(struct lc_graph *lc, struct lc_link *link)
+static inline void __lc_link_del(struct lc_graph *lc, struct lc_link *link)
 {
 	/* Also free the nodes if they lack other links */
 	if (--link->src->links == 0)
@@ -79,21 +78,19 @@ __lc_link_del(struct lc_graph *lc, struct lc_link *link)
 	__tbl_del(&lc->links, &link->l);
 }
 
-static inline int
-crit_addr(void *pos, void *addr)
+static inline int crit_addr(void *pos, void *addr)
 {
-	struct in_addr *a = (struct in_addr *) addr;
-	struct lc_node *p = (struct lc_node *) pos;
+	struct in_addr *a = (struct in_addr *)addr;
+	struct lc_node *p = (struct lc_node *)pos;
 
 	if (p->addr.s_addr == a->s_addr)
 		return 1;
 	return 0;
 }
-static inline int
-crit_link_query(void *pos, void *query)
+static inline int crit_link_query(void *pos, void *query)
 {
-	struct lc_link *p = (struct lc_link *) pos;
-	struct link_query *q = (struct link_query *) query;
+	struct lc_link *p = (struct lc_link *)pos;
+	struct link_query *q = (struct link_query *)query;
 
 	if (p->src->addr.s_addr == q->src.s_addr &&
 	    p->dst->addr.s_addr == q->dst.s_addr)
@@ -101,11 +98,10 @@ crit_link_query(void *pos, void *query)
 	return 0;
 }
 
-static inline int
-crit_expire(void *pos, void *data)
+static inline int crit_expire(void *pos, void *data)
 {
-	struct lc_link *link = (struct lc_link *) pos;
-	struct lc_graph *lc = (struct lc_graph *) data;
+	struct lc_link *link = (struct lc_link *)pos;
+	struct lc_graph *lc = (struct lc_graph *)data;
 	struct timeval now;
 
 	gettime(&now);
@@ -120,11 +116,10 @@ crit_expire(void *pos, void *data)
 	return 0;
 }
 
-static inline int
-do_lowest_cost(void *pos, void *data)
+static inline int do_lowest_cost(void *pos, void *data)
 {
-	struct lc_node *n = (struct lc_node *) pos;
-	struct cheapest_node *cn = (struct cheapest_node *) data;
+	struct lc_node *n = (struct lc_node *)pos;
+	struct cheapest_node *cn = (struct cheapest_node *)data;
 
 	if (n->cost != LC_COST_INF && (!cn->n || n->cost < cn->n->cost)) {
 		cn->n = n;
@@ -132,11 +127,10 @@ do_lowest_cost(void *pos, void *data)
 	return 0;
 }
 
-static inline int
-do_relax(void *pos, void *node)
+static inline int do_relax(void *pos, void *node)
 {
-	struct lc_link *link = (struct lc_link *) pos;
-	struct lc_node *u = (struct lc_node *) node;
+	struct lc_link *link = (struct lc_link *)pos;
+	struct lc_node *u = (struct lc_node *)node;
 	struct lc_node *v = link->dst;
 
 	/* If u and v have a link between them, update cost if cheaper */
@@ -153,11 +147,10 @@ do_relax(void *pos, void *node)
 	return 0;
 }
 
-static inline int
-do_init(void *pos, void *addr)
+static inline int do_init(void *pos, void *addr)
 {
-	struct in_addr *a = (struct in_addr *) addr;
-	struct lc_node *n = (struct lc_node *) pos;
+	struct in_addr *a = (struct in_addr *)addr;
+	struct lc_node *n = (struct lc_node *)pos;
 
 	if (!a || !n)
 		return -1;
@@ -176,8 +169,7 @@ do_init(void *pos, void *addr)
 
 #ifdef LC_TIMER
 
-void NSCLASS
-lc_garbage_collect(unsigned long data)
+void NSCLASS lc_garbage_collect(unsigned long data)
 {
 	char buf[204859];
 
@@ -194,8 +186,7 @@ lc_garbage_collect(unsigned long data)
 		lc_garbage_collect_set();
 }
 
-void NSCLASS
-lc_garbage_collect_set(void)
+void NSCLASS lc_garbage_collect_set(void)
 {
 	DSRUUTimer *lctimer;
 	struct timeval expires;
@@ -217,17 +208,16 @@ lc_garbage_collect_set(void)
 
 #endif				/* LC_TIMER */
 
-static inline struct lc_node *
-lc_node_create(struct in_addr addr)
+static inline struct lc_node *lc_node_create(struct in_addr addr)
 {
 	struct lc_node *n;
 
-	n = (struct lc_node *) MALLOC(sizeof (struct lc_node), GFP_ATOMIC);
+	n = (struct lc_node *)MALLOC(sizeof(struct lc_node), GFP_ATOMIC);
 
 	if (!n)
 		return NULL;
 
-	memset(n, 0, sizeof (struct lc_node));
+	memset(n, 0, sizeof(struct lc_node));
 	n->addr = addr;
 	n->links = 0;
 	n->cost = LC_COST_INF;
@@ -236,11 +226,11 @@ lc_node_create(struct in_addr addr)
 	return n;
 };
 
-static inline struct lc_link *
-__lc_link_find(struct tbl *t, struct in_addr src, struct in_addr dst)
+static inline struct lc_link *__lc_link_find(struct tbl *t, struct in_addr src,
+					     struct in_addr dst)
 {
 	struct link_query q = { src, dst };
-	return (struct lc_link *) __tbl_find(t, &q, crit_link_query);
+	return (struct lc_link *)__tbl_find(t, &q, crit_link_query);
 }
 
 static int
@@ -253,17 +243,17 @@ __lc_link_tbl_add(struct tbl *t, struct lc_node *src,
 	if (!src || !dst)
 		return -1;
 
-	link = (struct lc_link *) __lc_link_find(t, src->addr, dst->addr);
+	link = (struct lc_link *)__lc_link_find(t, src->addr, dst->addr);
 
 	if (!link) {
 		link =
-		    (struct lc_link *) MALLOC(sizeof (struct lc_link),
-					      GFP_ATOMIC);
+		    (struct lc_link *)MALLOC(sizeof(struct lc_link),
+					     GFP_ATOMIC);
 
 		if (!link) {
 			return -1;
 		}
-		memset(link, 0, sizeof (struct lc_link));
+		memset(link, 0, sizeof(struct lc_link));
 
 		__tbl_add_tail(t, &link->l);
 
@@ -293,7 +283,7 @@ lc_link_add(struct in_addr src, struct in_addr dst,
 
 	DSR_WRITE_LOCK(&LC.lock);
 
-	sn = (struct lc_node *) __tbl_find(&LC.nodes, &src, crit_addr);
+	sn = (struct lc_node *)__tbl_find(&LC.nodes, &src, crit_addr);
 
 	if (!sn) {
 		sn = lc_node_create(src);
@@ -307,7 +297,7 @@ lc_link_add(struct in_addr src, struct in_addr dst,
 
 	}
 
-	dn = (struct lc_node *) __tbl_find(&LC.nodes, &dst, crit_addr);
+	dn = (struct lc_node *)__tbl_find(&LC.nodes, &dst, crit_addr);
 
 	if (!dn) {
 		dn = lc_node_create(dst);
@@ -339,8 +329,7 @@ lc_link_add(struct in_addr src, struct in_addr dst,
 	return 0;
 }
 
-int NSCLASS
-lc_link_del(struct in_addr src, struct in_addr dst)
+int NSCLASS lc_link_del(struct in_addr src, struct in_addr dst)
 {
 	struct lc_link *link;
 	int res = 1;
@@ -378,8 +367,7 @@ __dijkstra_init_single_source(struct tbl *t, struct in_addr src)
 	__tbl_do_for_each(t, &src, do_init);
 }
 
-static inline struct lc_node *
-__dijkstra_find_lowest_cost_node(struct tbl *t)
+static inline struct lc_node *__dijkstra_find_lowest_cost_node(struct tbl *t)
 {
 	struct cheapest_node cn = { NULL };
 
@@ -395,20 +383,18 @@ __dijkstra_find_lowest_cost_node(struct tbl *t)
           pi[v] := u
 
 */
-static void
-__lc_move(struct tbl *to, struct tbl *from)
+static void __lc_move(struct tbl *to, struct tbl *from)
 {
 	while (!TBL_EMPTY(from)) {
 		struct lc_node *n;
 
-		n = (struct lc_node *) tbl_detach_first(from);
+		n = (struct lc_node *)tbl_detach_first(from);
 
 		tbl_add_tail(to, &n->l);
 	}
 }
 
-void NSCLASS
-__dijkstra(struct in_addr src)
+void NSCLASS __dijkstra(struct in_addr src)
 {
 	TBL(S, LC_NODES_MAX);
 	struct lc_node *src_node, *u;
@@ -421,7 +407,7 @@ __dijkstra(struct in_addr src)
 
 	__dijkstra_init_single_source(&LC.nodes, src);
 
-	src_node = (struct lc_node *) __tbl_find(&LC.nodes, &src, crit_addr);
+	src_node = (struct lc_node *)__tbl_find(&LC.nodes, &src, crit_addr);
 
 	if (!src_node)
 		return;
@@ -446,8 +432,7 @@ __dijkstra(struct in_addr src)
 	LC.src = src_node;
 }
 
-struct dsr_srt *NSCLASS
-lc_srt_find(struct in_addr src, struct in_addr dst)
+struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 {
 	struct dsr_srt *srt = NULL;
 	struct lc_node *dst_node;
@@ -460,7 +445,7 @@ lc_srt_find(struct in_addr src, struct in_addr dst)
 /* 	if (!LC.src || LC.src->addr.s_addr != src.s_addr) */
 	__dijkstra(src);
 
-	dst_node = (struct lc_node *) __tbl_find(&LC.nodes, &dst, crit_addr);
+	dst_node = (struct lc_node *)__tbl_find(&LC.nodes, &dst, crit_addr);
 
 	if (!dst_node) {
 		DEBUG("%s not found\n", print_ip(dst));
@@ -479,9 +464,9 @@ lc_srt_find(struct in_addr src, struct in_addr dst)
 		int i = 0;
 
 		srt =
-		    (struct dsr_srt *) MALLOC(sizeof (struct dsr_srt) +
-					      (k * sizeof (struct in_addr)),
-					      GFP_ATOMIC);
+		    (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) +
+					     (k * sizeof(struct in_addr)),
+					     GFP_ATOMIC);
 
 		if (!srt) {
 			DEBUG("Could not allocate source route!!!\n");
@@ -490,7 +475,7 @@ lc_srt_find(struct in_addr src, struct in_addr dst)
 
 		srt->dst = dst;
 		srt->src = src;
-		srt->laddrs = k * sizeof (struct in_addr);
+		srt->laddrs = k * sizeof(struct in_addr);
 
 		/*      l = __lc_link_find(&LC.links, dst_node->pred->addr, dst_node->addr); */
 
@@ -524,7 +509,7 @@ lc_srt_find(struct in_addr src, struct in_addr dst)
 			d = n;
 		}
 
-		if ((i + 1) != (int) dst_node->hops) {
+		if ((i + 1) != (int)dst_node->hops) {
 			DEBUG("hop count ERROR i+1=%d hops=%d!!!\n", i + 1,
 			      dst_node->hops);
 			FREE(srt);
@@ -546,7 +531,7 @@ lc_srt_add(struct dsr_srt *srt, usecs_t timeout, unsigned short flags)
 	if (!srt)
 		return -1;
 
-	n = srt->laddrs / sizeof (struct in_addr);
+	n = srt->laddrs / sizeof(struct in_addr);
 
 	addr1 = srt->src;
 
@@ -574,14 +559,12 @@ lc_srt_add(struct dsr_srt *srt, usecs_t timeout, unsigned short flags)
 	return links;
 }
 
-int
-lc_srt_del(struct in_addr src, struct in_addr dst)
+int lc_srt_del(struct in_addr src, struct in_addr dst)
 {
 	return 0;
 }
 
-void NSCLASS
-lc_flush(void)
+void NSCLASS lc_flush(void)
 {
 	DSR_WRITE_LOCK(&LC.lock);
 #ifdef LC_TIMER
@@ -600,8 +583,7 @@ lc_flush(void)
 
 	DSR_WRITE_UNLOCK(&LC.lock);
 }
-static char *
-print_hops(unsigned int hops)
+static char *print_hops(unsigned int hops)
 {
 	static char c[18];
 
@@ -612,8 +594,7 @@ print_hops(unsigned int hops)
 	return c;
 }
 
-static char *
-print_cost(unsigned int cost)
+static char *print_cost(unsigned int cost)
 {
 	static char c[18];
 
@@ -624,8 +605,7 @@ print_cost(unsigned int cost)
 	return c;
 }
 
-static int
-lc_print(struct lc_graph *LC, char *buf)
+static int lc_print(struct lc_graph *LC, char *buf)
 {
 	list_t *pos;
 	int len = 0;
@@ -643,7 +623,7 @@ lc_print(struct lc_graph *LC, char *buf)
 		    "Cost");
 
 	list_for_each(pos, &LC->links.head) {
-		struct lc_link *link = (struct lc_link *) pos;
+		struct lc_link *link = (struct lc_link *)pos;
 
 		len += sprintf(buf + len, "  %-15s %-15s %-4u %lu\n",
 			       print_ip(link->src->addr),
@@ -657,14 +637,14 @@ lc_print(struct lc_graph *LC, char *buf)
 		    "Hops", "Cost", "Links", "This", "Pred");
 
 	list_for_each(pos, &LC->nodes.head) {
-		struct lc_node *n = (struct lc_node *) pos;
+		struct lc_node *n = (struct lc_node *)pos;
 
 		len += sprintf(buf + len, "  %-15s %4s %4s %5u %12lX %12lX\n",
 			       print_ip(n->addr),
 			       print_hops(n->hops),
 			       print_cost(n->cost),
 			       n->links,
-			       (unsigned long) n, (unsigned long) n->pred);
+			       (unsigned long)n, (unsigned long)n->pred);
 	}
 
 	DSR_READ_UNLOCK(&LC->lock);
@@ -674,8 +654,7 @@ lc_print(struct lc_graph *LC, char *buf)
 
 #ifdef __KERNEL__
 
-static int
-lc_proc_info(char *buffer, char **start, off_t offset, int length)
+static int lc_proc_info(char *buffer, char **start, off_t offset, int length)
 {
 	int len;
 
@@ -701,8 +680,7 @@ module_exit(lc_cleanup);
 
 #endif				/* __KERNEL__ */
 
-int __init NSCLASS
-lc_init(void)
+int __init NSCLASS lc_init(void)
 {
 	/* Initialize Graph */
 	INIT_TBL(&LC.links, LC_LINKS_MAX);
@@ -720,8 +698,7 @@ lc_init(void)
 	return 0;
 }
 
-void __exit NSCLASS
-lc_cleanup(void)
+void __exit NSCLASS lc_cleanup(void)
 {
 	lc_flush();
 #ifdef __KERNEL__

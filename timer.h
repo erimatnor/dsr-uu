@@ -46,8 +46,7 @@ class DSRUUTimer:public TimerHandler {
 	char *name_;
 };
 
-static inline void
-gettime(struct timeval *tv)
+static inline void gettime(struct timeval *tv)
 {
 	double now, usecs;
 
@@ -57,9 +56,9 @@ gettime(struct timeval *tv)
 
 	now = Scheduler::instance().clock();
 
-	tv->tv_sec = (long) now;	/* Removes decimal part */
+	tv->tv_sec = (long)now;	/* Removes decimal part */
 	usecs = (now - tv->tv_sec) * 1000000;
-	tv->tv_usec = (long) usecs;
+	tv->tv_usec = (long)usecs;
 }
 
 #else
@@ -68,8 +67,7 @@ gettime(struct timeval *tv)
 
 typedef struct timer_list DSRUUTimer;
 
-static inline void
-set_timer(DSRUUTimer * t, struct timeval *expires)
+static inline void set_timer(DSRUUTimer * t, struct timeval *expires)
 {
 	unsigned long exp_jiffies;
 #ifdef KERNEL26
@@ -89,8 +87,7 @@ set_timer(DSRUUTimer * t, struct timeval *expires)
 	}
 }
 
-static inline void
-gettime(struct timeval *tv)
+static inline void gettime(struct timeval *tv)
 {
 	unsigned long now = jiffies;
 
@@ -106,15 +103,14 @@ gettime(struct timeval *tv)
 }
 #endif				/* NS2 */
 
-static inline char *
-print_timeval(struct timeval *tv)
+static inline char *print_timeval(struct timeval *tv)
 {
 	static char buf[56][56];
 	static int n = 0;
 
 	n = (n + 1) % 2;
 
-	snprintf(buf[n], sizeof (buf), "%ld:%02ld:%03lu", tv->tv_sec / 60,
+	snprintf(buf[n], sizeof(buf), "%ld:%02ld:%03lu", tv->tv_sec / 60,
 		 tv->tv_sec % 60, tv->tv_usec / 1000);
 
 	return buf[n];
@@ -122,8 +118,7 @@ print_timeval(struct timeval *tv)
 
 /* These functions may overflow (although unlikely)... Should probably be
  * improtved in the future */
-static inline long
-timeval_diff(struct timeval *tv1, struct timeval *tv2)
+static inline long timeval_diff(struct timeval *tv1, struct timeval *tv2)
 {
 	if (!tv1 || !tv2)
 		return 0;
@@ -132,8 +127,7 @@ timeval_diff(struct timeval *tv1, struct timeval *tv2)
 			tv1->tv_usec - tv2->tv_usec);
 }
 
-static inline int
-timeval_add_usecs(struct timeval *tv, usecs_t usecs)
+static inline int timeval_add_usecs(struct timeval *tv, usecs_t usecs)
 {
 	long add;
 

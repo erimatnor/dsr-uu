@@ -89,14 +89,12 @@ struct dsr_pkt {
 #define DSR_PKT_DELIVER        (DSR_PKT_NONE << 11)
 #define DSR_PKT_ACTION_LAST    (12)
 
-static inline int
-dsr_pkt_opts_len(struct dsr_pkt *dp)
+static inline int dsr_pkt_opts_len(struct dsr_pkt *dp)
 {
 	return dp->tail - dp->dsr_opts;
 }
 
-static inline int
-dsr_pkt_tailroom(struct dsr_pkt *dp)
+static inline int dsr_pkt_tailroom(struct dsr_pkt *dp)
 {
 	return dp->end - dp->tail;
 }

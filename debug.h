@@ -33,8 +33,7 @@ extern atomic_t num_pkts;
 
 #define DEBUG_BUFLEN 256
 
-static inline char *
-print_ip(struct in_addr addr)
+static inline char *print_ip(struct in_addr addr)
 {
 	static char buf[16 * 4];
 	static int index = 0;
@@ -52,27 +51,25 @@ print_ip(struct in_addr addr)
 	return str;
 }
 
-static inline char *
-print_eth(char *addr)
+static inline char *print_eth(char *addr)
 {
 	static char buf[30];
 
 	sprintf(buf, "%02x:%02x:%02x:%02x:%02x:%02x",
-		(unsigned char) addr[0], (unsigned char) addr[1],
-		(unsigned char) addr[2], (unsigned char) addr[3],
-		(unsigned char) addr[4], (unsigned char) addr[5]);
+		(unsigned char)addr[0], (unsigned char)addr[1],
+		(unsigned char)addr[2], (unsigned char)addr[3],
+		(unsigned char)addr[4], (unsigned char)addr[5]);
 
 	return buf;
 }
 
-static inline char *
-print_pkt(char *p, int len)
+static inline char *print_pkt(char *p, int len)
 {
 	static char buf[3000];
 	int i, l = 0;
 
 	for (i = 0; i < len; i++)
-		l += sprintf(buf + l, "%02X", (unsigned char) p[i]);
+		l += sprintf(buf + l, "%02X", (unsigned char)p[i]);
 
 	return buf;
 }

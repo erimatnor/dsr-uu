@@ -15,13 +15,12 @@
 #include "neigh.h"
 #include "maint-buf.h"
 
-struct dsr_ack_opt *
-dsr_ack_opt_add(char *buf, int len, struct in_addr src,
-		struct in_addr dst, unsigned short id)
+struct dsr_ack_opt *dsr_ack_opt_add(char *buf, int len, struct in_addr src,
+				    struct in_addr dst, unsigned short id)
 {
-	struct dsr_ack_opt *ack = (struct dsr_ack_opt *) buf;
+	struct dsr_ack_opt *ack = (struct dsr_ack_opt *)buf;
 
-	if (len < (int) DSR_ACK_HDR_LEN)
+	if (len < (int)DSR_ACK_HDR_LEN)
 		return NULL;
 
 	ack->type = DSR_OPT_ACK;
@@ -33,8 +32,7 @@ dsr_ack_opt_add(char *buf, int len, struct in_addr src,
 	return ack;
 }
 
-int NSCLASS
-dsr_ack_send(struct in_addr dst, unsigned short id)
+int NSCLASS dsr_ack_send(struct in_addr dst, unsigned short id)
 {
 	struct dsr_pkt *dp;
 	struct dsr_ack_opt *ack_opt;
@@ -111,12 +109,12 @@ dsr_ack_send(struct in_addr dst, unsigned short id)
 	return -1;
 }
 
-static struct dsr_ack_req_opt *
-dsr_ack_req_opt_create(char *buf, int len, unsigned short id)
+static struct dsr_ack_req_opt *dsr_ack_req_opt_create(char *buf, int len,
+						      unsigned short id)
 {
-	struct dsr_ack_req_opt *ack_req = (struct dsr_ack_req_opt *) buf;
+	struct dsr_ack_req_opt *ack_req = (struct dsr_ack_req_opt *)buf;
 
-	if (len < (int) DSR_ACK_REQ_HDR_LEN)
+	if (len < (int)DSR_ACK_REQ_HDR_LEN)
 		return NULL;
 
 	/* Build option */
@@ -139,7 +137,7 @@ dsr_ack_req_opt_add(struct dsr_pkt *dp, unsigned short id)
 	/* If we are forwarding a packet and there is already an ACK REQ option,
 	 * we just overwrite the old one. */
 	if (dp->ack_req_opt) {
-		buf = (char *) dp->ack_req_opt;
+		buf = (char *)dp->ack_req_opt;
 		goto end;
 	}
 #ifdef NS2
@@ -202,8 +200,7 @@ dsr_ack_req_opt_add(struct dsr_pkt *dp, unsigned short id)
 	return dsr_ack_req_opt_create(buf, DSR_ACK_REQ_HDR_LEN, id);
 }
 
-int NSCLASS
-dsr_ack_req_send(struct in_addr neigh_addr, unsigned short id)
+int NSCLASS dsr_ack_req_send(struct in_addr neigh_addr, unsigned short id)
 {
 	struct dsr_pkt *dp;
 	struct dsr_ack_req_opt *ack_req;
@@ -280,8 +277,7 @@ dsr_ack_req_opt_recv(struct dsr_pkt *dp, struct dsr_ack_req_opt *ack_req_opt)
 	return DSR_PKT_NONE;
 }
 
-int NSCLASS
-dsr_ack_opt_recv(struct dsr_ack_opt *ack)
+int NSCLASS dsr_ack_opt_recv(struct dsr_ack_opt *ack)
 {
 	unsigned short id;
 	struct in_addr dst, src, myaddr;

@@ -43,11 +43,10 @@ struct maint_buf_query {
 
 static int maint_buf_print(struct tbl *t, char *buffer);
 
-static inline int
-crit_addr_id_del(void *pos, void *data)
+static inline int crit_addr_id_del(void *pos, void *data)
 {
-	struct maint_entry *m = (struct maint_entry *) pos;
-	struct maint_buf_query *q = (struct maint_buf_query *) data;
+	struct maint_entry *m = (struct maint_entry *)pos;
+	struct maint_buf_query *q = (struct maint_buf_query *)data;
 
 	if (m->nxt_hop.s_addr == q->nxt_hop->s_addr && m->id <= *(q->id)) {
 		if (m->dp) {
@@ -63,11 +62,10 @@ crit_addr_id_del(void *pos, void *data)
 	return 0;
 }
 
-static inline int
-crit_addr_del(void *pos, void *data)
+static inline int crit_addr_del(void *pos, void *data)
 {
-	struct maint_entry *m = (struct maint_entry *) pos;
-	struct in_addr *nxt_hop = (struct in_addr *) data;
+	struct maint_entry *m = (struct maint_entry *)pos;
+	struct in_addr *nxt_hop = (struct in_addr *)data;
 
 	if (m->nxt_hop.s_addr == nxt_hop->s_addr) {
 		if (m->dp) {
@@ -82,11 +80,10 @@ crit_addr_del(void *pos, void *data)
 	return 0;
 }
 
-static inline int
-crit_expires(void *pos, void *data)
+static inline int crit_expires(void *pos, void *data)
 {
-	struct maint_entry *m = (struct maint_entry *) pos;
-	struct maint_entry *m_new = (struct maint_entry *) data;
+	struct maint_entry *m = (struct maint_entry *)pos;
+	struct maint_entry *m_new = (struct maint_entry *)data;
 
 	if (timeval_diff(&m->expires, &m_new->expires) > 0)
 		return 1;
@@ -94,29 +91,28 @@ crit_expires(void *pos, void *data)
 
 }
 
-static inline int
-crit_ack_req_sent(void *pos, void *data)
+static inline int crit_ack_req_sent(void *pos, void *data)
 {
-	struct maint_entry *m = (struct maint_entry *) pos;
+	struct maint_entry *m = (struct maint_entry *)pos;
 
 	if (m->ack_req_sent)
 		return 1;
 	return 0;
 }
 
-void NSCLASS
-maint_buf_set_max_len(unsigned int max_len)
+void NSCLASS maint_buf_set_max_len(unsigned int max_len)
 {
 	maint_buf.max_len = max_len;
 }
 
-static struct maint_entry *
-maint_entry_create(struct dsr_pkt *dp, unsigned short id, unsigned long rto)
+static struct maint_entry *maint_entry_create(struct dsr_pkt *dp,
+					      unsigned short id,
+					      unsigned long rto)
 {
 	struct maint_entry *m;
 
-	m = (struct maint_entry *) MALLOC(sizeof (struct maint_entry),
-					  GFP_ATOMIC);
+	m = (struct maint_entry *)MALLOC(sizeof(struct maint_entry),
+					 GFP_ATOMIC);
 
 	if (!m)
 		return NULL;
@@ -140,8 +136,7 @@ maint_entry_create(struct dsr_pkt *dp, unsigned short id, unsigned long rto)
 	return m;
 }
 
-void NSCLASS
-maint_buf_timeout(unsigned long data)
+void NSCLASS maint_buf_timeout(unsigned long data)
 {
 	struct maint_entry *m;
 
@@ -149,7 +144,7 @@ maint_buf_timeout(unsigned long data)
 		return;
 
 	/* Remove the first packet that has the ack_req_sent flag */
-	m = (struct maint_entry *) data;	/* tbl_find_detach(&maint_buf, NULL,  */
+	m = (struct maint_entry *)data;	/* tbl_find_detach(&maint_buf, NULL,  */
 /* 						  crit_ack_req_sent); */
 
 	tbl_detach(&maint_buf, &m->l);
@@ -204,8 +199,7 @@ maint_buf_timeout(unsigned long data)
 
 	return;
 }
-void NSCLASS
-maint_buf_set_timeout(void)
+void NSCLASS maint_buf_set_timeout(void)
 {
 	struct maint_entry *m;
 	usecs_t rto;
@@ -218,8 +212,8 @@ maint_buf_set_timeout(void)
 
 	DSR_WRITE_LOCK(&maint_buf.lock);
 	/* Get first packet in maintenance buffer */
-	m = (struct maint_entry *) __tbl_find(&maint_buf, NULL,
-					      crit_ack_req_sent);
+	m = (struct maint_entry *)__tbl_find(&maint_buf, NULL,
+					     crit_ack_req_sent);
 
 	if (!m) {
 		DEBUG("No packet to set timeout for\n");
@@ -237,18 +231,17 @@ maint_buf_set_timeout(void)
 	DSR_WRITE_UNLOCK(&maint_buf.lock);
 
 	/* Check if this packet has already expired */
-	if (timeval_diff(&now, &tx_time) > (int) rto)
+	if (timeval_diff(&now, &tx_time) > (int)rto)
 		maint_buf_timeout(0);
 	else {
 		DEBUG("ACK Timer: exp=%ld.%06ld now=%ld.%06ld\n",
 		      expires.tv_sec, expires.tv_usec, now.tv_sec, now.tv_usec);
-		ack_timer.data = (unsigned long) m;
+		ack_timer.data = (unsigned long)m;
 		set_timer(&ack_timer, &expires);
 	}
 }
 
-int NSCLASS
-maint_buf_add(struct dsr_pkt *dp)
+int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 {
 	struct maint_entry *m;
 	struct neighbor_info neigh_info;
@@ -308,8 +301,7 @@ maint_buf_add(struct dsr_pkt *dp)
 }
 
 /* Remove all packets for a next hop */
-int NSCLASS
-maint_buf_del_all(struct in_addr nxt_hop)
+int NSCLASS maint_buf_del_all(struct in_addr nxt_hop)
 {
 	int n;
 
@@ -324,8 +316,7 @@ maint_buf_del_all(struct in_addr nxt_hop)
 }
 
 /* Remove packets for a next hop with a specific ID */
-int NSCLASS
-maint_buf_del_all_id(struct in_addr nxt_hop, unsigned short id)
+int NSCLASS maint_buf_del_all_id(struct in_addr nxt_hop, unsigned short id)
 {
 	struct maint_buf_query q;
 	int n;
@@ -344,8 +335,7 @@ maint_buf_del_all_id(struct in_addr nxt_hop, unsigned short id)
 	return n;
 }
 
-static int
-maint_buf_print(struct tbl *t, char *buffer)
+static int maint_buf_print(struct tbl *t, char *buffer)
 {
 	list_t *p;
 	int len;
@@ -359,7 +349,7 @@ maint_buf_print(struct tbl *t, char *buffer)
 	DSR_READ_LOCK(&t->lock);
 
 	list_for_each(p, &t->head) {
-		struct maint_entry *e = (struct maint_entry *) p;
+		struct maint_entry *e = (struct maint_entry *)p;
 
 		if (e && e->dp)
 			len +=
@@ -399,8 +389,7 @@ maint_buf_get_info(char *buffer, char **start, off_t offset, int length)
 
 #endif				/* __KERNEL__ */
 
-int NSCLASS
-maint_buf_init(void)
+int NSCLASS maint_buf_init(void)
 {
 #ifdef __KERNEL__
 	struct proc_dir_entry *proc;
@@ -423,13 +412,12 @@ maint_buf_init(void)
 	return 1;
 }
 
-void NSCLASS
-maint_buf_cleanup(void)
+void NSCLASS maint_buf_cleanup(void)
 {
 	struct maint_entry *m;
 	del_timer_sync(&ack_timer);
 
-	while ((m = (struct maint_entry *) tbl_detach_first(&maint_buf))) {
+	while ((m = (struct maint_entry *)tbl_detach_first(&maint_buf))) {
 #ifdef NS2
 		if (m->dp->p)
 			Packet::free(m->dp->p);

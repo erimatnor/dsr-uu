@@ -144,8 +144,7 @@ struct dsr_node {
 
 extern struct dsr_node *dsr_node;
 
-static inline const unsigned int
-get_confval(enum confval cv)
+static inline const unsigned int get_confval(enum confval cv)
 {
 	unsigned int val = 0;
 
@@ -157,8 +156,7 @@ get_confval(enum confval cv)
 	return val;
 }
 
-static inline const int
-set_confval(enum confval cv, unsigned int val)
+static inline const int set_confval(enum confval cv, unsigned int val)
 {
 	if (dsr_node) {
 		DSR_SPIN_LOCK(&dsr_node->lock);
@@ -170,8 +168,7 @@ set_confval(enum confval cv, unsigned int val)
 	return val;
 }
 
-static inline void
-dsr_node_init(struct dsr_node *dn)
+static inline void dsr_node_init(struct dsr_node *dn)
 {
 	int i;
 	spin_lock_init(&dn->lock);
@@ -183,8 +180,7 @@ dsr_node_init(struct dsr_node *dn)
 	}
 }
 
-static inline struct in_addr
-my_addr(void)
+static inline struct in_addr my_addr(void)
 {
 	static struct in_addr my_addr;
 	if (dsr_node) {
@@ -195,8 +191,7 @@ my_addr(void)
 	return my_addr;
 }
 
-static inline unsigned long
-time_add_msec(unsigned long msecs)
+static inline unsigned long time_add_msec(unsigned long msecs)
 {
 	struct timespec t;
 
@@ -206,8 +201,7 @@ time_add_msec(unsigned long msecs)
 	return timespec_to_jiffies(&t);
 }
 
-static inline const int
-get_slave_dev_ifindex(void)
+static inline const int get_slave_dev_ifindex(void)
 {
 	int ifindex = -1;
 
@@ -220,14 +214,12 @@ get_slave_dev_ifindex(void)
 	return ifindex;
 }
 
-static inline void
-dsr_node_lock(struct dsr_node *dnode)
+static inline void dsr_node_lock(struct dsr_node *dnode)
 {
 	spin_lock(&dnode->lock);
 }
 
-static inline void
-dsr_node_unlock(struct dsr_node *dnode)
+static inline void dsr_node_unlock(struct dsr_node *dnode)
 {
 	spin_unlock(&dnode->lock);
 }
@@ -240,8 +232,7 @@ int do_mackill(char *mac);
 
 #ifndef NO_DECLS
 
-static inline usecs_t
-confval_to_usecs(enum confval cv)
+static inline usecs_t confval_to_usecs(enum confval cv)
 {
 	usecs_t usecs = 0;
 	unsigned int val;

@@ -21,8 +21,7 @@ typedef struct list {
 	(le)->next = NULL; (le)->prev = NULL; \
 } while (0)
 
-static inline int
-listelm_detach(list_t * prev, list_t * next)
+static inline int listelm_detach(list_t * prev, list_t * next)
 {
 	next->prev = prev;
 	prev->next = next;
@@ -30,8 +29,7 @@ listelm_detach(list_t * prev, list_t * next)
 	return LIST_SUCCESS;
 }
 
-static inline int
-listelm_add(list_t * le, list_t * prev, list_t * next)
+static inline int listelm_add(list_t * le, list_t * prev, list_t * next)
 {
 	prev->next = le;
 	le->prev = prev;
@@ -41,8 +39,7 @@ listelm_add(list_t * le, list_t * prev, list_t * next)
 	return LIST_SUCCESS;
 }
 
-static inline int
-list_add(list_t * le, list_t * head)
+static inline int list_add(list_t * le, list_t * head)
 {
 
 	if (!head || !le)
@@ -53,8 +50,7 @@ list_add(list_t * le, list_t * head)
 	return LIST_SUCCESS;
 }
 
-static inline int
-list_add_tail(list_t * le, list_t * head)
+static inline int list_add_tail(list_t * le, list_t * head)
 {
 
 	if (!head || !le)
@@ -65,8 +61,7 @@ list_add_tail(list_t * le, list_t * head)
 	return LIST_SUCCESS;
 }
 
-static inline int
-list_detach(list_t * le)
+static inline int list_detach(list_t * le)
 {
 	if (!le)
 		return LIST_NULL;

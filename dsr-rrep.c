@@ -41,22 +41,20 @@ struct grat_rrep_query {
 	struct in_addr *src, *prev_hop;
 };
 
-static inline int
-crit_query(void *pos, void *query)
+static inline int crit_query(void *pos, void *query)
 {
-	struct grat_rrep_entry *p = (struct grat_rrep_entry *) pos;
-	struct grat_rrep_query *q = (struct grat_rrep_query *) query;
+	struct grat_rrep_entry *p = (struct grat_rrep_entry *)pos;
+	struct grat_rrep_query *q = (struct grat_rrep_query *)query;
 
 	if (p->src.s_addr == q->src->s_addr &&
 	    p->prev_hop.s_addr == q->prev_hop->s_addr)
 		return 1;
 	return 0;
 }
-static inline int
-crit_time(void *pos, void *time)
+static inline int crit_time(void *pos, void *time)
 {
-	struct grat_rrep_entry *p = (struct grat_rrep_entry *) pos;
-	struct timeval *t = (struct timeval *) time;
+	struct grat_rrep_entry *p = (struct grat_rrep_entry *)pos;
+	struct timeval *t = (struct timeval *)time;
 
 	if (timeval_diff(&p->expires, t) < 0)
 		return 1;
@@ -64,11 +62,10 @@ crit_time(void *pos, void *time)
 	return 0;
 }
 
-void NSCLASS
-grat_rrep_tbl_timeout(unsigned long data)
+void NSCLASS grat_rrep_tbl_timeout(unsigned long data)
 {
 	struct grat_rrep_entry *e =
-	    (struct grat_rrep_entry *) tbl_detach_first(&grat_rrep_tbl);
+	    (struct grat_rrep_entry *)tbl_detach_first(&grat_rrep_tbl);
 
 	FREE(e);
 
@@ -77,7 +74,7 @@ grat_rrep_tbl_timeout(unsigned long data)
 
 	DSR_READ_LOCK(&grat_rrep_tbl.lock);
 
-	e = (struct grat_rrep_entry *) TBL_FIRST(&grat_rrep_tbl);
+	e = (struct grat_rrep_entry *)TBL_FIRST(&grat_rrep_tbl);
 
 	grat_rrep_tbl_timer.function = &NSCLASS grat_rrep_tbl_timeout;
 
@@ -86,8 +83,7 @@ grat_rrep_tbl_timeout(unsigned long data)
 	DSR_READ_UNLOCK(&grat_rrep_tbl.lock);
 }
 
-int NSCLASS
-grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop)
+int NSCLASS grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop)
 {
 	struct grat_rrep_query q = { &src, &prev_hop };
 	struct grat_rrep_entry *e;
@@ -95,8 +91,8 @@ grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop)
 	if (in_tbl(&grat_rrep_tbl, &q, crit_query))
 		return 0;
 
-	e = (struct grat_rrep_entry *) MALLOC(sizeof (struct grat_rrep_entry),
-					      GFP_ATOMIC);
+	e = (struct grat_rrep_entry *)MALLOC(sizeof(struct grat_rrep_entry),
+					     GFP_ATOMIC);
 
 	if (!e)
 		return -1;
@@ -114,7 +110,7 @@ grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop)
 	if (tbl_add(&grat_rrep_tbl, &e->l, crit_time)) {
 
 		DSR_READ_LOCK(&grat_rrep_tbl.lock);
-		e = (struct grat_rrep_entry *) TBL_FIRST(&grat_rrep_tbl);
+		e = (struct grat_rrep_entry *)TBL_FIRST(&grat_rrep_tbl);
 
 		grat_rrep_tbl_timer.function = &NSCLASS grat_rrep_tbl_timeout;
 		set_timer(&grat_rrep_tbl_timer, &e->expires);
@@ -123,8 +119,7 @@ grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop)
 	return 1;
 }
 
-int NSCLASS
-grat_rrep_tbl_find(struct in_addr src, struct in_addr prev_hop)
+int NSCLASS grat_rrep_tbl_find(struct in_addr src, struct in_addr prev_hop)
 {
 	struct grat_rrep_query q = { &src, &prev_hop };
 
@@ -133,8 +128,7 @@ grat_rrep_tbl_find(struct in_addr src, struct in_addr prev_hop)
 	return 0;
 }
 
-static int
-grat_rrep_tbl_print(struct tbl *t, char *buf)
+static int grat_rrep_tbl_print(struct tbl *t, char *buf)
 {
 	list_t *pos;
 	int len = 0;
@@ -147,7 +141,7 @@ grat_rrep_tbl_print(struct tbl *t, char *buf)
 	len += sprintf(buf, "# %-15s %-15s Time\n", "Source", "Prev hop");
 
 	list_for_each(pos, &t->head) {
-		struct grat_rrep_entry *e = (struct grat_rrep_entry *) pos;
+		struct grat_rrep_entry *e = (struct grat_rrep_entry *)pos;
 
 		len += sprintf(buf + len, "  %-15s %-15s %lu\n",
 			       print_ip(e->src),
@@ -188,26 +182,26 @@ dsr_rrep_add_srt(struct dsr_rrep_opt *rrep_opt, struct dsr_srt *srt)
 	if (!rrep_opt | !srt)
 		return -1;
 
-	n = srt->laddrs / sizeof (struct in_addr);
+	n = srt->laddrs / sizeof(struct in_addr);
 
 	memcpy(rrep_opt->addrs, srt->addrs, srt->laddrs);
-	memcpy(&rrep_opt->addrs[n], &srt->dst, sizeof (struct in_addr));
+	memcpy(&rrep_opt->addrs[n], &srt->dst, sizeof(struct in_addr));
 
 	return 0;
 }
 
-static struct dsr_rrep_opt *
-dsr_rrep_opt_add(char *buf, int len, struct dsr_srt *srt)
+static struct dsr_rrep_opt *dsr_rrep_opt_add(char *buf, int len,
+					     struct dsr_srt *srt)
 {
 	struct dsr_rrep_opt *rrep_opt;
 
-	if (!buf || !srt || (unsigned int) len < DSR_RREP_OPT_LEN(srt))
+	if (!buf || !srt || (unsigned int)len < DSR_RREP_OPT_LEN(srt))
 		return NULL;
 
-	rrep_opt = (struct dsr_rrep_opt *) buf;
+	rrep_opt = (struct dsr_rrep_opt *)buf;
 
 	rrep_opt->type = DSR_OPT_RREP;
-	rrep_opt->length = srt->laddrs + sizeof (struct in_addr) + 1;
+	rrep_opt->length = srt->laddrs + sizeof(struct in_addr) + 1;
 	rrep_opt->l = 0;
 	rrep_opt->res = 0;
 
@@ -217,8 +211,7 @@ dsr_rrep_opt_add(char *buf, int len, struct dsr_srt *srt)
 	return rrep_opt;
 }
 
-int NSCLASS
-dsr_rrep_send(struct dsr_srt *srt, struct dsr_srt *srt_to_me)
+int NSCLASS dsr_rrep_send(struct dsr_srt *srt, struct dsr_srt *srt_to_me)
 {
 	struct dsr_pkt *dp = NULL;
 	char *buf;
@@ -246,7 +239,7 @@ dsr_rrep_send(struct dsr_srt *srt, struct dsr_srt *srt_to_me)
 	len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) +
 	    DSR_RREP_OPT_LEN(srt_to_me) + DSR_OPT_PAD1_LEN;
 
-	n = srt->laddrs / sizeof (struct in_addr);
+	n = srt->laddrs / sizeof(struct in_addr);
 
 	DEBUG("srt: %s\n", print_srt(srt));
 	DEBUG("srt_to_me: %s\n", print_srt(srt_to_me));
@@ -305,7 +298,7 @@ dsr_rrep_send(struct dsr_srt *srt, struct dsr_srt *srt_to_me)
 	buf += DSR_RREP_OPT_LEN(srt_to_me);
 	len -= DSR_RREP_OPT_LEN(srt_to_me);
 
-	pad1_opt = (struct dsr_pad1_opt *) buf;
+	pad1_opt = (struct dsr_pad1_opt *)buf;
 	pad1_opt->type = DSR_OPT_PAD1;
 
 	/* if (ConfVal(UseNetworkLayerAck)) */
@@ -323,8 +316,7 @@ dsr_rrep_send(struct dsr_srt *srt, struct dsr_srt *srt_to_me)
 	return -1;
 }
 
-int NSCLASS
-dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
+int NSCLASS dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 {
 	struct in_addr myaddr;
 	struct dsr_srt *rrep_opt_srt;
@@ -336,7 +328,7 @@ dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 
 	rrep_opt_srt = dsr_srt_new(dp->dst, dp->src,
 				   DSR_RREP_ADDRS_LEN(rrep_opt),
-				   (char *) rrep_opt->addrs);
+				   (char *)rrep_opt->addrs);
 
 	if (!rrep_opt_srt)
 		return DSR_PKT_ERROR;
@@ -363,8 +355,7 @@ dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 	return DSR_PKT_FORWARD;
 }
 
-int __init NSCLASS
-grat_rrep_tbl_init(void)
+int __init NSCLASS grat_rrep_tbl_init(void)
 {
 	INIT_TBL(&grat_rrep_tbl, GRAT_RREP_TBL_MAX_LEN);
 
@@ -374,8 +365,7 @@ grat_rrep_tbl_init(void)
 	return 0;
 }
 
-void __exit NSCLASS
-grat_rrep_tbl_cleanup(void)
+void __exit NSCLASS grat_rrep_tbl_cleanup(void)
 {
 	tbl_flush(&grat_rrep_tbl, NULL);
 #ifdef __KERNEL__

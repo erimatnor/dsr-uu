@@ -33,22 +33,19 @@
 
 #include <stdio.h>
 
-int
-litend(void)
+int litend(void)
 {
 	int i = 0;
-	((char *) (&i))[0] = 1;
+	((char *)(&i))[0] = 1;
 	return (i == 1);
 }
 
-int
-bigend(void)
+int bigend(void)
 {
 	return !litend();
 }
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
 	printf("#ifndef _DSR_ENDIAN_H\n");
 	printf("#define _DSR_ENDIAN_H\n");

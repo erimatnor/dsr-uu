@@ -64,8 +64,7 @@ static char *confval_names[CONFVAL_TYPE_MAX] = { "Seconds (s)",
 };
 
 /* Stolen from LUNAR <christian.tschudin@unibas.ch> */
-static int
-parse_mackill(void)
+static int parse_mackill(void)
 {
 	char *pa[MAX_MACKILL], *cp;
 	int i, j;		// , ia[ETH_ALEN];
@@ -102,8 +101,7 @@ parse_mackill(void)
 	return 0;
 }
 
-int
-do_mackill(char *mac)
+int do_mackill(char *mac)
 {
 	int i;
 
@@ -139,8 +137,7 @@ dsr_arpset(struct in_addr addr, struct sockaddr *hw_addr,
 }
 #endif
 
-int
-dsr_ip_recv(struct sk_buff *skb)
+int dsr_ip_recv(struct sk_buff *skb)
 {
 	struct dsr_pkt *dp;
 #ifdef DEBUG
@@ -178,8 +175,7 @@ dsr_ip_recv(struct sk_buff *skb)
 	return 0;
 };
 
-static void
-dsr_ip_recv_err(struct sk_buff *skb, u32 info)
+static void dsr_ip_recv_err(struct sk_buff *skb, u32 info)
 {
 	DEBUG("received error, info=%u\n", info);
 
@@ -371,8 +367,7 @@ static struct net_protocol dsr_inet_prot = {
 #endif
 };
 
-static int __init
-dsr_module_init(void)
+static int __init dsr_module_init(void)
 {
 	int res = -EAGAIN;
 	struct proc_dir_entry *proc;
@@ -466,8 +461,7 @@ dsr_module_init(void)
 	return res;
 }
 
-static void __exit
-dsr_module_cleanup(void)
+static void __exit dsr_module_cleanup(void)
 {
 #ifdef KERNEL26
 	inet_del_protocol(&dsr_inet_prot, IPPROTO_DSR);

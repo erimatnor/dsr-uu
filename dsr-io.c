@@ -19,8 +19,7 @@
 #include "debug.h"
 #include "send-buf.h"
 
-void NSCLASS
-dsr_recv(struct dsr_pkt *dp)
+void NSCLASS dsr_recv(struct dsr_pkt *dp)
 {
 	int i = 0, action;
 	int mask = DSR_PKT_NONE;
@@ -114,8 +113,7 @@ dsr_recv(struct dsr_pkt *dp)
 	dsr_pkt_free(dp);
 }
 
-void NSCLASS
-dsr_start_xmit(struct dsr_pkt *dp)
+void NSCLASS dsr_start_xmit(struct dsr_pkt *dp)
 {
 	int res;
 
