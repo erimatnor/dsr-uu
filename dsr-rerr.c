@@ -47,7 +47,7 @@ static struct dsr_rerr_opt *dsr_rerr_opt_add(char *buf, int len,
 }
 
 
-int dsr_rerr_send(struct dsr_pkt *dp_trigg)
+int dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 {
 	struct dsr_pkt *dp;
 	struct dsr_srt *srt;
@@ -138,7 +138,7 @@ int dsr_rerr_send(struct dsr_pkt *dp_trigg)
 	buf += DSR_SRT_OPT_LEN(dp->srt);
 	len -= DSR_SRT_OPT_LEN(dp->srt);
 	
-	rerr_opt = dsr_rerr_opt_add(buf, len, NODE_UNREACHABLE, dp->dst, dp_trigg->nxt_hop, salv);
+	rerr_opt = dsr_rerr_opt_add(buf, len, NODE_UNREACHABLE, dp->dst, unr_addr, salv);
 
 	if (!rerr_opt)
 		goto out_err;

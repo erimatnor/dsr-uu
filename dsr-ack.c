@@ -277,7 +277,10 @@ int dsr_ack_opt_recv(struct dsr_ack_opt *ack)
 		return DSR_PKT_ERROR;
 
 	/* Purge packets buffered for this next hop */
-	maint_buf_del(src, id);
+	if (maint_buf_mark_acked(src, id))
+		DEBUG("Packet marked acked\n");
+	else
+		DEBUG("No packet with id=%u found\n", id);
 
 	return DSR_PKT_NONE;
 }

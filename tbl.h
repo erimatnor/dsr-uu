@@ -71,11 +71,9 @@ static inline int __tbl_add(struct tbl *t, struct list_head *l, criteria_t crit)
 	return len;
 }
 
-static inline int tbl_add_tail(struct tbl *t, struct list_head *l)
+static inline int __tbl_add_tail(struct tbl *t, struct list_head *l)
 {
 	int len;
-
-	write_lock_bh(&t->lock);
 
 	if (t->len >= t->max_len) {
 		printk(KERN_WARNING "Max list len reached\n");
@@ -86,8 +84,15 @@ static inline int tbl_add_tail(struct tbl *t, struct list_head *l)
 
 	len = ++t->len;
 	
+	return len;
+}
+
+static inline int tbl_add_tail(struct tbl *t, struct list_head *l)
+{
+	int len;
+	write_lock_bh(&t->lock);
+	len = __tbl_add_tail(t, l);
 	write_unlock_bh(&t->lock);
-	
 	return len;
 }
 
@@ -128,19 +133,48 @@ static inline int __tbl_del(struct tbl *t, struct list_head *l)
 	return 1;
 }
 
-static inline void __tbl_do_for_each(struct tbl *t, void *data, do_t func)
+static inline int __tbl_do_for_first(struct tbl *t, void *data, do_t func)
 {
 	struct list_head *pos, *tmp;
     
 	list_for_each_safe(pos, tmp, &t->head)
-		func(pos, data);
+		if (func(pos, data))
+			return 1;
+
+	return 0;
 }
 
-static inline void tbl_do_for_each(struct tbl *t, void *data, do_t func)
+static inline int tbl_do_for_first(struct tbl *t, void *data, do_t func)
 {
+	int res;
+	
 	write_lock_bh(&t->lock);
-	__tbl_do_for_each(t, data, func);
+	res = __tbl_do_for_first(t, data, func);
 	write_unlock_bh(&t->lock);
+
+	return res;
+}
+
+static inline int __tbl_do_for_each(struct tbl *t, void *data, do_t func)
+{
+	struct list_head *pos, *tmp;
+	int res = 0;
+	
+	list_for_each_safe(pos, tmp, &t->head)
+		res += func(pos, data);
+	
+	return res;
+}
+
+static inline int tbl_do_for_each(struct tbl *t, void *data, do_t func)
+{
+	int res;
+	
+	write_lock_bh(&t->lock);
+	res = __tbl_do_for_each(t, data, func);
+	write_unlock_bh(&t->lock);
+
+	return res;
 }
 
 static inline void *tbl_find_detach(struct tbl *t, void *id, criteria_t crit)
