@@ -209,10 +209,10 @@ static inline int tbl_find_do(struct tbl *t, void *data, do_t func)
 
 static inline int __tbl_do_for_each(struct tbl *t, void *data, do_t func)
 {
-	list_t *pos, *tmp;
+	list_t *pos;
 	int res = 0;
 	
-	list_for_each_safe(pos, tmp, &t->head)
+	list_for_each(pos, &t->head)
 		res += func(pos, data);
 	
 	return res;

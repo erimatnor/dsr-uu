@@ -37,6 +37,9 @@ static struct lc_graph LC;
 #define LC_GARBAGE_COLLECT_INTERVAL 5 * 1000000/* 5 Seconds */
 #endif /* LC_TIMER */
 
+
+#define NODE_LOWEST_COST 0x1
+
 struct lc_node {
 	list_t l;
 	struct in_addr addr;
@@ -45,6 +48,7 @@ struct lc_node {
 	unsigned int hops;  /* Number of hops from source. Used to get the
 			     * length of the source route to allocate. Same as
 			     * cost if cost is hops. */
+	int flags;
 	struct lc_node *pred; /* predecessor */
 };
 
@@ -64,9 +68,6 @@ struct cheapest_node {
 	struct lc_node *n;
 };
 
-#ifdef NS2
-static char lc_print_buf[2048];
-#endif
 static int lc_print(struct lc_graph *LC, char *buf);
 
 static inline void __lc_link_del(struct lc_graph *lc, struct lc_link *link)
@@ -109,6 +110,9 @@ static inline int crit_expire(void *pos, void *data)
 	
 	gettime(&now);
 	
+	printf("ptr=0x%x exp_ptr=0x%x now_ptr=0x%x %s<->%s\n", (unsigned int)link, (unsigned int)&link->expires, (unsigned int)&now, print_ip(link->src->addr), print_ip(link->dst->addr));
+	fflush(stdout);
+
 	if (timeval_diff(&link->expires, &now) <= 0) {
 		__lc_link_del(lc, link);
 		return 1;
@@ -121,7 +125,9 @@ static inline int do_lowest_cost(void *pos, void *data)
 	struct lc_node *n = (struct lc_node *)pos;
 	struct cheapest_node *cn = (struct cheapest_node *)data;
 
-	if (n->cost != LC_COST_INF && (!cn->n || n->cost < cn->n->cost)) {
+	if (n->cost != LC_COST_INF && 
+	    !(n->flags & NODE_LOWEST_COST) &&
+	    (!cn->n || n->cost < cn->n->cost)) {
 		cn->n = n;		
 	}
 	return 0;
@@ -172,6 +178,15 @@ static inline int do_init(void *pos, void *addr)
 
 void NSCLASS lc_garbage_collect(unsigned long data)
 {
+	char buf[204859];
+
+	lc_print(&LC, buf);
+
+	printf("#node %d\n%s\n", this->myaddr_.s_addr, buf);
+	fflush(stdout);
+	printf("#end\n");
+	fflush(stdout);
+
 	tbl_do_for_each(&LC.links, &LC, crit_expire);
 
 	if (!tbl_empty(&LC.links))
@@ -351,7 +366,6 @@ int NSCLASS lc_link_del(struct in_addr src, struct in_addr dst)
 	
 	__lc_link_del(&LC, link);
 
-	
 /* 	lc_print(&LC, lc_print_buf); */
 /* 	DEBUG("\n%s\n", lc_print_buf); */
  out:
@@ -411,12 +425,14 @@ void NSCLASS __dijkstra(struct in_addr src)
 	
 	while ((u = __dijkstra_find_lowest_cost_node(&LC.nodes))) {
 		
+		u->flags |= NODE_LOWEST_COST;
+
+		tbl_do_for_each(&LC.links, u, do_relax);
+		
 		tbl_detach(&LC.nodes, &u->l);
 		
 		/* Add to S */
 		tbl_add_tail(&S, &u->l);
-		
-		tbl_do_for_each(&LC.links, u, do_relax);
 	}
 	
 	/* Restore the nodes in the LC graph */

@@ -4,7 +4,7 @@
 #include "tbl.h"
 #include "timer.h"
 
-#define LC_TIMER
+//#define LC_TIMER
 
 #ifndef NO_GLOBALS
 
