@@ -166,12 +166,14 @@ int dsr_vprintk(const char *func, const char *fmt, va_list args)
 	int printed_len, prefix_len;
 	char *p;
 	static char printk_buf[1024];
+	struct timeval now;
 	
 	/* This stops the holder of console_sem just where we want him */
 	spin_lock_irqsave(&dbg_logbuf_lock, flags);
-
-	prefix_len = sprintf(printk_buf, "%d:%s: ", 
-			     atomic_read(&num_pkts), func);
+	
+	do_gettimeofday(&now);
+	
+	prefix_len = sprintf(printk_buf, "%ld.%03ld:%s: ", now.tv_sec, now.tv_usec / 1000, func);
 	
 	/* Emit the output into the temporary buffer */
 	printed_len = vsnprintf(printk_buf+prefix_len, sizeof(printk_buf) - prefix_len, fmt, args);

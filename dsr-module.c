@@ -361,12 +361,11 @@ static int dsr_config_proc_write(struct file* file, const char* buffer,
   if(copy_from_user(cmd, buffer, count))
 	  return -EFAULT;
 
-		  
   for (i = 0; i < PARAMS_MAX; i++) {
 	  int n = strlen(params_def[i].name);
 	  
 	  if (strlen(cmd) - 2 <= n)
-		  return -EFAULT;
+		  continue;
 
 	  if (strncmp(cmd, params_def[i].name, n) == 0) {
 		  char *from, *to;

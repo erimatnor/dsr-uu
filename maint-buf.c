@@ -154,11 +154,12 @@ int maint_buf_add(struct dsr_pkt *dp)
 		return -1;
 	}
 	
-	dsr_ack_req_opt_add(dp, m->id);
-
-	if (empty)
-		maint_buf_set_timeout();
-
+	if (PARAM(UseNetworkLayerAck)) {
+		dsr_ack_req_opt_add(dp, m->id);
+		
+		if (empty)
+			maint_buf_set_timeout();
+	}
 	return 1;
 }
 static void maint_buf_set_timeout(void)
@@ -213,14 +214,6 @@ static void maint_buf_timeout(unsigned long data)
 	      print_ip(m->nxt_hop.s_addr), m->id, m->rexmt);
 	
 	m->timer_set = 0;
-
-/* 	if (m->acked) { */
-/* 		DEBUG("Packet was ACK'd, freeing\n"); */
-/* 		if (m->dp) */
-/* 			dsr_pkt_free(m->dp); */
-/* 		kfree(m); */
-/* 		goto out; */
-/* 	} */
 
 	/* Increase the number of retransmits */	
 	if (++m->rexmt >= PARAM(MaxMaintRexmt)) {
@@ -334,7 +327,6 @@ int maint_buf_init(void)
 
 	return 1;
 }
-
 
 void maint_buf_cleanup(void)
 {

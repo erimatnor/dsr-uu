@@ -8,6 +8,7 @@
 #include <linux/if_ether.h>
 #include <net/ip.h>
 #include <linux/random.h>
+#include <linux/wireless.h>
 
 #include "debug.h"
 #include "dsr.h"
@@ -23,6 +24,7 @@
 /* Our dsr device */
 struct net_device *dsr_dev;
 struct dsr_node *dsr_node;
+
 
 static int dsr_dev_inetaddr_event(struct notifier_block *this, 
 				  unsigned long event,
@@ -236,7 +238,7 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 		return -1;
 
 	/* Only buffer packets with data */
-	if (dp->payload_len)
+	if (dp->payload_len && PARAM(UseNetworkLayerAck))
 		maint_buf_add(dp);
 
 	dsr_node_lock(dsr_node);
@@ -347,6 +349,7 @@ static struct notifier_block inetaddr_notifier = {
 	.notifier_call = dsr_dev_inetaddr_event,
 };
 
+
 int __init dsr_dev_init(char *ifname)
 { 
 	int res = 0;	
@@ -392,6 +395,7 @@ int __init dsr_dev_init(char *ifname)
 			dev_hold(dnode->slave_dev);
 			DEBUG("wireless interface is %s\n", 
 			      dnode->slave_dev->name);
+			
 		} else {
 			DEBUG("No proper slave device found\n");
 			res = -1;

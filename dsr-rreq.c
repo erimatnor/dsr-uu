@@ -461,9 +461,7 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 	} else {
 		int i, n;
 		struct in_addr myaddr = my_addr();
-		
-		/* TODO: Reply if I have a route */
-		
+				
 		n = DSR_RREQ_ADDRS_LEN(rreq_opt) / sizeof(struct in_addr);
 		
 		/* Examine source route if this node already exists in it */
