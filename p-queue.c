@@ -251,7 +251,7 @@ int p_queue_set_verdict(int verdict, unsigned long daddr)
 		    }
 		    
 		    if (kdsr_get_hwaddr(dp->nh, &hw_addr, entry->skb->dev) < 0) {
-			    DEBUG("Could not get hardware addressn");
+			    DEBUG("Could not get hardware address\n");
 			    dev_kfree_skb(entry->skb);
 			    dsr_pkt_free(dp);
 			    goto out;
