@@ -1,6 +1,7 @@
 #include <linux/config.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/version.h>
 #include <linux/netdevice.h>
 #include <linux/inetdevice.h>
 #include <linux/etherdevice.h>
@@ -200,7 +201,11 @@ static void dsr_dev_uninit(struct net_device *dev)
 	dsr_node = NULL;
 }
 
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,4,20)
 static int __init dsr_dev_setup(struct net_device *dev)
+#else
+static void __init dsr_dev_setup(struct net_device *dev)
+#endif
 {
 	/* Fill in device structure with ethernet-generic values. */
 	ether_setup(dev);
@@ -223,8 +228,10 @@ static int __init dsr_dev_setup(struct net_device *dev)
 	SET_MODULE_OWNER(dev);
 	//random_ether_addr(dev->dev_addr);
 	get_random_bytes(dev->dev_addr, 6);
-	
+
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,4,20)	
 	return 0;
+#endif
 }
 
 
@@ -358,7 +365,7 @@ static struct notifier_block inetaddr_notifier = {
 };
 
 
-int __init dsr_dev_init(char *ifname)
+int  dsr_dev_init(char *ifname)
 { 
 	int res = 0;	
 	struct dsr_node *dnode;
