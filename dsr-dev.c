@@ -208,6 +208,38 @@ int dsr_dev_build_hw_hdr(struct sk_buff *skb, struct sockaddr *dest)
 	return -1;
 }
 
+int dsr_dev_deliver(struct sk_buff *skb)
+{	
+	struct dsr_node *dnode = skb->dev->priv;
+	int res;
+
+	skb->protocol = htons(ETH_P_IP);
+	skb->pkt_type = PACKET_HOST;
+	
+	dsr_dev_lock(dnode);
+	dsr_node->stats.rx_packets++;
+	dsr_node->stats.rx_bytes += skb->len;
+	dsr_dev_unlock(dnode);
+
+	skb->dev = dsr_dev;
+	dst_release(skb->dst);
+	skb->dst = NULL;
+#ifdef CONFIG_NETFILTER
+	nf_conntrack_put(skb->nfct);
+	skb->nfct = NULL;
+#ifdef CONFIG_NETFILTER_DEBUG
+	skb->nf_debug = 0;
+#endif
+#endif
+	res = netif_rx(skb);	
+	
+	if (res == NET_RX_DROP) {
+		DEBUG("Netif_rx DROP\n");
+	}
+	return res;
+}
+
+
 
 /* Transmit a DSR packet... this function assumes that the packet has a valid
  * source route already. */

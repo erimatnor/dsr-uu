@@ -86,7 +86,6 @@ static int kdsr_recv(struct sk_buff *skb)
 		len = dsr_opts_remove(dp);
 		
 		if (len) {
-			int res;
 			
 			DEBUG("Deliver to DSR device\n");
 			
@@ -103,27 +102,7 @@ static int kdsr_recv(struct sk_buff *skb)
 
 			skb_trim(skb, skb->len - len);
 			
-			skb->protocol = htons(ETH_P_IP);
-			skb->pkt_type = PACKET_HOST;
-			
-			dsr_node->stats.rx_packets++;
-			dsr_node->stats.rx_bytes += skb->len;
-
-			skb->dev = dsr_dev;
-			dst_release(skb->dst);
-			skb->dst = NULL;
-#ifdef CONFIG_NETFILTER
-			nf_conntrack_put(skb->nfct);
-			skb->nfct = NULL;
-#ifdef CONFIG_NETFILTER_DEBUG
-			skb->nf_debug = 0;
-#endif
-#endif
-			res = netif_rx(skb);	
-			
-			if (res == NET_RX_DROP) {
-				DEBUG("Netif_rx DROP\n");
-			}
+			dsr_dev_deliver(skb);
 			
 		} else
 			kfree_skb(skb);
