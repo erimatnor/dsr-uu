@@ -261,7 +261,6 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 		DEBUG("dp is NULL!?\n");
 		return -1;
 	}
-	/* If the buffer is empty we should also set the timer */
 
 	res = neigh_tbl_query(dp->nxt_hop, &neigh_info);
 
@@ -281,13 +280,14 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 		return -1;
 	}
 
+	neigh_tbl_id_inc(m->nxt_hop);
+
 	/* Check if we should add an ACK REQ */
 	if (dp->flags & PKT_REQUEST_ACK &&
 	    (usecs_t) timeval_diff(&m->tx_time, &neigh_info.last_ack_req) >
 	    ConfValToUsecs(MaintHoldoffTime)) {
 
 		/* Increased ID and sets last_ack_req time */
-		neigh_tbl_id_inc(m->nxt_hop);
 
 		m->ack_req_sent = 1;
 
@@ -361,7 +361,7 @@ static int maint_buf_print(struct tbl *t, char *buffer)
 
 	gettime(&now);
 
-	len = sprintf(buffer, "# %-15s %-6s %-6s %-2s %-15s %-15s %-15s\n",
+	len = sprintf(buffer, "# %-15s %-5s %-6s %-2s %-8s %-15s %-15s\n",
 		      "NeighAddr", "Rexmt", "Id", "AR", "RTO", "TxTime", "Expires");
 
 	DSR_READ_LOCK(&t->lock);
@@ -372,7 +372,7 @@ static int maint_buf_print(struct tbl *t, char *buffer)
 		if (e && e->dp)
 			len +=
 			    sprintf(buffer + len,
-				    "  %-15s %-6d %-6u %-2d %-15u %-15s %-15s\n",
+				    "  %-15s %-5d %-6u %-2d %-8u %-15s %-15s\n",
 				    print_ip(e->nxt_hop), e->rexmt, e->id,
 				    e->ack_req_sent, (unsigned int)e->rto, 
 				    print_timeval(&e->tx_time),
