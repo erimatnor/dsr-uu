@@ -56,7 +56,7 @@ void dsr_recv(char *buf, int len, struct in_addr src, struct in_addr dst)
 	dh = (dsr_hdr_t *)buf;
 
 	if (len < ntohs(dh->length)) {
-		DEBUG("received data to short according to DSR header!\n");
+		DEBUG("data to short according to DSR header len=%d dh->length=%d!\n", len, ntohs(dh->length));
 		return;
 	}
 

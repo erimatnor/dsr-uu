@@ -29,7 +29,7 @@ typedef struct dsr_hdr {
 } dsr_hdr_t;
 
 /* Header lengths */
-#define DSR_OPT_HDR_LEN sizeof(struct dsr_opt)
+#define DSR_OPT_HDR_LEN sizeof(struct dsr_hdr)
 #define DSR_PKT_MIN_LEN 24 /* IP header + DSR header =  20 + 4 */
 
 #define DSR_OPT_PADN       0
