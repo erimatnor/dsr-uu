@@ -31,7 +31,7 @@ MODULE_LICENSE("GPL");
 struct lc_node {
 	struct list_head l;
 	struct in_addr addr;
-	int links;
+	unsigned int links;
 	unsigned int cost; /* Cost estimate from source when running Dijkstra */
 	unsigned int hops;  /* Number of hops from source. Used to get the
 			     * length of the source route to allocate. Same as
@@ -62,10 +62,10 @@ static struct lc_graph LC;
 static inline void __lc_link_del(struct lc_link *link)
 {
 	/* Also free the nodes if they lack other links */
-	if (--link->src->links <= 0)
+	if (--link->src->links == 0)
 		__tbl_del(&LC.nodes, &link->src->l);
 
-	if (--link->dst->links <= 0)
+	if (--link->dst->links == 0)
 		__tbl_del(&LC.nodes, &link->dst->l);
 
 	__tbl_del(&LC.links, &link->l);
@@ -238,7 +238,11 @@ static int __lc_link_tbl_add(struct lc_node *src, struct lc_node *dst,
 		      print_ip(dst->addr.s_addr), 
 		      cost);
 		
-		__tbl_add(&LC.links, &link->l, crit_none);
+		__tbl_add_tail(&LC.links, &link->l);
+		
+		src->links++;
+		dst->links++;
+
 		res = 1;
 	} else
 		res = 0;
@@ -249,9 +253,6 @@ static int __lc_link_tbl_add(struct lc_node *src, struct lc_node *dst,
 	link->cost = cost;
 	link->expire = jiffies + (timeout / 1000 * HZ);
 	
-	src->links++;
-	dst->links++;
-
 	return res;
 }
 
@@ -263,7 +264,6 @@ int lc_link_add(struct in_addr src, struct in_addr dst,
 	
 	write_lock_bh(&LC.lock);
 	
-
 	sn = __tbl_find(&LC.nodes, &src, crit_addr);
 	dn = __tbl_find(&LC.nodes, &dst, crit_addr);
 
@@ -275,7 +275,7 @@ int lc_link_add(struct in_addr src, struct in_addr dst,
 			write_unlock_bh(&LC.lock);
 			return -1;
 		}
-		__tbl_add(&LC.nodes, &sn->l, crit_none);
+		__tbl_add_tail(&LC.nodes, &sn->l);
 		
 	}
 	if (!dn) {
@@ -285,7 +285,7 @@ int lc_link_add(struct in_addr src, struct in_addr dst,
 			write_unlock_bh(&LC.lock);
 			return -1;
 		}
-		__tbl_add(&LC.nodes, &dn->l, crit_none);
+		__tbl_add_tail(&LC.nodes, &dn->l);
 	}
 	
 	res = __lc_link_tbl_add(sn, dn, timeout, status, cost);
@@ -415,8 +415,8 @@ struct dsr_srt *dsr_rtc_find(struct in_addr src, struct in_addr dst)
 	
 	write_lock_bh(&LC.lock);
 	
-	if (!LC.src || LC.src->addr.s_addr != src.s_addr)
-		__dijkstra(src);
+/* 	if (!LC.src || LC.src->addr.s_addr != src.s_addr) */
+	__dijkstra(src);
 	
 	dst_node = __tbl_find(&LC.nodes, &dst, crit_addr);
 
@@ -429,9 +429,10 @@ struct dsr_srt *dsr_rtc_find(struct in_addr src, struct in_addr dst)
 	
 	if (dst_node->cost != LC_COST_INF) {
 		struct lc_node *n;
+		int k = (dst_node->hops - 1);
 		int i = 0;
 		
-		srt = kmalloc(sizeof(srt) * dst_node->hops, GFP_ATOMIC);
+		srt = kmalloc(sizeof(srt) * k, GFP_ATOMIC);
 		
 		if (!srt) {
 			DEBUG("Could not allocate source route!!!\n");
@@ -439,8 +440,9 @@ struct dsr_srt *dsr_rtc_find(struct in_addr src, struct in_addr dst)
 		}
 
 		srt->dst = dst;
-		srt->src = src;
-		
+		srt->src = src;		
+		srt->laddrs = k * sizeof(srt->dst);
+
 		if (!dst_node->pred) {
 			kfree(srt);
 			srt = NULL;
@@ -448,11 +450,12 @@ struct dsr_srt *dsr_rtc_find(struct in_addr src, struct in_addr dst)
 			goto out;			
 		}
 			
-		for (n = dst_node->pred; (n != n->pred) || !n->pred; n = n->pred) {
-			srt->addrs[i] = n->addr;
+		/* Fill in the source route by traversing the nodes starting
+		 * from the destination predecessor */
+		for (n = dst_node->pred; n && (n != n->pred) && n->pred; n = n->pred) {
+			srt->addrs[k-i-1] = n->addr;
 			i++;
 		}
-		srt->laddrs = i * sizeof(srt->dst);
 
 		if ((i + 1) != dst_node->hops)
 			DEBUG("hop count ERROR i+1=%d hops=%d!!!\n", i + 1, 
@@ -573,6 +576,28 @@ void dsr_rtc_flush(void)
 {
 	lc_flush();
 }
+
+static char *print_hops(unsigned int hops)
+{
+	static char c[18];
+	
+	if (hops == LC_HOPS_INF)
+		sprintf(c, "INF");
+	else
+		sprintf(c, "%u", hops);
+	return c;
+}
+
+static char *print_cost(unsigned int cost)
+{
+	static char c[18];
+	
+	if (cost == LC_COST_INF)
+		sprintf(c, "INF");
+	else
+		sprintf(c, "%u", cost);
+	return c;
+}
 static int lc_print(char *buf)
 {
 	struct list_head *pos;
@@ -590,6 +615,20 @@ static int lc_print(char *buf)
 			       print_ip(link->dst->addr.s_addr),
 			       link->cost,
 			       (link->expire - jiffies) / HZ);
+	}
+    
+	len += sprintf(buf+len, "\n# %-15s %-4s %-4s %-5s %12s %12s\n", "Addr", "Hops", "Cost", "Links", "This", "Pred");
+
+	list_for_each(pos, &LC.nodes.head) {
+		struct lc_node *n = (struct lc_node *)pos;
+		
+		len += sprintf(buf+len, "  %-15s %4s %4s %5u %12lX %12lX\n", 
+			       print_ip(n->addr.s_addr),
+			       print_hops(n->hops),
+			       print_cost(n->cost),
+			       n->links,
+			       (unsigned long)n,
+			       (unsigned long)n->pred);
 	}
     
 	read_unlock_bh(&LC.lock);
