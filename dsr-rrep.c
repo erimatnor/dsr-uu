@@ -186,20 +186,19 @@ static struct dsr_rrep_opt *dsr_rrep_opt_add(char *buf, int len, struct dsr_srt 
 	return rrep_opt;	
 }
 
-int dsr_rrep_send(struct dsr_srt *srt)
+int dsr_rrep_send(struct dsr_srt *srt_to_me)
 {
 	struct dsr_pkt *dp;
 	char *buf;
-	struct dsr_srt *srt_to_me;
 	struct dsr_pad1_opt *pad1_opt;
 	int len, ttl;
 	
-	if (!srt) {
+	if (!srt_to_me) {
 		DEBUG("no source route!\n");
 		return -1;
 	}	
 		
-	len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) + DSR_RREP_OPT_LEN(srt) + DSR_OPT_PAD1_LEN;
+	len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt_to_me) + DSR_RREP_OPT_LEN(srt_to_me) + DSR_OPT_PAD1_LEN;
 
 	dp = dsr_pkt_alloc(NULL, len);
 	
@@ -207,22 +206,31 @@ int dsr_rrep_send(struct dsr_srt *srt)
 		DEBUG("Could not allocate DSR packet\n");
 		return -1;
 	}
+	
+	dp->srt = dsr_srt_new_rev(srt_to_me);
 
-	dp->dst = srt->dst;
+	if (!dp->srt) {
+		dsr_pkt_free(dp);
+		return -1;
+	}
+
+	DEBUG("srt_to_me: %s\n", print_srt(srt_to_me));
+	DEBUG("srt_rev: %s\n", print_srt(dp->srt));
+
 	dp->src = my_addr();
-	dp->nxt_hop = dsr_srt_next_hop(srt, 0);
-	dp->srt = srt;
+	dp->dst = dp->srt->dst;
+	dp->nxt_hop = dsr_srt_next_hop(dp->srt, 0);
 	dp->dsr_opts_len = len;
 	dp->data = NULL;
 	dp->data_len = 0;
 	
-	DEBUG("IP_HDR_LEN=%d DSR_OPT_HDR_LEN=%d DSR_SRT_OPT_LEN=%d DSR_RREP_OPT_LEN=%d DSR_OPT_PAD1_LEN=%d RREP len=%d\n", IP_HDR_LEN, DSR_OPT_HDR_LEN, DSR_SRT_OPT_LEN(srt), DSR_RREP_OPT_LEN(srt), DSR_OPT_PAD1_LEN, len);
-	
-	DEBUG("srt: %s\n", print_srt(srt));
-	
-	ttl = srt->laddrs / sizeof(struct in_addr) + 2;
 
-	DEBUG("TTL=%d, n=%d\n", ttl, srt->laddrs / sizeof(struct in_addr));
+	DEBUG("IP_HDR_LEN=%d DSR_OPT_HDR_LEN=%d DSR_SRT_OPT_LEN=%d DSR_RREP_OPT_LEN=%d DSR_OPT_PAD1_LEN=%d RREP len=%d\n", IP_HDR_LEN, DSR_OPT_HDR_LEN, DSR_SRT_OPT_LEN(srt_to_me), DSR_RREP_OPT_LEN(srt_to_me), DSR_OPT_PAD1_LEN, len);
+	
+	
+	ttl = srt_to_me->laddrs / sizeof(struct in_addr) + 1;
+
+	DEBUG("TTL=%d, n=%d\n", ttl, srt_to_me->laddrs / sizeof(struct in_addr));
 
 	buf = dp->dsr_data;
 
@@ -246,15 +254,8 @@ int dsr_rrep_send(struct dsr_srt *srt)
 	buf += DSR_OPT_HDR_LEN;
 	len -= DSR_OPT_HDR_LEN;
 
-	srt_to_me = dsr_srt_new_rev(dp->srt);
-	
-	if (!srt_to_me) 
-		goto out_err;
-
 	/* Add the source route option to the packet */
 	dp->srt_opt = dsr_srt_opt_add(buf, len, srt_to_me);
-
-	kfree(srt_to_me);
 
 	if (!dp->srt_opt) {
 		DEBUG("Could not create Source Route option header\n");
@@ -299,8 +300,8 @@ int dsr_rrep_opt_recv(struct dsr_pkt *dp)
 	myaddr = my_addr();
 	
 	rrep_opt_srt = dsr_srt_new(dp->dst, dp->src, 
-			      DSR_RREP_ADDRS_LEN(dp->rrep_opt), 
-			      (char *)dp->rrep_opt->addrs);
+				   DSR_RREP_ADDRS_LEN(dp->rrep_opt), 
+				   (char *)dp->rrep_opt->addrs);
 	
 	if (!rrep_opt_srt)
 		return DSR_PKT_ERROR;

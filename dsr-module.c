@@ -243,17 +243,12 @@ static int dsr_ip_recv(struct sk_buff *skb)
 	}
 
 	if (action & DSR_PKT_SEND_RREP) {
-		struct dsr_srt *srt_rev;
 
 		DEBUG("Send RREP\n");
 		
 		if (dp->srt) {
-			srt_rev = dsr_srt_new_rev(dp->srt);
-			
-			DEBUG("srt_rev: %s\n", print_srt(srt_rev));
 			/* send rrep.... */
-			dsr_rrep_send(srt_rev);
-			kfree(srt_rev);
+			dsr_rrep_send(dp->srt);
 		}
 	}
 
