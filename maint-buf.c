@@ -59,6 +59,7 @@ static inline int crit_addr_id_del(void *pos, void *data)
 		if (m->dp) {
 #ifdef NS2
 			if (m->dp->p)
+/* 				drop(m->dp->p, DROP_RTR_SALVAGE); */
 				Packet::free(m->dp->p);
 #endif
 			dsr_pkt_free(m->dp);
@@ -169,6 +170,11 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 	unsigned short id;
 	unsigned long rto;
 	
+	if (!dp) {
+		DEBUG("dp is NULL!?\n");
+		return -1;
+	}		
+
 	if (TBL_EMPTY(&maint_buf))
 		empty = 1;
 	
@@ -192,7 +198,7 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 		return -1;
 	}
 	
-	if (ConfVal(UseNetworkLayerAck)) {
+	if (dp->flags & PKT_REQUEST_ACK) {
 		dsr_ack_req_opt_add(dp, m->id);
 		
 		if (empty)
@@ -263,23 +269,23 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 	/* Increase the number of retransmits */	
 	if (m->rexmt >= ConfVal(MaxMaintRexmt)) {
 		int n;
-		DEBUG("MaxMaintRexmt reached, send RERR\n");
+		DEBUG("MaxMaintRexmt reached!\n");
 		lc_link_del(my_addr(), m->nxt_hop);
 
 /* 		neigh_tbl_del(m->nxt_hop); */
-
-		DEBUG("Deleted %d packets from maint_buf\n", n);
 
 		dsr_rerr_send(m->dp, m->nxt_hop);
 
 		if (m->dp) {
 #ifdef NS2
 			if (m->dp->p)
-				Packet::free(m->dp->p);
+				drop(m->dp->p, DROP_RTR_SALVAGE);
 #endif
 			dsr_pkt_free(m->dp);
 		}
 		n = maint_buf_del_all(m->nxt_hop);
+		
+		DEBUG("Deleted %d packets from maint_buf\n", n);
 
 		FREE(m);
 		goto out;

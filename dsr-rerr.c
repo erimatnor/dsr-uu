@@ -60,11 +60,13 @@ int NSCLASS dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 {
 	struct dsr_pkt *dp;
 	struct dsr_rerr_opt *rerr_opt;
-	struct in_addr dst, err_src, err_dst;
+	struct in_addr dst, err_src, err_dst, myaddr;
 	char *buf;
 	int n, len, salv/* , i */;
 	
-	if (!dp_trigg)
+	myaddr = my_addr();
+
+	if (!dp_trigg || dp_trigg->src.s_addr == myaddr.s_addr)
 		return -1;
 
 	dp_trigg->srt_opt = (struct dsr_srt_opt *)dsr_opt_find_opt(dp_trigg, DSR_OPT_SRT);
@@ -101,7 +103,7 @@ int NSCLASS dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 		return -1;
 	}
 
-	dp->srt = dsr_rtc_find(my_addr(), dst);
+	dp->srt = dsr_rtc_find(myaddr, dst);
 
 	if (!dp->srt) {
 		DEBUG("No source route to %s\n", print_ip(dst));
@@ -113,7 +115,7 @@ int NSCLASS dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 
 	DEBUG("opt_len=%d SR: %s\n", len, print_srt(dp->srt));
 	n = dp->srt->laddrs / sizeof(struct in_addr);
-	dp->src = my_addr();
+	dp->src = myaddr;
 	dp->dst = dst;
 	dp->nxt_hop = dsr_srt_next_hop(dp->srt, n);
 	

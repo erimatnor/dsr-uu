@@ -23,7 +23,7 @@ struct dsr_rrep_opt {
 
 
 
-#define DSR_RREP_HDR_LEN sizeof(struct dsr_rrep_opt)
+#define DSR_RREP_HDR_LEN 3
 #define DSR_RREP_OPT_LEN(srt) (DSR_RREP_HDR_LEN + srt->laddrs + sizeof(struct in_addr))
 /* Length of source route is length of option, minus reserved/flags field minus
  * the last source route hop (which is the destination) */
@@ -34,7 +34,7 @@ struct dsr_rrep_opt {
 #ifndef NO_DECLS
 
 int dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt);
-int dsr_rrep_send(struct dsr_srt *srt);
+int dsr_rrep_send(struct dsr_srt *srt, struct dsr_srt *srt_to_me);
 
 void grat_rrep_tbl_timeout(unsigned long data);
 int grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop);

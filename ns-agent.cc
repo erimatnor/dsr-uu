@@ -211,6 +211,7 @@ DSRUU::ns_packet_create(struct dsr_pkt *dp)
 		
 		if (!neigh_tbl_get_hwaddr(dp->nxt_hop, &hw_addr)) {
 			DEBUG("No next hop MAC address in neigh_tbl\n");
+			Packet::free(dp->p);
 			return NULL;
 		}
 
@@ -243,14 +244,14 @@ DSRUU::ns_packet_create(struct dsr_pkt *dp)
 	cmh->size() = tot_len;
 	cmh->iface() = -2;
 	cmh->error() = 0;
-	cmh->prev_hop_ = (nsaddr_t)dp->src.s_addr;
+	cmh->prev_hop_ = (nsaddr_t)myaddr_.s_addr;
 	cmh->next_hop_ = (nsaddr_t)dp->nxt_hop.s_addr;
 	
 	memcpy(iph, dp->nh.iph, sizeof(hdr_ip));
 	
 	return dp->p;
 }
-
+	    
 void 
 DSRUU::ns_xmit(struct dsr_pkt *dp)
 {
@@ -259,20 +260,19 @@ DSRUU::ns_xmit(struct dsr_pkt *dp)
 	struct hdr_cmn *cmh;
 	struct hdr_ip *iph; 
 	double jitter = 0.0;
+		
+	if (dp->flags & PKT_REQUEST_ACK)
+		maint_buf_add(dp);
 	
 	p = ns_packet_create(dp);
 
 	if (!p) {
 		DEBUG("Could not create packet\n");
 		if (dp->p) 
-			drop(dp->p, DROP_RTR_TTL); /* Should change reason */	
+			drop(dp->p, DROP_RTR_NO_ROUTE);
 		goto out;
 	}	
-	
-	if ((DATA_PACKET(dp->dh.opth->nh) || dp->dh.opth->nh == PT_PING) && 
-	    ConfVal(UseNetworkLayerAck))
-		maint_buf_add(dp);
-	
+
 	iph = HDR_IP(p);
 	cmh = HDR_CMN(p);
     
@@ -287,10 +287,11 @@ DSRUU::ns_xmit(struct dsr_pkt *dp)
 	      iph->saddr(), iph->daddr(), cmh->next_hop_);
     
 	/* Set packet fields depending on packet type */
-	if ((u_int32_t)iph->daddr() == DSR_BROADCAST) { 
+	if (dp->flags & PKT_XMIT_JITTER) {
+		jitter = ConfVal(BroadCastJitter);
 		/* Broadcast packet */
-		jitter = (ConfValToUsecs(BroadCastJitter) / 1000000) * 
-			Random::uniform();
+		jitter = Random::uniform(jitter / 1000);
+		DEBUG("xmit jitter=%f\n", jitter);
 	}
 		
 	Scheduler::instance().schedule(ll_, p, jitter);
@@ -315,7 +316,7 @@ DSRUU::ns_deliver(struct dsr_pkt *dp)
 
 	target_->recv(dp->p, (Handler*)0);
 	
-	dp->p = 0;
+	dp->p = NULL;
 	dsr_pkt_free(dp);
 }
 
@@ -333,7 +334,7 @@ DSRUU::recv(Packet* p, Handler*)
 	switch(cmh->ptype()) {
 	case PT_DSR:
 		if (dp->src.s_addr != myaddr_.s_addr) {
-// 			DEBUG("DSR packet from %s\n", print_ip(dp->src));
+// 			DEBUG("DSR packet from %s\n", print_ip(dp->src)); 
 			dsr_recv(dp);
 		} else {
 			
@@ -344,6 +345,7 @@ DSRUU::recv(Packet* p, Handler*)
 		if (dp->src.s_addr == myaddr_.s_addr) {
 			DEBUG("Locally generated non DSR packet\n");
 			dp->payload_len += IP_HDR_LEN;
+			
 			dsr_start_xmit(dp);
 		} else {
 			// This shouldn't really happen ?
@@ -361,7 +363,7 @@ DSRUU::tap(const Packet *p)
 	struct dsr_pkt *dp;
 	hdr_cmn *cmh = hdr_cmn::access(p);
 	hdr_ip *iph = hdr_ip::access(p);
-	struct in_addr next_hop;
+	struct in_addr next_hop, prev_hop;
 	/* We need to make a copy since the original packet is "const" and is
 	 * not to be touched */
 
@@ -372,10 +374,10 @@ DSRUU::tap(const Packet *p)
 		goto out;
 
 	next_hop.s_addr = cmh->next_hop_;
+	prev_hop.s_addr = cmh->prev_hop_;
 
 	/* Do nothing for packets I am going to receive anyway */
-	if ((unsigned int)iph->daddr() == myaddr_.s_addr ||
-	    next_hop.s_addr == myaddr_.s_addr)
+	if (next_hop.s_addr == myaddr_.s_addr)
 		goto out;
 	    
 	do {
@@ -385,8 +387,8 @@ DSRUU::tap(const Packet *p)
 		dst.s_addr = iph->daddr();
 		
 		next_hop.s_addr = cmh->next_hop_;
-		DEBUG("###### Tap packet src=%s dst=%s next_hop=%s\n", 
-		      print_ip(src), print_ip(dst), print_ip(next_hop));
+		DEBUG("###### Tap packet src=%s dst=%s prev_hop=%s next_hop=%s\n", 
+		      print_ip(src), print_ip(dst), print_ip(prev_hop), print_ip(next_hop));
 	} while (0);
 	
 	dp = dsr_pkt_alloc(p_copy);
@@ -496,7 +498,7 @@ void
 DSRUUTimer::expire (Event *e)
 {
 	if (a_) {
-		a_->trace(__FUNCTION__, "%s Interrupt\n", name_);
+		// a_->trace(__FUNCTION__, "%s Interrupt\n", name_);
 		(a_->*function)(data);
 	}
 }

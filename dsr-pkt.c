@@ -96,12 +96,16 @@ struct dsr_pkt *dsr_pkt_alloc(Packet *p)
 		dp->mac.raw = p->access(hdr_mac::offset_);
 		dp->nh.iph = hdr_ip::access(p);
 		
-		dp->src.s_addr = Address::instance().get_nodeaddr(dp->nh.iph->saddr());
-		dp->dst.s_addr = Address::instance().get_nodeaddr(dp->nh.iph->daddr());
+		dp->src.s_addr = 
+			Address::instance().get_nodeaddr(dp->nh.iph->saddr());
+		dp->dst.s_addr = 
+			Address::instance().get_nodeaddr(dp->nh.iph->daddr());
 
 		if (cmh->ptype() == PT_DSR) {
-			dp->dh.opth = hdr_dsr::access(p);	
-			dsr_opts_len = ntohs(dp->dh.opth->p_len) + DSR_OPT_HDR_LEN;
+			dp->dh.opth = hdr_dsr::access(p);
+			
+			dsr_opts_len = ntohs(dp->dh.opth->p_len) + 
+				DSR_OPT_HDR_LEN;
 			
 			if (!dsr_pkt_alloc_opts(dp, dsr_opts_len)) {
 				FREE(dp);
@@ -110,12 +114,16 @@ struct dsr_pkt *dsr_pkt_alloc(Packet *p)
 			
 			memcpy(dp->dsr_opts, dp->dh.raw, dsr_opts_len);
 			dp->dh.raw = dp->dsr_opts;
-			
 		
-		} 
+			if (DATA_PACKET(dp->dh.opth->nh) ||
+			    dp->dh.opth->nh == PT_PING)
+				dp->flags |= PKT_REQUEST_ACK;						
+		} else if (DATA_PACKET(cmh->ptype()) ||
+			   cmh->ptype() == PT_PING)
+			dp->flags |= PKT_REQUEST_ACK;
+			
 		/* A trick to calculate payload length... */
 		dp->payload_len = cmh->size() - dsr_opts_len - IP_HDR_LEN;
-		
 	}
 	return dp;
 }

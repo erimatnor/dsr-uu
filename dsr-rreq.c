@@ -457,6 +457,9 @@ int NSCLASS dsr_rreq_send(struct in_addr target, int ttl)
 	DEBUG("Sending RREQ src=%s dst=%s target=%s ttl=%d iph->saddr()=%d\n", 
 	      print_ip(dp->src), print_ip(dp->dst), print_ip(target), ttl, dp->nh.iph->saddr());
 #endif
+	
+	dp->flags |= PKT_XMIT_JITTER;
+
 	XMIT(dp);
 
 	return 0;
@@ -472,7 +475,8 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 	struct in_addr myaddr;
 	struct in_addr trg;
 	struct dsr_srt *srt_rev;
-
+	int action = DSR_PKT_NONE;
+	
 	if (!dp || !rreq_opt || dp->flags & PKT_PROMISC_RECV)
 		return DSR_PKT_DROP;
 
@@ -490,8 +494,7 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 
 	rreq_tbl_add_id(dp->src, trg, ntohs(rreq_opt->id));
 	
-	dp->srt = dsr_srt_new(dp->src, myaddr,
-			      DSR_RREQ_ADDRS_LEN(rreq_opt),
+	dp->srt = dsr_srt_new(dp->src, myaddr, DSR_RREQ_ADDRS_LEN(rreq_opt),
 			      (char *)rreq_opt->addrs);
 	
 	if (!dp->srt) {
@@ -499,8 +502,8 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		return DSR_PKT_ERROR;
 	}
 	DEBUG("RREQ target=%s src=%s dst=%s laddrs=%d\n", 
-	      print_ip(trg), print_ip(dp->src), print_ip(dp->dst), DSR_RREQ_ADDRS_LEN(rreq_opt));
-	/* DEBUG("my addr %s\n", print_ip(myaddr)); */
+	      print_ip(trg), print_ip(dp->src), 
+	      print_ip(dp->dst), DSR_RREQ_ADDRS_LEN(rreq_opt));
 	
         /* Add reversed source route */
 	srt_rev = dsr_srt_new_rev(dp->srt);
@@ -510,7 +513,6 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		return DSR_PKT_ERROR;
 	}
 	DEBUG("srt: %s\n", print_srt(dp->srt));
-
 	DEBUG("srt_rev: %s\n", print_srt(srt_rev));
        
 	dsr_rtc_add(srt_rev, ConfValToUsecs(RouteCacheTimeout), 0);
@@ -520,30 +522,26 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		dp->prv_hop = srt_rev->addrs[0];
 	else
 		dp->prv_hop = srt_rev->dst;
-
-/* 	DEBUG("prv_hop=%s\n", print_ip(dp->prv_hop)); */
 	
 	neigh_tbl_add(dp->prv_hop, dp->mac.ethh);
 
 	/* Send buffered packets */
 	send_buf_set_verdict(SEND_BUF_SEND, srt_rev->dst);
 
-	FREE(srt_rev);
-		
 	if (rreq_opt->target == myaddr.s_addr) {
-
+		
 		DEBUG("RREQ OPT for me\n");
 		
 		/* According to the draft, the dest addr in the IP header must
 		 * be updated with the target address */
 #ifdef NS2
-
+		dp->nh.iph->daddr() = (nsaddr_t)rreq_opt->target;
 #else
 		dp->nh.iph->daddr = rreq_opt->target;
 #endif		
-		dsr_rrep_send(dp->srt);
+		dsr_rrep_send(srt_rev, dp->srt);
 		
-		return DSR_PKT_NONE;
+		action = DSR_PKT_NONE;
 	} else {
 		int i, n;
 		struct in_addr myaddr = my_addr();
@@ -552,8 +550,10 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		
 		/* Examine source route if this node already exists in it */
 		for (i = 0; i < n; i++)
-			if (dp->srt->addrs[i].s_addr == myaddr.s_addr)
-				return DSR_PKT_DROP;
+			if (dp->srt->addrs[i].s_addr == myaddr.s_addr) {
+				action = DSR_PKT_DROP;
+				goto out;
+			}
 		
 		dsr_pkt_alloc_opts_expand(dp, sizeof(struct in_addr));
 		
@@ -576,10 +576,11 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 			     dp->nh.iph->ttl);
 #endif
 		/* Forward RREQ */
-		return DSR_PKT_FORWARD_RREQ;
+		action = DSR_PKT_FORWARD_RREQ;
 	}
-
-	return DSR_PKT_DROP;
+ out:
+	FREE(srt_rev);
+	return action;
 }
 
 #ifdef __KERNEL__
