@@ -38,15 +38,17 @@ struct grat_rrep_entry {
 	struct timeval expires;
 };
 
+struct grat_rrep_query {
+	struct in_addr *src, *prev_hop;
+};
 
 static inline int crit_query(void *pos, void *query)
 {
 	struct grat_rrep_entry *p = (struct grat_rrep_entry *)pos;
-	struct in_addr *src = (struct in_addr *)query;
-	struct in_addr *prev_hop = (struct in_addr *)src+1;
+	struct grat_rrep_query *q = (struct grat_rrep_query *)query;
 	
-	if (p->src.s_addr == src->s_addr && 
-	    p->prev_hop.s_addr == prev_hop->s_addr)
+	if (p->src.s_addr == q->src->s_addr && 
+	    p->prev_hop.s_addr == q->prev_hop->s_addr)
 		return 1;
 	return 0;
 }
@@ -84,10 +86,10 @@ void NSCLASS grat_rrep_tbl_timeout(unsigned long data)
 
 int NSCLASS grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop)
 {
-	struct in_addr q[2] = { src, prev_hop };
+	struct grat_rrep_query q = { &src, &prev_hop };
 	struct grat_rrep_entry *e;
 	
-	if (in_tbl(&grat_rrep_tbl, q, crit_query))
+	if (in_tbl(&grat_rrep_tbl, &q, crit_query))
 		return 0;
 
 	e = (struct grat_rrep_entry *)MALLOC(sizeof(struct grat_rrep_entry), GFP_ATOMIC);
@@ -115,6 +117,15 @@ int NSCLASS grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop)
 		DSR_READ_UNLOCK(&grat_rrep_tbl.lock);		
 	}
 	return 1;
+}
+
+int NSCLASS grat_rrep_tbl_find(struct in_addr src, struct in_addr prev_hop)
+{
+	struct grat_rrep_query q = { &src, &prev_hop };
+	
+	if (in_tbl(&grat_rrep_tbl, &q, crit_query))
+		return 1;
+	return 0;
 }
 
 #ifdef __KERNEL__
@@ -201,7 +212,7 @@ int NSCLASS dsr_rrep_send(struct dsr_srt *srt_to_me)
 	struct dsr_pkt *dp;
 	char *buf;
 	struct dsr_pad1_opt *pad1_opt;
-	int len, ttl;
+	int len, ttl, n;
 	
 	if (!srt_to_me) {
 		DEBUG("no source route!\n");
@@ -223,13 +234,16 @@ int NSCLASS dsr_rrep_send(struct dsr_srt *srt_to_me)
 		dsr_pkt_free(dp);
 		return -1;
 	}
+	n = dp->srt->laddrs / sizeof(struct in_addr);
 
 	DEBUG("srt_to_me: %s\n", print_srt(srt_to_me));
 	DEBUG("srt_rev: %s\n", print_srt(dp->srt));
 
 	dp->src = my_addr();
 	dp->dst = dp->srt->dst;
-	dp->nxt_hop = dsr_srt_next_hop(dp->srt, dp->src, 0);
+	dp->nxt_hop = dsr_srt_next_hop(dp->srt, n);
+
+	DEBUG("next_hop=%s\n", print_ip(dp->nxt_hop));
 
 	DEBUG("IP_HDR_LEN=%d DSR_OPT_HDR_LEN=%d DSR_SRT_OPT_LEN=%d DSR_RREP_OPT_LEN=%d DSR_OPT_PAD1_LEN=%d RREP len=%d\n", IP_HDR_LEN, DSR_OPT_HDR_LEN, DSR_SRT_OPT_LEN(srt_to_me), DSR_RREP_OPT_LEN(srt_to_me), DSR_OPT_PAD1_LEN, len);
 	
@@ -298,7 +312,7 @@ int NSCLASS dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 	struct in_addr myaddr;
 	struct dsr_srt *rrep_opt_srt;
 
-	if (!dp || !dp->rrep_opt)
+	if (!dp || !dp->rrep_opt || dp->flags & PKT_PROMISC_RECV)
 		return DSR_PKT_ERROR;
 
 	
@@ -311,11 +325,10 @@ int NSCLASS dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 	if (!rrep_opt_srt)
 		return DSR_PKT_ERROR;
 	
-	DEBUG("Adding srt to cache\n");
-	dsr_rtc_add(rrep_opt_srt, 60000, 0);
+/* 	DEBUG("Adding srt to cache\n"); */
+	dsr_rtc_add(rrep_opt_srt, ConfValToUsecs(RouteCacheTimeout), 0);
 	
 	/* Remove pending RREQs */
-	
 	rreq_tbl_route_discovery_cancel(rrep_opt_srt->dst);
 	
 	FREE(rrep_opt_srt);

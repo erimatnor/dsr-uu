@@ -38,6 +38,7 @@ int dsr_rrep_send(struct dsr_srt *srt);
 
 void grat_rrep_tbl_timeout(unsigned long data);
 int grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop);
+int grat_rrep_tbl_find(struct in_addr src, struct in_addr prev_hop);
 int grat_rrep_tbl_init(void);
 void grat_rrep_tbl_cleanup(void);
 

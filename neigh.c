@@ -147,21 +147,38 @@ static struct neighbor *neigh_tbl_create(struct in_addr addr,
 
 	return neigh;
 }
-
-int NSCLASS neigh_tbl_add(struct in_addr neigh_addr, struct sockaddr *hw_addr)
+#ifdef NS2 
+int NSCLASS neigh_tbl_add(struct in_addr neigh_addr, struct hdr_mac *mach)
+#else
+int NSCLASS neigh_tbl_add(struct in_addr neigh_addr, struct ethhdr *ethh)
+#endif
 {
+	struct sockaddr hw_addr;
 	struct neighbor *neigh;
 	
 	if (in_tbl(&neigh_tbl, &neigh_addr, crit_addr))
 		return 0;
-
-	neigh = neigh_tbl_create(neigh_addr, hw_addr, 1);
+#ifdef NS2 
+	/* This should probably be changed to lookup the MAC type
+	 * dynamically in case the simulation is run over a non 802.11
+	 * mac layer... Or is there a uniform way to get hold of the mac
+	 * source for all mac headers? */
+	struct hdr_mac802_11 *mh_802_11 = 
+		(struct hdr_mac802_11 *)mach;
+	
+	int mac_src = ETHER_ADDR(mh_802_11->dh_ta);
+	
+	inttoeth(&mac_src, (char *)&hw_addr);
+#else	
+	memcpy(hw_addr.sa_data, ethh->h_source, ETH_ALEN);
+#endif		
+	
+	neigh = neigh_tbl_create(neigh_addr, &hw_addr, 1);
 
 	if (!neigh) {
 		DEBUG("Could not create new neighbor entry\n");
 		return -1;
 	}
-	
 	tbl_add(&neigh_tbl, &neigh->l, crit_none);
 
 	return 1;

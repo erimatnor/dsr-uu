@@ -14,65 +14,49 @@
 #include "link-cache.h"
 #include "debug.h"
 
-struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, struct in_addr myaddr, int index)
+
+struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, int sleft)
 {
 	int n = srt->laddrs / sizeof(struct in_addr);
 	struct in_addr nxt_hop;
 	
-	if (srt->src.s_addr == myaddr.s_addr) {
-		if (srt->laddrs == 0)
-			nxt_hop = srt->dst;
-		else
-			nxt_hop = srt->addrs[0];
-	} else {
-		
-		/* The draft's usage of indexes into the source route is a bit
-		 * confusing since they use arrays that start at position 1 */
-		
-		if ((index - n) == 0)
-			nxt_hop = srt->dst;
-		else
-			nxt_hop = srt->addrs[index-1];
-	}
+	if (sleft == 0)
+		nxt_hop = srt->dst;
+	else 
+		nxt_hop = srt->addrs[n-sleft];
 	
-/* 	DEBUG("Next hop for %s is %s\n",  */
-/* 	      print_ip(srt->dst), print_ip(nxt_hop)); */
-
 	return nxt_hop;
 }
 
-struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt, struct in_addr myaddr)
+struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt, int sleft)
 {
 	struct in_addr prev_hop;
 	int n = srt->laddrs / sizeof(u_int32_t);
-		
-	/* Find the previous hop */
-	if (n == 0)
+	
+	if (sleft + 1 == n)
 		prev_hop = srt->src;
-	else {
-		int i;
-		
-		if (srt->dst.s_addr == myaddr.s_addr) {
-			prev_hop = srt->addrs[n-1];
-			goto out;
-		}
-		for (i = 0; i < n; i++) {
-			if (srt->addrs[i].s_addr == myaddr.s_addr) {
-				if (i == 0)
-					prev_hop = srt->src;
-				else 
-					prev_hop = srt->addrs[i-1];
-				goto out;
-			}
-/* 			DEBUG("Error! Previous hop not found!\n"); */
-			return prev_hop;
-		}
-	}
- out:
-/* 	DEBUG("Previous hop=%s\n", print_ip(prev_hop)); */
+	else 
+		prev_hop = srt->addrs[n-sleft+1];
+
 	return prev_hop;
 }
 
+static int dsr_srt_find_addr(struct dsr_srt *srt, struct in_addr addr, int index)
+{
+	int n = srt->laddrs / sizeof(struct in_addr);
+	
+	if (n == 0 || index >= n)
+		return 0;
+	
+	for (; index < n; index++)
+		if (srt->addrs[index].s_addr == addr.s_addr)
+			return 1;
+
+	if (addr.s_addr == srt->dst.s_addr)
+		return 1;
+	
+	return 0;
+}
 
 struct dsr_srt *dsr_srt_new(struct in_addr src, struct in_addr dst,
 		       unsigned int length, char *addrs)
@@ -150,13 +134,15 @@ struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt)
 int NSCLASS dsr_srt_add(struct dsr_pkt *dp)
 {
 	char *buf;
-	int len, ttl, tot_len, ip_len;
+	int n, len, ttl, tot_len, ip_len;
 	int prot = 0;
 		
 	if (!dp || !dp->srt)
 		return -1;
 
-	dp->nxt_hop = dsr_srt_next_hop(dp->srt, dp->src, 0);
+	n = dp->srt->laddrs / sizeof(struct in_addr);
+
+	dp->nxt_hop = dsr_srt_next_hop(dp->srt, n);
 
 	/* Calculate extra space needed */
 
@@ -164,6 +150,8 @@ int NSCLASS dsr_srt_add(struct dsr_pkt *dp)
 
 /* 	DEBUG("dsr_opts_len=%d\n", len); */
 	
+	DEBUG("SR: %s\n", print_srt(dp->srt));
+
 	buf = dsr_pkt_alloc_opts(dp, len);
 
 	if (!buf) {
@@ -234,37 +222,70 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp)
 		return DSR_PKT_ERROR;
 	}
 	
-	DEBUG("Source route: %s\n", print_srt(dp->srt));
+	DEBUG("SR: %s\n", print_srt(dp->srt));
 
-
-	dsr_rtc_add(dp->srt, 60000, 0);
+	dsr_rtc_add(dp->srt, ConfValToUsecs(RouteCacheTimeout), 0);
 	
 	if (dp->srt_opt->sleft == 0) {
-	/* 	DEBUG("Remove source route...\n"); */
-		return DSR_PKT_SRT_REMOVE;
+		dp->prv_hop = dsr_srt_prev_hop(dp->srt, n-1);
+			
+/* 		DEBUG("prev_hop=%s\n", print_ip(dp->prv_hop)); */
+		
+		neigh_tbl_add(dp->prv_hop, dp->mac.ethh);
+		
+		if (dp->flags & PKT_PROMISC_RECV)
+			return DSR_PKT_DROP;
+		else
+			return DSR_PKT_SRT_REMOVE;
 	}
 	
 	if (dp->srt_opt->sleft > n) {
 		// Send ICMP parameter error
 		return DSR_PKT_SEND_ICMP;
 	} else {
-		int i;
+		struct in_addr myaddr = my_addr();
+		struct in_addr next_hop_intended;
 		
 		if (dp->srt_opt->sleft > n) {
 			DEBUG("segments left=%d larger than n=%d\n", 
 			      dp->srt_opt->sleft, n);
 			return DSR_PKT_ERROR;
 		}
+		next_hop_intended = dsr_srt_next_hop(dp->srt, dp->srt_opt->sleft);
+		dp->srt_opt->sleft--;
 		
-		dp->srt_opt->sleft--;	
-		i = n - dp->srt_opt->sleft;
+		dp->nxt_hop = dsr_srt_next_hop(dp->srt, dp->srt_opt->sleft);
+		dp->prv_hop = dsr_srt_prev_hop(dp->srt, dp->srt_opt->sleft);
+			
+		DEBUG("next_hop=%s prev_hop=%s next_hop_intended=%s\n", 
+		      print_ip(dp->nxt_hop), 
+		      print_ip(dp->prv_hop), 
+		      print_ip(next_hop_intended));
 		
+		neigh_tbl_add(dp->prv_hop, dp->mac.ethh);
 
-		/* Fill in next hop */
-		dp->nxt_hop = dsr_srt_next_hop(dp->srt, my_addr(), i);
+		/* Automatic route shortening - Check if this node is the
+		 * intended next hop... */
+		if (next_hop_intended.s_addr != myaddr.s_addr && 
+		    dsr_srt_find_addr(dp->srt, myaddr, dp->srt_opt->sleft) && 
+		    !grat_rrep_tbl_find(dp->src, dp->prv_hop)) {
+			struct dsr_srt *srt_to_me;
+			
+			/* Send Grat RREP */
+			DEBUG("Send Gratuitous RREP to %s\n", 
+			      print_ip(dp->src));
+			
+			grat_rrep_tbl_add(dp->src, dp->prv_hop);
+			
+			srt_to_me = lc_srt_find(dp->src, myaddr);
+			
+			dsr_rrep_send(srt_to_me);
 
-		DEBUG("Setting next hop %s and forward n=%d i=%d\n", 
-		      print_ip(dp->nxt_hop), n, i);
+			FREE(srt_to_me);
+
+			return DSR_PKT_DROP;
+		}
+	
 		/* TODO: check for multicast address in next hop or dst */
 		/* TODO: check MTU and compare to pkt size */
 	

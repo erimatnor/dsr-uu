@@ -18,6 +18,7 @@ struct dsr_pkt {
 	struct in_addr dst;
        	struct in_addr nxt_hop;
        	struct in_addr prv_hop;
+	int flags;
 #ifdef NS2
 	union {
 		struct hdr_mac *ethh;
@@ -66,20 +67,10 @@ struct dsr_pkt {
 	
 };
 
-/* Packet actions: */
-/* Actions to take after processing source route option: */
-/* #define DSR_PKT_NONE           0 */
-/* #define DSR_PKT_ERROR          0x1 */
-/* #define DSR_PKT_SRT_REMOVE     0x2 */
-/* #define DSR_PKT_FORWARD        0x4 */
-/* #define DSR_PKT_DELIVER        0x8 */
-/* #define DSR_PKT_SEND_ICMP      0x10 */
-/* #define DSR_PKT_DROP           0x20 */
-/* #define DSR_PKT_SEND_RREP      0x40 */
-/* #define DSR_PKT_SEND_BUFFERED  0x80 */
-/* #define DSR_PKT_FORWARD_RREQ   0x100 */
-/* #define DSR_PKT_SEND_ACK       0x200 */
+/* Flags: */
+#define PKT_PROMISC_RECV 0x01
 
+/* Packet actions: */
 #define DSR_PKT_NONE           1
 #define DSR_PKT_SRT_REMOVE     (DSR_PKT_NONE << 2)
 #define DSR_PKT_SEND_ICMP      (DSR_PKT_NONE << 3)

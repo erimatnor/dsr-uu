@@ -9,7 +9,7 @@ static class DSRUUHeaderClass:public PacketHeaderClass {
 
   public:
     DSRUUHeaderClass():PacketHeaderClass("PacketHeader/DSRUU",
-					 sizeof(hdr_dsr)) {
+					 sizeof(DSR_OPTS_MAX_SIZE)) {
 	    bind_offset(&hdr_dsr::offset_);
 }} class_rtProtoDSRUU_hdr;
 
@@ -54,7 +54,7 @@ DSRUU::DSRUU() : Agent(PT_DSR),
 	maint_buf_init();
 	send_buf_init();
 	
-	myaddr.s_addr = 0;
+	myaddr_.s_addr = 0;
 
 	return;
 }
@@ -87,7 +87,7 @@ DSRUU::trace(const char *func, const char *fmt, ...)
 	va_start(args, fmt);
 	
 	len = sprintf(buf, "# %.5f:_%d_:%s: ", Scheduler::instance().clock(), 
-		      myaddr.s_addr, func);
+		      myaddr_.s_addr, func);
 	
 	/* Emit the output into the temporary buffer */
 	len += vsnprintf(buf+len, BUF_LEN - len, fmt, args);
@@ -129,7 +129,7 @@ DSRUU::arpset(struct in_addr addr, unsigned int mac_addr)
 	ch->direction() = hdr_cmn::UP; // send this pkt UP to LL
 	ch->ptype() = PT_ARP;
 
-	mac_->hdr_dst(mh, this->macaddr);
+	mac_->hdr_dst(mh, this->macaddr_);
 	mac_->hdr_src(mh, mac_addr);
 	mac_->hdr_type(mh, ETHERTYPE_ARP);
 
@@ -137,14 +137,14 @@ DSRUU::arpset(struct in_addr addr, unsigned int mac_addr)
 	lh->lltype() = LL_DATA;
 
 	ah->arp_op  = ARPOP_REPLY;
-	ah->arp_tha = this->macaddr;
+	ah->arp_tha = this->macaddr_;
 	ah->arp_sha = mac_addr;
 		
 	ah->arp_spa = (nsaddr_t)addr.s_addr;
-	ah->arp_tpa = (nsaddr_t)myaddr.s_addr;
+	ah->arp_tpa = (nsaddr_t)myaddr_.s_addr;
 
-	DEBUG("Setting ARP Table entry to %d for %s\n", 
-	      mac_addr, print_ip(addr));
+	// DEBUG("Setting ARP Table entry to %d for %s\n", 
+// 	      mac_addr, print_ip(addr));
 	// ARPTable *arpt = ll_->arp_table();
 	
 // 	if (arpt)
@@ -156,6 +156,7 @@ DSRUU::arpset(struct in_addr addr, unsigned int mac_addr)
 
 	return 1;
 }
+
 
 struct hdr_ip *	DSRUU::dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, 
 				    struct in_addr dst, int ip_len, 
@@ -170,10 +171,6 @@ struct hdr_ip *	DSRUU::dsr_build_ip(struct dsr_pkt *dp, struct in_addr src,
 	dp->nh.iph->daddr() = (nsaddr_t)dp->dst.s_addr;
 	dp->nh.iph->ttl() = ttl;
 	
-	// Note: Port number for routing agents, not AODV port number!
-// 	dp->nh.iph->sport() = RT_PORT;
-// 	dp->nh.iph->dport() = RT_PORT;
-	
 	if (dp->p) {
 		cmh = HDR_CMN(dp->p);
 		cmh->ptype() = (packet_t)protocol;
@@ -187,9 +184,9 @@ DSRUU::ns_packet_create(struct dsr_pkt *dp)
 	hdr_mac *mh;
 	hdr_cmn *cmh;
 	hdr_ip *iph;	
-	dsr_opt_hdr *dh;
+	dsr_opt_hdr *opth;
 	int tot_len;
-	int dsr_opts_len = dsr_pkt_opts_len(dp); // - sizeof(struct dsr_opt_hdr) + DSR_FIXED_HDR_LEN;
+	int dsr_opts_len = dsr_pkt_opts_len(dp); 
 
 	if (!dp)
 		return NULL;
@@ -202,7 +199,7 @@ DSRUU::ns_packet_create(struct dsr_pkt *dp)
 	mh = HDR_MAC(dp->p);
 	cmh = HDR_CMN(dp->p);
 	iph = HDR_IP(dp->p);
-	dh = HDR_DSRUU(dp->p);
+	opth = HDR_DSRUU(dp->p);
 	
 	if (dp->dst.s_addr == DSR_BROADCAST) {
 		cmh->addr_type() = NS_AF_NONE;
@@ -227,12 +224,12 @@ DSRUU::ns_packet_create(struct dsr_pkt *dp)
 		arpset(dp->nxt_hop, mac_dst);
 	}
 	// Clear DSR part of packet
-	memset(dh, 0, dh->size());
+	memset(opth, 0, dsr_opts_len);
 	
-	DEBUG("Building packet dsr_opts_len=%d\n", dsr_opts_len);
+	DEBUG("Building packet dsr_opts_len=%d p_len=%d\n", dsr_opts_len, dp->dh.opth->p_len);
 	// Copy message contents into packet
 	if (dsr_opts_len)
-		memcpy(dh, dp->dh.raw, dsr_opts_len);
+		memcpy(opth, dp->dh.raw, dsr_opts_len);
 	
 	/* Add payload */
 // 	if (dp->payload_len && dp->payload)
@@ -253,7 +250,7 @@ DSRUU::ns_packet_create(struct dsr_pkt *dp)
 }
 
 void 
-DSRUU::xmit(struct dsr_pkt *dp)
+DSRUU::ns_xmit(struct dsr_pkt *dp)
 {
 	Packet *p;
 	
@@ -272,8 +269,7 @@ DSRUU::xmit(struct dsr_pkt *dp)
 		if (dp->p) 
 			drop(dp->p, DROP_RTR_TTL); /* Should change reason */	
 		goto out;
-	}
-	
+	}	
 
 	iph = HDR_IP(p);
 	cmh = HDR_CMN(p);
@@ -285,7 +281,8 @@ DSRUU::xmit(struct dsr_pkt *dp)
 		goto out;
 	}
 
-	DEBUG("xmitting pkt src=%d\n", iph->saddr());
+	DEBUG("xmitting pkt src=%d dst=%d nxt_hop=%d\n", 
+	      iph->saddr(), iph->daddr(), cmh->next_hop_);
     
 	/* Set packet fields depending on packet type */
 	if (iph->daddr() == DSR_BROADCAST) {
@@ -301,7 +298,7 @@ DSRUU::xmit(struct dsr_pkt *dp)
 }
 
 void 
-DSRUU::deliver(struct dsr_pkt *dp)
+DSRUU::ns_deliver(struct dsr_pkt *dp)
 {
 	int len, dsr_len = 0;
 	
@@ -312,12 +309,7 @@ DSRUU::deliver(struct dsr_pkt *dp)
 	
 	if (len) {
 		dsr_len = len; //- sizeof(struct dsr_opt_hdr) + DSR_FIXED_HDR_LEN;
-		DEBUG("Removed %d (%d real) bytes DSR options\n", dsr_len, len);
-		
-	}
-
-	DEBUG("Packet type %s\n", packet_info.name(cmh->ptype()));
-				
+		DEBUG("Removed %d (%d real) bytes DSR options\n", dsr_len, len);	}
 	cmh->size() -= IP_HDR_LEN - dsr_len;
 
 	target_->recv(dp->p, (Handler*)0);
@@ -332,7 +324,7 @@ DSRUU::recv(Packet* p, Handler*)
 {
 	struct dsr_pkt *dp;
 	int action, res = -1;
-	struct hdr_cmn *cmh= hdr_cmn::access(p);
+	struct hdr_cmn *cmh = hdr_cmn::access(p);
 
 	DEBUG("##########\n");
 
@@ -340,26 +332,93 @@ DSRUU::recv(Packet* p, Handler*)
 	
 	switch(cmh->ptype()) {
 	case PT_DSR:
-		if (dp->src.s_addr != myaddr.s_addr) {
-			DEBUG("DSR packet from %s\n", print_ip(dp->src));
+		if (dp->src.s_addr != myaddr_.s_addr) {
+// 			DEBUG("DSR packet from %s\n", print_ip(dp->src));
 			dsr_recv(dp);
 		} else {
 			
-			DEBUG("Locally gernerated DSR packet\n");
+// 			DEBUG("Locally generated DSR packet\n");
 		}
 		break;
 	default:
-		if (dp->src.s_addr == myaddr.s_addr) {
+		if (dp->src.s_addr == myaddr_.s_addr) {
 			DEBUG("Locally generated non DSR packet\n");
 			dsr_start_xmit(dp);
 		} else {
 			// This shouldn't really happen ?
 			DEBUG("Data packet from %s without DSR header!n", 
 			      print_ip(dp->src));
+			dsr_pkt_free(dp);
 		}
 	}
 	return;
 }
+
+void 
+DSRUU::tap(const Packet *p)
+{
+	struct dsr_pkt *dp;
+	hdr_cmn *cmh = hdr_cmn::access(p);
+	hdr_ip *iph = hdr_ip::access(p);
+	struct in_addr next_hop;
+	/* We need to make a copy since the original packet is "const" and is
+	 * not to be touched */
+
+	return;
+
+	Packet *p_copy = p->copy();
+
+	/* Do nothing for my own packets... */
+	if (iph->saddr() == myaddr_.s_addr)
+		goto out;
+
+	next_hop.s_addr = cmh->next_hop_;
+
+	/* Do nothing for packets I am going to receive anyway */
+	if (iph->daddr() == myaddr_.s_addr ||
+	    next_hop.s_addr == myaddr_.s_addr)
+		goto out;
+	    
+	do {
+		struct in_addr src, dst, next_hop;
+
+		src.s_addr = iph->saddr();
+		dst.s_addr = iph->daddr();
+		
+		next_hop.s_addr = cmh->next_hop_;
+		DEBUG("###### Tap packet src=%s dst=%s next_hop=%s\n", 
+		      print_ip(src), print_ip(dst), print_ip(next_hop));
+	} while (0);
+	
+	dp = dsr_pkt_alloc(p_copy);
+	dp->flags |= PKT_PROMISC_RECV;
+
+	/* TODO: See if this node is the next hop. In that case do nothing */
+
+	switch(cmh->ptype()) {
+	case PT_DSR:
+		if (dp->src.s_addr != myaddr_.s_addr) {
+			//DEBUG("DSR packet from %s\n", print_ip(dp->src));
+			dsr_recv(dp);
+		} else {
+// 			DEBUG("Locally gernerated DSR packet\n");
+			dsr_pkt_free(dp);
+		}
+		break;
+	default:
+		// This shouldn't really happen ?
+		DEBUG("Data packet from %s without DSR header!n", 
+		      print_ip(dp->src));
+		
+		dsr_pkt_free(dp);
+	}
+ out:
+	Packet::free(p_copy);
+
+	return;
+}
+
+
 
 enum {
 	SET_ADDR,
@@ -403,10 +462,10 @@ DSRUU::command(int argc, const char* const* argv)
 
 	switch (name2cmd(argv[1])) {
 	case SET_ADDR:
-		myaddr.s_addr = Address::instance().str2addr(argv[2]);
+		myaddr_.s_addr = Address::instance().str2addr(argv[2]);
 		break;
 	case SET_MAC_ADDR:
-		macaddr = Address::instance().str2addr(argv[2]);
+		macaddr_ = Address::instance().str2addr(argv[2]);
 		break;
 	case SET_NODE:
 		node_ = (MobileNode *)TclObject::lookup(argv[2]);
@@ -419,7 +478,8 @@ DSRUU::command(int argc, const char* const* argv)
 		break;
 	case SET_TAP:
 		mac_ = (Mac *)TclObject::lookup(argv[2]);
-		macaddr = mac_->addr();
+		macaddr_ = mac_->addr();
+		mac_->installTap(this);
 		break;
 	case SET_TRACE_TARGET:
 		trace_ = (Trace *)TclObject::lookup(argv[2]);

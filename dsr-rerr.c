@@ -63,7 +63,7 @@ int NSCLASS dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 	struct dsr_rerr_opt *rerr_opt;
 	struct in_addr dst, err_src, err_dst;
 	char *buf;
-	int len, salv/* , i */;
+	int n, len, salv/* , i */;
 	
 	if (!dp_trigg)
 		return -1;
@@ -108,11 +108,12 @@ int NSCLASS dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 		DEBUG("Could not allocate DSR packet\n");
 		return -1;
 	}
-	
+	n = dp->srt->laddrs / sizeof(struct in_addr);
 	dp->src = my_addr();
 	dp->dst = dst;
 	dp->srt = srt;
-	dp->nxt_hop = dsr_srt_next_hop(dp->srt, dp->src, 0);
+
+	dp->nxt_hop = dsr_srt_next_hop(dp->srt, n);
 
 	buf = dsr_pkt_alloc_opts(dp, len);
 

@@ -75,8 +75,8 @@ static inline char *print_srt(struct dsr_srt *srt)
 		len = sprintf(buf+len, "%s", print_ip(srt->dst));
 	return buf;
 }
-struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, struct in_addr myaddr, int index);
-struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt, struct in_addr myaddr);
+struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, int sleft);
+struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt, int sleft);
 struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt);
 struct dsr_srt *dsr_srt_new(struct in_addr src, struct in_addr dst, 
 			    unsigned int length, char *addrs);

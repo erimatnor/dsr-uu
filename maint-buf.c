@@ -215,9 +215,9 @@ void NSCLASS maint_buf_set_timeout(void)
 	else {
 		expires = now;
 		timeval_add_usecs(&expires, rto);
-		DEBUG("ACK Timer: exp=%ld.%06ld now=%ld.%06ld\n", 
-		      expires.tv_sec, expires.tv_usec, 
-		      now.tv_sec, now.tv_usec);
+		/* DEBUG("ACK Timer: exp=%ld.%06ld now=%ld.%06ld\n",  */
+/* 		      expires.tv_sec, expires.tv_usec,  */
+/* 		      now.tv_sec, now.tv_usec); */
 		
 		set_timer(&ack_timer, &expires);
 	}

@@ -23,12 +23,13 @@ MODULE_LICENSE("GPL");
 
 static struct lc_graph LC;
 
+#define LC_PROC_NAME "dsr_lc"
+
 #endif /* __KERNEL__ */
 
 #define LC_NODES_MAX 500
 #define LC_LINKS_MAX 100 /* TODO: Max links should be calculated from Max
 			  * nodes */
-#define LC_PROC_NAME "dsr_lc"
 #define LC_COST_INF UINT_MAX
 #define LC_HOPS_INF UINT_MAX
 
@@ -438,10 +439,11 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 		goto out;
 	}
 	
-	DEBUG("Hops to %s: %u\n", print_ip(dst), dst_node->hops);
+/* 	DEBUG("Hops to %s: %u\n", print_ip(dst), dst_node->hops); */
 	
 	if (dst_node->cost != LC_COST_INF) {
-		struct lc_node *n;
+		struct lc_node *d, *n;
+		struct lc_link *l;
 		int k = (dst_node->hops - 1);
 		int i = 0;
 		
@@ -463,11 +465,36 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 			goto out;			
 		}
 			
+	/* 	l = __lc_link_find(&LC.links, dst_node->pred->addr, dst_node->addr); */
+		
+/* 		if (!l) { */
+/* 			DEBUG("Link not found for timeout update!\n"); */
+/* 		} else { */
+/* 		/\* 	DEBUG("Updating timeout for link %s->%s\n",  *\/ */
+/* /\* 			      print_ip(l->src->addr),  *\/ */
+/* /\* 			      print_ip(l->dst->addr)); *\/ */
+/* 			gettime(&l->expires); */
+/* 		} */
+		
+		d = dst_node;
+		
 		/* Fill in the source route by traversing the nodes starting
 		 * from the destination predecessor */
 		for (n = dst_node->pred; n && (n != n->pred) && n->pred; n = n->pred) {
+			
+		/* 	l = __lc_link_find(&LC.links, n->addr, d->addr); */
+
+/* 			if (!l) { */
+/* 				DEBUG("Link not found for timeout update!\n"); */
+/* 			} else { */
+/* 			/\* 	DEBUG("Updating timeout for link %s->%s\n",  *\/ */
+/* /\* 				      print_ip(l->src->addr),  *\/ */
+/* /\* 				      print_ip(l->dst->addr)); *\/ */
+/* 				gettime(&l->expires); */
+/* 			} */
 			srt->addrs[k-i-1] = n->addr;
 			i++;
+			d = d->pred;
 		}
 
 		if ((i + 1) != dst_node->hops)
@@ -485,10 +512,7 @@ int NSCLASS lc_srt_add(struct dsr_srt *srt, usecs_t timeout,
 {
 	int i, n, links = 0;
 	struct in_addr addr1, addr2;
-	
-	/* Override for now... */
-        timeout = 300000000;
-	
+		
 	if (!srt)
 		return -1;
 
@@ -517,7 +541,6 @@ int NSCLASS lc_srt_add(struct dsr_srt *srt, usecs_t timeout,
 		lc_link_add(addr2, addr1, timeout, 0, 1);
 		links++;
 	}
-	
 	return links;
 }
 int lc_srt_del(struct in_addr src, struct in_addr dst)

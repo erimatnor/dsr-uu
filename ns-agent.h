@@ -51,8 +51,8 @@ typedef dsr_opt_hdr hdr_dsr;
 #define del_timer_sync(timer) del_timer(timer)
 #define MALLOC(s, p) malloc(s)
 #define FREE(p) free(p)
-#define XMIT(pkt) xmit(pkt)
-#define DELIVER(pkt) deliver(pkt)
+#define XMIT(pkt) ns_xmit(pkt)
+#define DELIVER(pkt) ns_deliver(pkt)
 #define __init
 #define __exit
 #define ntohl(x) x
@@ -74,7 +74,7 @@ struct hdr_test {
 
 };
 
-class DSRUU : public Agent {
+class DSRUU : public Tap, public Agent {
  public:
 	friend class DSRUUTimer;
 	
@@ -85,9 +85,10 @@ class DSRUU : public Agent {
 
 	int command(int argc, const char*const* argv);
 	void recv(Packet*, Handler* callback = 0);
+	void tap(const Packet *p);
 	Packet *ns_packet_create(struct dsr_pkt *dp);
-	void xmit(struct dsr_pkt *dp);
-	void deliver(struct dsr_pkt *dp);
+	void ns_xmit(struct dsr_pkt *dp);
+	void ns_deliver(struct dsr_pkt *dp);
 
 /* 	void tap(const Packet *p); */
 	// tap out all data packets received at this host and promiscously snoop
@@ -159,7 +160,7 @@ class DSRUU : public Agent {
 
 #undef NO_GLOBALS
 	
-	struct in_addr my_addr() { return myaddr; }
+	struct in_addr my_addr() { return myaddr_; }
 	int arpset(struct in_addr addr, unsigned int mac_addr);
 	inline void ethtoint(char * eth, int *num)
 		{
@@ -173,8 +174,8 @@ class DSRUU : public Agent {
 		}
  private:
 	static int confvals[CONFVAL_MAX];
-	struct in_addr myaddr;
-	unsigned long macaddr;
+	struct in_addr myaddr_;
+	unsigned long macaddr_;
 	Trace *trace_;
 	Mac *mac_;
 	LL *ll_;

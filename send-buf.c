@@ -189,7 +189,7 @@ int NSCLASS send_buf_set_verdict(int verdict, struct in_addr dst)
 		    
 			if (e->dp->srt) {
 				
-				DEBUG("Source route=%s\n", print_srt(e->dp->srt));
+				DEBUG("SR=%s\n", print_srt(e->dp->srt));
 				
 				if (dsr_srt_add(e->dp) < 0) {
 					DEBUG("Could not add source route\n");
@@ -210,8 +210,8 @@ int NSCLASS send_buf_set_verdict(int verdict, struct in_addr dst)
 			FREE(e);
 		}
 		
-		if (pkts == 0)
-			DEBUG("No packets for dest %s\n", print_ip(dst));
+	/* 	if (pkts == 0) */
+/* 			DEBUG("No packets for dest %s\n", print_ip(dst)); */
 		break;
 	}
 	return pkts;

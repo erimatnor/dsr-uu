@@ -90,6 +90,50 @@ void NSCLASS rreq_tbl_set_max_len(unsigned int max_len)
         rreq_tbl.max_len = max_len;
 }
 
+static int rreq_tbl_print(struct tbl *t, char *buf)
+{
+	list_t *pos1, *pos2;
+	int len = 0;
+	int first = 1;
+	struct timeval now;
+	
+	gettime(&now);
+
+	DSR_READ_LOCK(t->lock);
+    
+	len += sprintf(buf, "# %-15s %-6s %-8s %15s:%s\n", "IPAddr", "TTL", "Used", "TargetIPAddr", "ID");
+
+	list_for_each(pos1, &t->head) {
+		struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)pos1;
+		struct id_entry *id_e;
+		
+		if (TBL_EMPTY(&e->rreq_id_tbl))
+			len += sprintf(buf+len, "  %-15s %-6u %-8lu %15s:%s\n",
+				       print_ip(e->node_addr), e->ttl,
+				       timeval_diff(&now, &e->last_used) / 
+				       1000000, "-", "-");
+		else {
+			id_e = (struct id_entry *)TBL_FIRST(&e->rreq_id_tbl);
+			len += sprintf(buf+len, "  %-15s %-6u %-8lu %15s:%u\n",
+				       print_ip(e->node_addr), e->ttl,
+				       timeval_diff(&now, &e->last_used) / 
+				       1000000, print_ip(id_e->trg_addr), 
+				       id_e->id);
+		}
+		list_for_each(pos2, &e->rreq_id_tbl.head) {
+			id_e = (struct id_entry *)pos2;
+			if (!first)
+				len += sprintf(buf+len, "%49s:%u\n", print_ip(id_e->trg_addr), id_e->id);
+			first = 0;
+		}
+	}
+	
+	DSR_READ_UNLOCK(t->lock);
+	return len;
+
+}
+
+
 void NSCLASS rreq_tbl_timeout(unsigned long data)
 {
 	struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)data;
@@ -255,12 +299,15 @@ int NSCLASS rreq_tbl_route_discovery_cancel(struct in_addr dst)
 	DSR_WRITE_LOCK(&rreq_tbl);
 	
 	e = (struct rreq_tbl_entry *)__tbl_find(&rreq_tbl, &dst, crit_addr);
-
+	
 	if (!e) {
 		DEBUG("%s not in RREQ table\n", print_ip(dst));
 		DSR_WRITE_UNLOCK(&rreq_tbl);
 		return -1;
 	}
+
+	if (e->state != STATE_IN_ROUTE_DISC)
+		return 0;
 
 	del_timer_sync(e->timer);
 
@@ -271,6 +318,7 @@ int NSCLASS rreq_tbl_route_discovery_cancel(struct in_addr dst)
 	__tbl_add_tail(&rreq_tbl, &e->l);
 	       
 	DSR_WRITE_UNLOCK(&rreq_tbl);
+
 	return 1;	
 }
 int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
@@ -379,7 +427,7 @@ int NSCLASS dsr_rreq_send(struct in_addr target, int ttl)
 		
 	buf = dsr_pkt_alloc_opts(dp, len);
 	
-	DEBUG("Allocating %d for opts %d\n", dsr_pkt_opts_len(dp), sizeof(struct dsr_opt_hdr));
+/* 	DEBUG("Allocating %d for opts %d\n", dsr_pkt_opts_len(dp), sizeof(struct dsr_opt_hdr)); */
 
 	if (!buf)
 		goto out_err;
@@ -425,7 +473,7 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 	struct in_addr trg;
 	struct dsr_srt *srt_rev;
 
-	if (!dp || !rreq_opt)
+	if (!dp || !rreq_opt || dp->flags & PKT_PROMISC_RECV)
 		return DSR_PKT_DROP;
 
 	myaddr = my_addr();
@@ -450,9 +498,9 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		DEBUG("Could not extract source route\n");
 		return DSR_PKT_ERROR;
 	}
-	DEBUG("RREQ target=%s src=%s dst=%s\n", 
-	      print_ip(trg), print_ip(dp->src), print_ip(dp->dst));
-	DEBUG("my addr %s\n", print_ip(myaddr));
+	DEBUG("RREQ target=%s src=%s dst=%s laddrs=%d\n", 
+	      print_ip(trg), print_ip(dp->src), print_ip(dp->dst), DSR_RREQ_ADDRS_LEN(rreq_opt));
+	/* DEBUG("my addr %s\n", print_ip(myaddr)); */
 	
         /* Add reversed source route */
 	srt_rev = dsr_srt_new_rev(dp->srt);
@@ -464,9 +512,19 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 	DEBUG("srt: %s\n", print_srt(dp->srt));
 
 	DEBUG("srt_rev: %s\n", print_srt(srt_rev));
+       
+	dsr_rtc_add(srt_rev, ConfValToUsecs(RouteCacheTimeout), 0);
 	
-	dsr_rtc_add(srt_rev, 60000, 0);
+	/* Set previous hop */
+	if (srt_rev->laddrs > 0)
+		dp->prv_hop = srt_rev->addrs[0];
+	else
+		dp->prv_hop = srt_rev->dst;
+
+/* 	DEBUG("prv_hop=%s\n", print_ip(dp->prv_hop)); */
 	
+	neigh_tbl_add(dp->prv_hop, dp->mac.ethh);
+
 	/* Send buffered packets */
 	send_buf_set_verdict(SEND_BUF_SEND, srt_rev->dst);
 
@@ -483,7 +541,9 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 #else
 		dp->nh.iph->daddr = rreq_opt->target;
 #endif		
-		return DSR_PKT_SEND_RREP;
+		dsr_rrep_send(dp->srt);
+		
+		return DSR_PKT_NONE;
 	} else {
 		int i, n;
 		struct in_addr myaddr = my_addr();
@@ -525,55 +585,11 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 #ifdef __KERNEL__
 
 
-static int rreq_tbl_print(char *buf)
-{
-	list_t *pos1, *pos2;
-	int len = 0;
-	int first = 1;
-	struct timeval now;
-	
-	gettime(&now);
-
-	DSR_READ_LOCK(&rreq_tbl.lock);
-    
-	len += sprintf(buf, "# %-15s %-6s %-8s %15s:%s\n", "IPAddr", "TTL", "Used", "TargetIPAddr", "ID");
-
-	list_for_each(pos1, &rreq_tbl.head) {
-		struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)pos1;
-		struct id_entry *id_e;
-		
-		if (TBL_EMPTY(&e->rreq_id_tbl))
-			len += sprintf(buf+len, "  %-15s %-6u %-8lu %15s:%s\n",
-				       print_ip(e->node_addr), e->ttl,
-				       timeval_diff(&now, &e->last_used) / 
-				       1000000, "-", "-");
-		else {
-			id_e = (struct id_entry *)TBL_FIRST(&e->rreq_id_tbl);
-			len += sprintf(buf+len, "  %-15s %-6u %-8lu %15s:%u\n",
-				       print_ip(e->node_addr), e->ttl,
-				       timeval_diff(&now, &e->last_used) / 
-				       1000000, print_ip(id_e->trg_addr), 
-				       id_e->id);
-		}
-		list_for_each(pos2, &e->rreq_id_tbl.head) {
-			id_e = (struct id_entry *)pos2;
-			if (!first)
-				len += sprintf(buf+len, "%49s:%u\n", print_ip(id_e->trg_addr), id_e->id);
-			first = 0;
-		}
-	}
-	
-	DSR_READ_UNLOCK(&rreq_tbl.lock);
-	return len;
-
-}
-
-
 static int rreq_tbl_proc_info(char *buffer, char **start, off_t offset, int length)
 {
 	int len;
 
-	len = rreq_tbl_print(buffer);
+	len = rreq_tbl_print(&rreq_tbl, buffer);
     
 	*start = buffer + offset;
 	len -= offset;

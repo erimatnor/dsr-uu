@@ -8,8 +8,11 @@
 #include "dsr.h"
 
 #ifndef NO_DECLS
-
-int neigh_tbl_add(struct in_addr neigh_addr, struct sockaddr *hw_addr);
+#ifdef NS2 
+int neigh_tbl_add(struct in_addr neigh_addr, struct hdr_mac *mac);
+#else
+int neigh_tbl_add(struct in_addr neigh_addr, struct ethhdr *ethh);
+#endif
 int neigh_tbl_del(struct in_addr neigh_addr);
 int neigh_tbl_get_hwaddr(struct in_addr neigh_addr, struct sockaddr *hw_addr);
 unsigned short neigh_tbl_get_id(struct in_addr neigh_addr);

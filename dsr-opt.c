@@ -114,13 +114,11 @@ int NSCLASS dsr_opt_recv(struct dsr_pkt *dp)
 	
 	/* Packet for us ? */
 #ifdef NS2
-	DEBUG("Next header=%s\n", packet_info.name((packet_t)dp->dh.opth->nh));
+	//DEBUG("Next header=%s\n", packet_info.name((packet_t)dp->dh.opth->nh));
 	
 	if (dp->dst.s_addr == myaddr.s_addr && 
-	    (DATA_PACKET(dp->dh.opth->nh) || dp->dh.opth->nh == PT_PING)) { 
+	    (DATA_PACKET(dp->dh.opth->nh) || dp->dh.opth->nh == PT_PING)) 
 		action |= DSR_PKT_DELIVER;
-		DEBUG("Set DELIVER flag!\n");
-	}
 #else
 	if (dp->dst.s_addr == myaddr.s_addr && dp->payload_len != 0) 
 		action |= DSR_PKT_DELIVER;
@@ -130,16 +128,17 @@ int NSCLASS dsr_opt_recv(struct dsr_pkt *dp)
 	l = DSR_OPT_HDR_LEN;
 	dopt = DSR_GET_OPT(dp->dh.opth);
 	
-	DEBUG("Parsing DSR packet l=%d dsr_len=%d\n", l, dsr_len);
+	//DEBUG("Parsing DSR packet l=%d dsr_len=%d\n", l, dsr_len);
 		
 	while (l < dsr_len && (dsr_len - l) > 2) {
-		DEBUG("dsr_len=%d l=%d\n", dsr_len, l);
+		//DEBUG("dsr_len=%d l=%d\n", dsr_len, l);
 		switch (dopt->type) {
 		case DSR_OPT_PADN:
 			break;
 		case DSR_OPT_RREQ:
+			if (dp->flags & PKT_PROMISC_RECV)
+				break;
 			num_rreq_opts++;
-			DEBUG("RREQ opt:\n");
 			if (num_rreq_opts > 1) {
 				DEBUG("More than one RREQ opt!!! - Ignoring\n");
 				return DSR_PKT_ERROR;
@@ -148,14 +147,16 @@ int NSCLASS dsr_opt_recv(struct dsr_pkt *dp)
 			action |= dsr_rreq_opt_recv(dp, (struct dsr_rreq_opt *)dopt);
 			break;
 		case DSR_OPT_RREP:
-			DEBUG("RREP opt:\n");
+			if (dp->flags & PKT_PROMISC_RECV)
+				break;
 			if (dp->num_rrep_opts < MAX_RREP_OPTS) {
 				dp->rrep_opt[dp->num_rrep_opts++] = (struct dsr_rrep_opt *)dopt;
 				action |= dsr_rrep_opt_recv(dp, (struct dsr_rrep_opt *)dopt);
 			}
 			break;
 		case DSR_OPT_RERR:
-			DEBUG("RERR opt:\n");
+			if (dp->flags & PKT_PROMISC_RECV)
+				break;
 			if (dp->num_rerr_opts < MAX_RERR_OPTS) {
 				dp->rerr_opt[dp->num_rerr_opts++] = (struct dsr_rerr_opt *)dopt;
 				action |= dsr_rerr_opt_recv((struct dsr_rerr_opt *)dopt);
@@ -165,14 +166,15 @@ int NSCLASS dsr_opt_recv(struct dsr_pkt *dp)
 		case DSR_OPT_PREV_HOP:
 			break;
 		case DSR_OPT_ACK:
-			DEBUG("ACK opt:\n");
+			if (dp->flags & PKT_PROMISC_RECV)
+				break;
+
 			if (dp->num_ack_opts < MAX_ACK_OPTS) {
 				dp->ack_opt[dp->num_ack_opts++] = (struct dsr_ack_opt *)dopt;
 				action |= dsr_ack_opt_recv((struct dsr_ack_opt *)dopt);
 			}
 			break;
 		case DSR_OPT_SRT:
-			DEBUG("SRT opt:\n");
 			dp->srt_opt = (struct dsr_srt_opt *)dopt;
 			action |= dsr_srt_opt_recv(dp);
 			break;
@@ -181,11 +183,9 @@ int NSCLASS dsr_opt_recv(struct dsr_pkt *dp)
 		case DSR_OPT_FLOWID:
 			break;
 		case DSR_OPT_ACK_REQ:
-			DEBUG("ACK REQ opt:\n");
 			action |= dsr_ack_req_opt_recv(dp, (struct dsr_ack_req_opt *)dopt);
 			break;
 		case DSR_OPT_PAD1:
-			DEBUG("PAD1 opt\n");
 			l++;
 			dopt++;
 			continue;
