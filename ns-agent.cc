@@ -262,7 +262,7 @@ DSRUU::ns_xmit(struct dsr_pkt *dp)
 	
 	struct hdr_cmn *cmh;
 	struct hdr_ip *iph; 
-	double jitter = 0.0;
+	double jitter = 0;
 
 	if (dp->flags & PKT_REQUEST_ACK)	
 		maint_buf_add(dp);

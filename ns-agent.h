@@ -99,7 +99,10 @@ class DSRUU:public Tap, public Agent {
 				    int tot_len, int protocol, int ttl);
 	void add_timer(DSRUUTimer * t) {
 		//printf("Setting timer %s to %f\n", t->get_name(), t->expires - Scheduler::instance().clock());
-		t->resched(t->expires - Scheduler::instance().clock());
+		if (t->expires - Scheduler::instance().clock() < 0)
+			t->resched(0);
+		else
+			t->resched(t->expires - Scheduler::instance().clock());
 	}
 	/*      void mod_timer (DSRUUTimer *t, unsinged long expires_)  *//*            { t->expires = expires_ ; t->resched(t->expires); } */
 	    void del_timer(DSRUUTimer * t) {
