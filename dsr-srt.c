@@ -172,7 +172,7 @@ int dsr_srt_add(struct dsr_pkt *dp)
 	dp->nxt_hop = dsr_srt_next_hop(dp->srt, 0);
 
 	/* Calculate extra space needed */
-	add_ack_req = dsr_ack_add_ack_req(dp->nxt_hop);
+	/* add_ack_req = dsr_ack_add_ack_req(dp->nxt_hop); */
 
 	if (add_ack_req)
 		
@@ -214,19 +214,19 @@ int dsr_srt_add(struct dsr_pkt *dp)
 	buf += DSR_SRT_OPT_LEN(dp->srt);
 	len -= DSR_SRT_OPT_LEN(dp->srt);
 	
-	if (add_ack_req) {
-		struct dsr_ack_req_opt *areq;
+	/* if (add_ack_req) { */
+/* 		struct dsr_ack_req_opt *areq; */
 		
-		areq = dsr_ack_req_opt_add(buf, len, dp->nxt_hop);
+/* 		areq = dsr_ack_req_opt_add(buf, len, dp->nxt_hop); */
 
-		if (!areq) {
-			DEBUG("Could not create ACK REQ option header!\n");
-			kfree(dp->dh.raw);
-			return -1;
-		}
-		buf += DSR_ACK_REQ_HDR_LEN;
-		len -= DSR_ACK_REQ_HDR_LEN;
-	}
+/* 		if (!areq) { */
+/* 			DEBUG("Could not create ACK REQ option header!\n"); */
+/* 			kfree(dp->dh.raw); */
+/* 			return -1; */
+/* 		} */
+/* 		buf += DSR_ACK_REQ_HDR_LEN; */
+/* 		len -= DSR_ACK_REQ_HDR_LEN; */
+/* 	} */
 
 	dp->nh.iph->tot_len = 
 		htons(ntohs(dp->nh.iph->tot_len) + dp->dsr_opts_len);

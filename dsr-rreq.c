@@ -58,6 +58,19 @@ static inline int crit_addr(void *pos, void *addr)
 	return 0;
 }
 
+static inline int crit_addr_del(void *pos, void *addr)
+{
+	struct in_addr *a = addr; 
+	struct rreq_tbl_entry *p = pos;
+	
+	if (p->addr.s_addr == a->s_addr) {
+		if (timer_pending(&p->timer))
+			del_timer(&p->timer);
+		return 1;
+	}
+	return 0;
+}
+
 static inline int crit_expire(void *pos, void *expire)
 {
 	unsigned long *exp = expire; 
@@ -220,6 +233,11 @@ HZ);
 		rreq_tbl_set_timer(e);
 	
 	return 1;
+}
+
+int rreq_tbl_del(struct in_addr dst)
+{
+	return tbl_for_each_del(&rreq_tbl, &dst, crit_addr_del);
 }
 
 

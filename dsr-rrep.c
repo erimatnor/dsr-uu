@@ -7,6 +7,7 @@
 #include "debug.h"
 #include "tbl.h"
 #include "dsr-rrep.h"
+#include "dsr-rreq.h"
 #include "dsr-opt.h"
 #include "dsr-srt.h"
 #include "dsr-rtc.h"
@@ -192,7 +193,7 @@ int dsr_rrep_send(struct dsr_srt *srt)
 	char *buf;
 	struct dsr_srt *srt_to_me;
 	struct dsr_pad1_opt *pad1_opt;
-	int len;
+	int len, ttl;
 	
 	if (!srt) {
 		DEBUG("no source route!\n");
@@ -216,7 +217,11 @@ int dsr_rrep_send(struct dsr_srt *srt)
 	
 	DEBUG("srt: %s\n", print_srt(srt));
 	
-	dp.nh.iph = dsr_build_ip(ip_buf, IP_HDR_LEN, IP_HDR_LEN + len, dp.src, dp.dst, 1);
+	ttl = srt->laddrs / sizeof(struct in_addr) + 2;
+
+	DEBUG("TTL=%d, n=%d\n", ttl, srt->laddrs / sizeof(struct in_addr));
+
+	dp.nh.iph = dsr_build_ip(ip_buf, IP_HDR_LEN, IP_HDR_LEN + len, dp.src, dp.dst, ttl);
 	
 	if (!dp.nh.iph) {
 		DEBUG("Could not create IP header\n");
@@ -300,6 +305,10 @@ int dsr_rrep_opt_recv(struct dsr_pkt *dp)
 	
 	DEBUG("Adding srt to cache\n");
 	dsr_rtc_add(rrep_opt_srt, 60000, 0);
+	
+	/* Remove pending RREQs */
+	
+	rreq_tbl_del(rrep_opt_srt->dst);
 	
 	kfree(rrep_opt_srt);
 	

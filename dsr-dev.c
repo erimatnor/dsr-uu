@@ -240,6 +240,8 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 		
 	dev_queue_xmit(skb);
 	
+	DEBUG("Sent %d bytes skb->data_len=%s headroom=%d tailroom=%d %u:%u %d\n", skb->len, skb->data_len, skb_headroom(skb), skb_tailroom(skb), skb->head, skb->tail, skb->tail - skb->head);
+
 	dsr_node_lock(dsr_node);
 	dsr_node->stats.tx_packets++;
 	dsr_node->stats.tx_bytes+=skb->len;
@@ -263,6 +265,8 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	      (unsigned long)skb->nh.iph);
 	
 	memset(&dp, 0, sizeof(dp));
+	
+	dp.skb = skb;
 
 	ethh = (struct ethhdr *)skb->data;
 	

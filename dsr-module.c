@@ -134,7 +134,9 @@ static int dsr_ip_recv(struct sk_buff *skb)
 	DEBUG("Received DSR packet\n");
 
 	memset(&dp, 0, sizeof(dp));
-
+	
+	dp.skb = skb;
+	
 	dp.nh.iph = skb->nh.iph;
 		
 	if ((skb->len + (dp.nh.iph->ihl << 2)) < ntohs(dp.nh.iph->tot_len)) {
@@ -232,6 +234,9 @@ static int dsr_ip_recv(struct sk_buff *skb)
 		dp.rreq_opt->addrs[n] = myaddr.s_addr;
 		dp.rreq_opt->length += sizeof(struct in_addr);
 		
+		dp.nh.iph->tot_len = htons(ntohs(dp.nh.iph->tot_len) + sizeof(struct in_addr));
+		ip_send_check(dp.nh.iph);
+
 		dsr_dev_xmit(&dp);
 		
 		kfree(dp.dh.raw);
@@ -325,15 +330,17 @@ struct sk_buff *dsr_skb_create(struct dsr_pkt *dp,
 	DEBUG("iph_len=%d dp->data_len=%d dp->dsr_opts_len=%d TOT len=%d\n", 
 	      ip_len, dp->data_len, dp->dsr_opts_len, tot_len);
 	
-	skb = alloc_skb(dev->hard_header_len + 15 + tot_len, GFP_ATOMIC);
-	
+/* 	skb = alloc_skb(dev->hard_header_len + 15 + tot_len, GFP_ATOMIC); */
+	skb = alloc_skb(tot_len +  LL_RESERVED_SPACE(dev), GFP_ATOMIC);
+
 	if (!skb) {
 		DEBUG("alloc_skb failed\n");
 		return NULL;
 	}
 	
 	/* We align to 16 bytes, for ethernet: 2 bytes + 14 bytes header */
-       	skb_reserve(skb, (dev->hard_header_len+15)&~15); 
+	skb_reserve(skb, LL_RESERVED_SPACE(dev));
+       /* 	skb_reserve(skb, (dev->hard_header_len+15)&~15);  */
 	skb->nh.raw = skb->data;
 	skb->dev = dev;
 	skb->protocol = htons(ETH_P_IP);
@@ -448,23 +455,30 @@ static unsigned int dsr_pre_routing_recv(unsigned int hooknum,
 {	
 	struct iphdr *iph = (*skb)->nh.iph;
 	struct in_addr myaddr = my_addr();
-	
+
+
 	if (in && in->ifindex == get_slave_dev_ifindex() && 
 	    (*skb)->protocol == htons(ETH_P_IP)) {
-		
-		if (do_mackill((*skb)->mac.raw + ETH_ALEN))
-			return NF_DROP;
 
+	/* 	DEBUG("IP packet on nf hook\n"); */
+
+		if (do_mackill((*skb)->mac.raw + ETH_ALEN)) {
+		/* 	DEBUG("Dropping pkt\n"); */
+			return NF_DROP;
+		}
 		if (iph && iph->protocol == IPPROTO_DSR && 
-		    iph->daddr != myaddr.s_addr) {
+		    iph->daddr != myaddr.s_addr && 
+		    iph->daddr != DSR_BROADCAST) {
 		
 		/* 	DEBUG("Packet for ip_rcv\n"); */
 			
 			(*skb)->data = (*skb)->nh.raw + (iph->ihl << 2);
+			(*skb)->len = (*skb)->tail - (*skb)->data;
 			dsr_ip_recv(*skb);
-		
+		/* 	DEBUG("Stolen\n"); */
 			return NF_STOLEN;
 		}
+		DEBUG("Accepted\n");
 	}
 	return NF_ACCEPT;	
 }
@@ -533,6 +547,7 @@ static int __init dsr_module_init(void)
 		goto cleanup_neigh_tbl;
 
 	proc = create_proc_entry(CONFIG_PROC_NAME, S_IRUGO | S_IWUSR, proc_net);
+	
 	if (!proc)
 		goto cleanup_nf_hook;
 	
@@ -543,17 +558,18 @@ static int __init dsr_module_init(void)
 #ifndef KERNEL26
 	inet_add_protocol(&dsr_inet_prot);
 	DEBUG("Setup finished\n");
-	return 0;
+	return res;
 #else
+	res = inet_add_protocol(&dsr_inet_prot, IPPROTO_DSR);
 	
-	if (inet_add_protocol(&dsr_inet_prot, IPPROTO_DSR) < 0) {
+	if (res < 0) {
 		DEBUG("Could not register inet protocol\n");
 		goto cleanup_proc;
 	}
 	
 	DEBUG("Setup finished res=%d\n", res);
 	
-	return 0;
+	return res;
  cleanup_proc:
 	proc_net_remove(CONFIG_PROC_NAME);
 #endif

@@ -34,9 +34,10 @@ struct dsr_pkt {
 	struct dsr_srt_opt *srt_opt;
 	struct dsr_rreq_opt *rreq_opt;
 	struct dsr_rrep_opt *rrep_opt;   
+	struct dsr_srt *srt; /* Source route */
 	char *data;           /* Packet data (IP not included)*/
 	int data_len;
-	struct dsr_srt *srt; /* Source route */
+	struct sk_buff *skb;
 	/* These are pointers into the dsr options in the dsr header */
 };
 
