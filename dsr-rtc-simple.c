@@ -33,7 +33,7 @@ struct rtc_entry {
 	struct list_head l;
 	unsigned long expires;
 	unsigned short flags;
-	dsr_srt_t srt;
+	struct dsr_srt srt;
 };
 
 #define RTC_TIMER
@@ -183,10 +183,10 @@ int dsr_rtc_del(struct in_addr addr)
 	return res;
 }
 
-dsr_srt_t *dsr_rtc_find(struct in_addr addr)
+struct dsr_srt *dsr_rtc_find(struct in_addr addr)
 {
 	struct rtc_entry *e;
-	dsr_srt_t *srt;
+	struct dsr_srt *srt;
     
 /*     printk("Checking activeness\n"); */
 	read_lock_bh(&rtc_lock);
@@ -195,8 +195,8 @@ dsr_srt_t *dsr_rtc_find(struct in_addr addr)
 	if (e) {
 		/* We must make a copy of the source route so that we do not
 		 * return a pointer into the shared data structure */
-		srt = kmalloc(e->srt.laddrs + sizeof(dsr_srt_t), GFP_ATOMIC);
-		memcpy(srt, &e->srt, e->srt.laddrs + sizeof(dsr_srt_t));
+		srt = kmalloc(e->srt.laddrs + sizeof(struct dsr_srt), GFP_ATOMIC);
+		memcpy(srt, &e->srt, e->srt.laddrs + sizeof(struct dsr_srt));
 		return srt;
 	}	
 	read_unlock_bh(&rtc_lock);
@@ -204,7 +204,7 @@ dsr_srt_t *dsr_rtc_find(struct in_addr addr)
 }
 
 
-int dsr_rtc_add(dsr_srt_t *srt, unsigned long time, 
+int dsr_rtc_add(struct dsr_srt *srt, unsigned long time, 
 		unsigned short flags)
 {
 	struct rtc_entry *e;
@@ -225,7 +225,7 @@ int dsr_rtc_add(dsr_srt_t *srt, unsigned long time,
 
 	e->flags = flags;
 	e->expires = jiffies + (time * HZ) / 1000;
-	memcpy(&e->srt, srt, sizeof(dsr_srt_t));
+	memcpy(&e->srt, srt, sizeof(struct dsr_srt));
 	memcpy(e->srt.addrs, srt->addrs, srt->laddrs);
     
 	write_lock_bh(&rtc_lock);
@@ -258,7 +258,7 @@ int dsr_rtc_add(dsr_srt_t *srt, unsigned long time,
 	return status;
 }
 
-void dsr_rtc_update(dsr_srt_t *srt, unsigned long time, 
+void dsr_rtc_update(struct dsr_srt *srt, unsigned long time, 
 		    unsigned short flags)
 {
 	struct rtc_entry *e;
@@ -277,7 +277,7 @@ void dsr_rtc_update(dsr_srt_t *srt, unsigned long time,
 	e->flags = flags;
 	/* Update expire time */
 	e->expires = jiffies + (time * HZ) / 1000;
-	memcpy(&e->srt, srt, sizeof(dsr_srt_t));
+	memcpy(&e->srt, srt, sizeof(struct dsr_srt));
 	memcpy(e->srt.addrs, srt->addrs, srt->laddrs);
     
 	/* Remove from list */    

@@ -3,9 +3,21 @@
 
 #include "dsr.h"
 #include "dsr-srt.h"
+#include "dsr-opt.h"
 #include "debug.h"
 
-char *print_srt(dsr_srt_t *srt)
+
+struct in_addr dsr_srt_next_hop(struct dsr_srt *srt)
+{
+
+	/* This function should be fixed for multihop */
+	if (srt->laddrs == 0)
+		return srt->dst;
+	else
+		return srt->addrs[0];
+}
+
+char *print_srt(struct dsr_srt *srt)
 {
 #define BUFLEN 256
 	static char buf[BUFLEN];
@@ -25,12 +37,12 @@ char *print_srt(dsr_srt_t *srt)
 	return buf;
 }
 
-dsr_srt_t *dsr_srt_new(struct in_addr src, struct in_addr dst,
+struct dsr_srt *dsr_srt_new(struct in_addr src, struct in_addr dst,
 		       unsigned int length, char *addrs)
 {
-	dsr_srt_t *sr;
+	struct dsr_srt *sr;
 
-	sr = kmalloc(sizeof(dsr_srt_t) + length, GFP_ATOMIC);
+	sr = kmalloc(sizeof(struct dsr_srt) + length, GFP_ATOMIC);
 	
 	if (!sr)
 		return NULL;
@@ -45,15 +57,15 @@ dsr_srt_t *dsr_srt_new(struct in_addr src, struct in_addr dst,
 	return sr;
 }
 
-dsr_srt_t *dsr_srt_new_rev(dsr_srt_t *srt)
+struct dsr_srt *dsr_srt_new_rev(struct dsr_srt *srt)
 {
-	dsr_srt_t *srt_rev;
+	struct dsr_srt *srt_rev;
 	int i, n;
 
 	if (!srt)
 		return NULL;
 	
-	srt_rev = kmalloc(sizeof(dsr_srt_t) + srt->laddrs, GFP_ATOMIC);
+	srt_rev = kmalloc(sizeof(struct dsr_srt) + srt->laddrs, GFP_ATOMIC);
 	
 	srt_rev->src.s_addr = srt->dst.s_addr;
 	srt_rev->dst.s_addr = srt->src.s_addr;
@@ -67,123 +79,100 @@ dsr_srt_t *dsr_srt_new_rev(dsr_srt_t *srt)
 	return srt_rev;
 }
 
-dsr_srt_opt_t *dsr_srt_opt_add(char *buf, int len, dsr_srt_t *srt)
+dsr_srt_opt_t *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt)
 {
-	dsr_srt_opt_t *sopt;
+	dsr_srt_opt_t *srt_opt;
 	
 	if (len < DSR_SRT_OPT_LEN(srt))
 		return NULL;
 
-	sopt = (dsr_srt_opt_t *)buf;
+	srt_opt = (dsr_srt_opt_t *)buf;
 
-	sopt->type = DSR_OPT_SRT;
-	sopt->length = srt->laddrs + 2;
-	sopt->f = 0;
-	sopt->l = 0;
-	sopt->res = 0;
-	SET_SALVAGE(sopt, 0);
-	sopt->sleft = (srt->laddrs / sizeof(struct in_addr));
+	srt_opt->type = DSR_OPT_SRT;
+	srt_opt->length = srt->laddrs + 2;
+	srt_opt->f = 0;
+	srt_opt->l = 0;
+	srt_opt->res = 0;
+	SET_SALVAGE(srt_opt, 0);
+	srt_opt->sleft = (srt->laddrs / sizeof(struct in_addr));
 	
-	memcpy(sopt->addrs, srt->addrs, srt->laddrs);
+	memcpy(srt_opt->addrs, srt->addrs, srt->laddrs);
 	
-	return sopt;
+	return srt_opt;
 }
 
-int dsr_srt_add(dsr_pkt_t *dp)
+int dsr_srt_add(struct dsr_pkt *dp)
 {
-	struct iphdr *iph;
-	struct sk_buff *nskb;
-	int dsr_len;
+	int len;
+	char *buf;
 	
-	if (!dp || !dp->skb || !dp->srt)
+	if (!dp || !dp->srt)
 		return -1;
 
 	/* Calculate extra space needed */
-	dsr_len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(dp->srt);
+	dp->dsr_opts_len = len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(dp->srt);
 	
-	/* Allocate new data space at head */
-	nskb = skb_copy_expand(dp->skb, skb_headroom(dp->skb),
-			       skb_tailroom(dp->skb) + dsr_len, 
-			       GFP_ATOMIC);
+	buf = kmalloc(len, GFP_ATOMIC);
 	
-	if (nskb == NULL) {
-		printk("Could not allocate new skb\n");
-		return -1;	
-	}
-	/* Set old owner */
-	if (dp->skb->sk != NULL)
-		skb_set_owner_w(nskb, dp->skb->sk);
-		
-	skb_put(nskb, dsr_len);
-
-	kfree_skb(dp->skb);
-	dp->skb = nskb;	
-	
-	/* Update pointer to IP header */
-	iph = dp->skb->nh.iph;
-	
-	if (!iph) {
+	if (!dp->iph) {
 		DEBUG("No IP header!\n");
 		return -1;
 	}
-	/* Move data towards tail */
-	memmove(dp->skb->h.raw + dsr_len, dp->skb->h.raw, dp->skb->tail - dp->skb->h.raw);
 	
-	dsr_hdr_add(dp->skb->h.raw, dsr_len, iph->protocol);
-	
-	iph->tot_len = htons(ntohs(iph->tot_len) + dsr_len);
-	iph->protocol = IPPROTO_DSR;
-	
-	ip_send_check(iph);
+	dp->opt_hdr = dsr_opt_hdr_add(buf, len, dp->iph->protocol);
 
-	dsr_srt_opt_add(dp->skb->h.raw + DSR_OPT_HDR_LEN, dsr_len - DSR_OPT_HDR_LEN, dp->srt);
-	dp->skb->h.raw += dsr_len;
-	DEBUG("New skb->len=%d\n", dp->skb->len);
+	if (!dp->opt_hdr) {
+		DEBUG("Could not create DSR opts header!\n");
+		return -1;
+	}
 
+	buf += DSR_OPT_HDR_LEN;
+	len -= DSR_OPT_HDR_LEN;
+	
+	dp->iph->tot_len = htons(ntohs(dp->iph->tot_len) + len);
+	dp->iph->protocol = IPPROTO_DSR;
+	
+	ip_send_check(dp->iph);
+
+	dp->srt_opt = dsr_srt_opt_add(buf, len, dp->srt);
+
+	if (!dp->srt_opt) {
+		DEBUG("Could not create Source Route option header!\n");
+		return -1;
+	}
+	
 	return 0;
 }
 
-int dsr_srt_recv(struct dsr_pkt *dp)
+int dsr_srt_opt_recv(struct dsr_pkt *dp)
 {
-	dsr_srt_opt_t *sopt;
 	int n;	
 	
-	if (!dp || !dp->sopt)
+	if (!dp || !dp->srt_opt)
 		return DSR_PKT_ERROR;
 	
-	sopt = dp->sopt;
-	
-	dp->srt = dsr_srt_new(dp->src, dp->dst, sopt->length, (char *)sopt->addrs);
+	dp->srt = dsr_srt_new(dp->src, dp->dst, dp->srt_opt->length, 
+			      (char *)dp->srt_opt->addrs);
 	
 	/* We should add this source route info to the cache... */
-	n = (sopt->length - 2) / sizeof(struct in_addr);
-	
-	dsr_node_lock(dsr_node);
-	
-	if (sopt->sleft == 0) {
-		if (dp->dst.s_addr == dsr_node->ifaddr.s_addr) {
-			DEBUG("Source route remove and deliver\n");
-			dsr_node_unlock(dsr_node);
-			return DSR_PKT_DELIVER;
-		} else {
-			DEBUG("Remove source route...\n");
-			dsr_node_unlock(dsr_node);
-			return DSR_PKT_SRT_REMOVE;
-		}
+	n = (dp->srt_opt->length - 2) / sizeof(struct in_addr);
+
+	if (dp->srt_opt->sleft == 0) {
+		DEBUG("Remove source route...\n");
+		return DSR_PKT_SRT_REMOVE;
 	}
-	dsr_node_unlock(dsr_node);
 	
-	if (sopt->sleft > n) {
+	if (dp->srt_opt->sleft > n) {
 		// Send ICMP parameter error
 		return DSR_PKT_SEND_ICMP;
 	} else {
 		int i;
 
-		sopt->sleft--;		
-		i = n - sopt->sleft;
+		dp->srt_opt->sleft--;		
+		i = n - dp->srt_opt->sleft;
 
 		/* Fill in next hop */
-		dp->nh.s_addr = sopt->addrs[i];
+		dp->nxt_hop.s_addr = dp->srt_opt->addrs[i];
 		DEBUG("Setting next hop and forward\n");
 		/* TODO: check for multicast address in next hop or dst */
 		/* TODO: check MTU and compare to pkt size */
@@ -192,3 +181,58 @@ int dsr_srt_recv(struct dsr_pkt *dp)
 	}
 	return DSR_PKT_ERROR;
 }
+
+
+
+/* int dsr_srt_add(struct dsr_pkt *dp, char *buf, int len) */
+/* { */
+/* 	struct iphdr *iph; */
+/* 	int dsr_len; */
+	
+/* 	if (!dp || !dp->skb || !dp->srt) */
+/* 		return -1; */
+
+/* 	/\* Calculate extra space needed *\/ */
+/* 	dsr_len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(dp->srt); */
+	
+/* 	/\* Allocate new data space at head *\/ */
+/* 	nskb = skb_copy_expand(dp->skb, skb_headroom(dp->skb), */
+/* 			       skb_tailroom(dp->skb) + dsr_len,  */
+/* 			       GFP_ATOMIC); */
+	
+/* 	if (nskb == NULL) { */
+/* 		printk("Could not allocate new skb\n"); */
+/* 		return -1;	 */
+/* 	} */
+/* 	/\* Set old owner *\/ */
+/* 	if (dp->skb->sk != NULL) */
+/* 		skb_set_owner_w(nskb, dp->skb->sk); */
+		
+/* 	skb_put(nskb, dsr_len); */
+
+/* 	kfree_skb(dp->skb); */
+/* 	dp->skb = nskb;	 */
+	
+/* 	/\* Update pointer to IP header *\/ */
+/* 	iph = dp->skb->nh.iph; */
+	
+/* 	if (!iph) { */
+/* 		DEBUG("No IP header!\n"); */
+/* 		return -1; */
+/* 	} */
+/* 	/\* Move data towards tail *\/ */
+/* 	memmove(dp->skb->h.raw + dsr_len, dp->skb->h.raw, dp->skb->tail - dp->skb->h.raw); */
+	
+/* 	dsr_opt_hdr_add(dp->skb->h.raw, dsr_len, iph->protocol); */
+	
+/* 	iph->tot_len = htons(ntohs(iph->tot_len) + dsr_len); */
+/* 	iph->protocol = IPPROTO_DSR; */
+	
+/* 	ip_send_check(iph); */
+
+/* 	dsr_srt_opt_add(dp->skb->h.raw + DSR_OPT_HDR_LEN, dsr_len - DSR_OPT_HDR_LEN, dp->srt); */
+/* 	dp->skb->h.raw += dsr_len; */
+/* 	DEBUG("New skb->len=%d\n", dp->skb->len); */
+
+/* 	return 0; */
+/* } */

@@ -4,7 +4,7 @@
 #include "dsr.h"
 #include "dsr-srt.h"
 
-typedef struct dsr_rrep_opt {
+struct dsr_rrep_opt {
 	u_int8_t type;
 	u_int8_t length;
 #if defined(__LITTLE_ENDIAN_BITFIELD)
@@ -17,18 +17,17 @@ typedef struct dsr_rrep_opt {
 #error  "Please fix <asm/byteorder.h>"
 #endif
 	u_int32_t addrs[0];
-} dsr_rrep_opt_t;
+};
 
-#define DSR_RREP_HDR_LEN sizeof(dsr_rrep_opt_t)
-#define DSR_RREP_TOT_LEN IP_HDR_LEN + sizeof(dsr_rrep_opt_t)
+#define DSR_RREP_HDR_LEN sizeof(struct dsr_rrep_opt)
+#define DSR_RREP_TOT_LEN IP_HDR_LEN + sizeof(struct dsr_rrep_opt)
 #define DSR_RREP_OPT_LEN(srt) (DSR_RREP_HDR_LEN + srt->laddrs + sizeof(struct in_addr))
 /* Length of source route is length of option, minus reserved/flags field minus
  * the last source route hop (which is the destination) */
-#define DSR_RREP_ADDRS_LEN(rrep) (rrep->length - (1 + sizeof(struct in_addr))) 
+#define DSR_RREP_ADDRS_LEN(rrep_opt) (rrep_opt->length - (1 + sizeof(struct in_addr))) 
 
-//dsr_rrep_opt_t *dsr_rrep_opt_add(char *buf, int len, dsr_srt_t *sr);
-int dsr_rrep_create(dsr_pkt_t *dp);
-int dsr_rrep_recv(dsr_pkt_t *dp);
-int dsr_rrep_send(dsr_srt_t *srt);
+//struct dsr_rrep_opt *dsr_rrep_opt_add(char *buf, int len, struct dsr_srt *sr);
+int dsr_rrep_opt_recv(struct dsr_pkt *dp);
+int dsr_rrep_send(struct dsr_srt *srt);
 
 #endif /* _DSR_RREP */

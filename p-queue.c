@@ -27,9 +27,9 @@
 
 struct p_queue_entry {
 	struct list_head list;
-/* 	struct dsr_pkt *dp; */
+	struct dsr_pkt dp;
 	struct sk_buff *skb;
-	int (*okfn)(struct sk_buff *);
+	int (*okfn)(struct dsr_pkt *);
 };
 
 typedef int (*p_queue_cmpfn)(struct p_queue_entry *, unsigned long);
@@ -120,7 +120,7 @@ void p_queue_flush(void)
 	write_unlock_bh(&queue_lock);
 }
 
-int p_queue_enqueue_packet(struct sk_buff *skb, int (*okfn)(struct sk_buff *))
+int p_queue_enqueue_packet(struct dsr_pkt *dp, struct sk_buff *skb, int (*okfn)(struct dsr_pkt *))
 {
 	int status = -EINVAL;
 	struct p_queue_entry *entry;
@@ -134,6 +134,7 @@ int p_queue_enqueue_packet(struct sk_buff *skb, int (*okfn)(struct sk_buff *))
 	
 	entry->okfn = okfn;
 	entry->skb = skb;
+	memcpy(&entry->dp, dp, sizeof(struct dsr_pkt));
 	
 	write_lock_bh(&queue_lock);
 
@@ -179,9 +180,7 @@ int p_queue_set_verdict(int verdict, unsigned long daddr)
 {
     struct p_queue_entry *entry;
     int pkts = 0;
-    dsr_srt_t *srt = NULL;
-    struct in_addr dst;
-	
+
     if (verdict == P_QUEUE_DROP) {
 	
 	while (1) {
@@ -214,69 +213,20 @@ int p_queue_set_verdict(int verdict, unsigned long daddr)
 			    DEBUG("No packets for dest %s\n", print_ip(daddr));
 		    break;
 	    }
-
 	    
-	    dst.s_addr = daddr;
-
-	    srt = dsr_rtc_find(dst);
+	    entry->dp.srt = dsr_rtc_find(entry->dp.dst);
 		
-	    if (srt) {
-		    dsr_pkt_t *dp;
-		    struct sockaddr hw_addr;
-		    
-		    struct ethhdr *ethh;
-		    
-		    /* Allocate a DSR packet */
-		    dp = dsr_pkt_alloc();
-		    dp->skb = entry->skb;
-		    dp->data = entry->skb->data;
-		    dp->len = entry->skb->len;
-		    
-		    dp->src.s_addr = entry->skb->nh.iph->saddr;
-		    dp->dst.s_addr = entry->skb->nh.iph->daddr;
-		    
-		    DEBUG("Setting src route\n");
-		    dp->srt = srt;
-		    
-		    ethh = (struct ethhdr *)entry->skb->data;
+	    if (entry->dp.srt) {
 
-		    if (!ethh) {
-			    DEBUG("ethh NULL!\n");
-			    dev_kfree_skb(entry->skb);
-			    dsr_pkt_free(dp);
-			    goto loop_end;
-
-		    }
-		    /*   Set next hop address */
-		    if (dp->srt->laddrs == 0)
-			    dp->nh.s_addr = dp->srt->dst.s_addr;
-		    else
-			    dp->nh.s_addr = dp->srt->addrs[0].s_addr;
+		    dsr_srt_add(&entry->dp);
+			
+		    /* Set next hop */
+		    entry->dp.nxt_hop = dsr_srt_next_hop(entry->dp.srt);
+			
+		    /* Send packet */
+		    entry->okfn(&entry->dp);
 		    
-		    /* Add source route */
-		    if (dsr_srt_add(dp) < 0) {
-			    DEBUG("SRT add failed\n");
-			    dev_kfree_skb(entry->skb);
-			    dsr_pkt_free(dp);
-			    goto loop_end;
-		    }
-		    
-		    if (kdsr_get_hwaddr(dp->nh, &hw_addr, entry->skb->dev) < 0) {
-			    DEBUG("Could not get hardware address\n");
-			    dev_kfree_skb(entry->skb);
-			    dsr_pkt_free(dp);
-			    goto loop_end;
-		    }
-		    
-		    dp->skb->dev->rebuild_header(dp->skb);
-		    
-		    memcpy(ethh->h_source, entry->skb->dev->dev_addr, entry->skb->dev->addr_len);
-		    
-		    /* Inject packet */
-		  /*   entry->okfn(entry->skb);  */
 		    kfree_skb(entry->skb); 
-		    /* We must free the DSR packet */
-		    dsr_pkt_free(dp);
 	    } else {
 
 		    DEBUG("No source route found for %s!\n", print_ip(daddr));

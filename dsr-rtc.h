@@ -11,9 +11,9 @@
 
 /* DSR route cache API */
 
-dsr_srt_t *dsr_rtc_find(struct in_addr addr);
-int dsr_rtc_add(dsr_srt_t *srt, unsigned long time, unsigned short flags);
-void dsr_rtc_update(dsr_srt_t *srt, unsigned long time, 
+struct dsr_srt *dsr_rtc_find(struct in_addr addr);
+int dsr_rtc_add(struct dsr_srt *srt, unsigned long time, unsigned short flags);
+void dsr_rtc_update(struct dsr_srt *srt, unsigned long time, 
 		    unsigned short flags);
 int dsr_rtc_del(struct in_addr addr);
 void dsr_rtc_fini(void);

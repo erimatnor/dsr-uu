@@ -65,8 +65,11 @@ depend:
 	@echo "Updating Makefile dependencies..."
 	@makedepend -Y./ -- $(DEFS) -- $(SRC) &>/dev/null
 
+TAGS: *.c *.h
+	etags.emacs *.c *.h
+
 clean:
-	rm -rf .*ko* .*mod* .*cmd *mod* .tmp_versions *~ *.ko *.o *.ver Makefile.bak .*o.d
+	rm -rf .*ko* .*mod* .*cmd *mod* .tmp_versions *~ *.ko *.o *.ver Makefile.bak .*o.d TAGS
 endif
 # DO NOT DELETE
 

@@ -12,6 +12,7 @@
 #include "debug.h"
 #include "dsr.h"
 #include "kdsr.h"
+#include "dsr-opt.h"
 #include "dsr-rreq.h"
 #include "dsr-rtc.h"
 #include "dsr-srt.h"
@@ -124,7 +125,7 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
         return NOTIFY_DONE;
 }
 
-static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev);
+static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev);
 static struct net_device_stats *dsr_dev_get_stats(struct net_device *dev);
 
 static int dsr_dev_set_address(struct net_device *dev, void *p)
@@ -185,7 +186,7 @@ static void __init dsr_dev_setup(struct net_device *dev)
 	dev->uninit = dsr_dev_uninit;
 	dev->open = dsr_dev_open;
 	dev->stop = dsr_dev_stop;
-	dev->hard_start_xmit = dsr_dev_xmit;
+	dev->hard_start_xmit = dsr_dev_start_xmit;
 	dev->set_multicast_list = set_multicast_list;
 	dev->set_mac_address = dsr_dev_set_address;
 #ifdef CONFIG_NET_FASTROUTE
@@ -243,150 +244,83 @@ int dsr_dev_deliver(struct sk_buff *skb)
 	return res;
 }
 
+int dsr_dev_xmit(struct dsr_pkt *dp)
+{
+	struct sk_buff *skb;
 
+	skb = kdsr_skb_create(dp);
 
-/* Transmit a DSR packet... this function assumes that the packet has a valid
- * source route already. */
-/* int dsr_dev_queue_xmit(dsr_pkt_t *dp) */
-/* { */
-/* 	struct dsr_node *dnode = dsr_dev->priv; */
-/* 	struct ethhdr *ethh; */
-/* 	struct sockaddr hw_addr; */
-		
-/* 	if (!dp) */
-/* 		return -1; */
-
-/* 	if (!dp->skb) { */
-/* 		dsr_pkt_free(dp); */
-/* 		return -1; */
-/* 	}	 */
-
-/* 	dp->skb->dev = dnode->slave_dev; */
-
-/* 	ethh = (struct ethhdr *)dp->skb->data; */
-
-/* 	if (kdsr_get_hwaddr(dp->nh, &hw_addr, dp->skb->dev) < 0) */
-/* 		goto out_err; */
+	if (!skb) {
+		DEBUG("Could not create skb!\n");
+		return -1;
+	}
+       
+	dev_queue_xmit(skb);
 	
-/* 	DEBUG("Transmitting head=%d skb->data=%lu skb->nh.iph=%lu\n", skb_headroom(dp->skb), (unsigned long)dp->skb->data, (unsigned long)dp->skb->nh.iph); */
-
-/*  	/\* Build hw header *\/  */
-/* 	dp->skb->dev->rebuild_header(dp->skb); */
-
-/* 	memcpy(ethh->h_source, dp->skb->dev->dev_addr, dp->skb->dev->addr_len); */
-
-/* 	/\* Send packet *\/ */
-/* 	dev_queue_xmit(dp->skb); */
+	dsr_node_lock(dsr_node);
+	dsr_node->stats.tx_packets++;
+	dsr_node->stats.tx_bytes+=skb->len;
+	dsr_node_unlock(dsr_node);
 	
-/* 	dsr_node_lock(dnode); */
-/* 	dnode->stats.tx_packets++; */
-/* 	dnode->stats.tx_bytes+=dp->skb->len; */
-/* 	dsr_node_unlock(dnode); */
-/* 	/\* We must free the DSR packet *\/ */
-		
-/* 	dsr_pkt_free(dp); */
-/* 	return 0; */
-/* /\* 	default: *\/ */
-/* /\* 		DEBUG("Unkown packet type\n"); *\/ */
-/* /\* 	} *\/ */
-/*  out_err: */
-/* 	DEBUG("Could not send packet, freeing...\n"); */
-/* 	dev_kfree_skb(dp->skb); */
-/* 	dsr_pkt_free(dp); */
-/* 	return -1; */
-/* } */
+	return 0;
+}
 
 /* Main receive function for packets originated in user space */
-static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
+static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
-	struct dsr_node *dnode = (struct dsr_node *)dev->priv;
+	/* struct dsr_node *dnode = (struct dsr_node *)dev->priv; */
 	struct ethhdr *ethh;
-	dsr_srt_t *srt = NULL;
+	struct dsr_pkt dp;
 	struct in_addr dst;
 	int res = 0;
-	
-	ethh = (struct ethhdr *)skb->data;
-
+			
 	DEBUG("headroom=%d skb->data=%lu skb->nh.iph=%lu\n", 
 	      skb_headroom(skb), (unsigned long)skb->data, 
 	      (unsigned long)skb->nh.iph);
-
+	
+	ethh = (struct ethhdr *)skb->data;
+	
+	dp.iph = skb->nh.iph;
+	dp.data = skb->data + dev->hard_header_len + (dp.iph->ihl << 2);
+	dp.data_len = skb->len - dev->hard_header_len - (dp.iph->ihl << 2);
+	
+	dp.src.s_addr = skb->nh.iph->saddr;
+	dp.dst.s_addr = skb->nh.iph->daddr;
+	
 	switch (ntohs(ethh->h_proto)) {
 	case ETH_P_IP:
+	    
+		dp.srt = dsr_rtc_find(dst);
 		
-		/* slave_dev = dev_get_by_index(.ifindex); */
-		skb->dev = dnode->slave_dev;
-	/* 	dev_put(slave_dev); */
-		dst.s_addr = skb->nh.iph->daddr;
-
-		srt = dsr_rtc_find(dst);
+		if (dp.srt) {
+	       
+			dsr_srt_add(&dp);
+			
+			/* Set next hop */
+			dp.nxt_hop = dsr_srt_next_hop(dp.srt);
 		
-		if (srt) {
-			dsr_pkt_t *dp;
-			struct sockaddr hw_addr;
-		       
-				/* Allocate a DSR packet */
-			dp = dsr_pkt_alloc();
-			dp->skb = skb;
-			dp->data = skb->data;
-			dp->len = skb->len;
-	
-			dp->src.s_addr = skb->nh.iph->saddr;
-			dp->dst.s_addr = skb->nh.iph->daddr;
-			
-			dp->srt = srt;
-		
-			if (dp->srt->laddrs == 0)
-				dp->nh.s_addr = dp->srt->dst.s_addr;
-			else
-				dp->nh.s_addr = dp->srt->addrs[0].s_addr;
-			
-			/* Add source route */
-			if (dsr_srt_add(dp) < 0) {
-				dev_kfree_skb(skb);
-				dsr_pkt_free(dp);
-				break;
-			}
-				
-			if (kdsr_get_hwaddr(dp->nh, &hw_addr, skb->dev) < 0) {
-				dev_kfree_skb(skb);
-				dsr_pkt_free(dp);
-				break;
-			}
-			
-			dp->skb->dev->rebuild_header(dp->skb);
-
-			memcpy(ethh->h_source, skb->dev->dev_addr, skb->dev->addr_len);
-
 			/* Send packet */
-			dev_queue_xmit(skb);
-			
-			dsr_node_lock(dnode);
-			dnode->stats.tx_packets++;
-			dnode->stats.tx_bytes+=skb->len;
-			dsr_node_unlock(dnode);
+			dsr_dev_xmit(&dp);
 
-			/* We must free the DSR packet */
-			dsr_pkt_free(dp);
 		} else {			
-			res = p_queue_enqueue_packet(skb, dev_queue_xmit);
+			res = p_queue_enqueue_packet(&dp, skb, dsr_dev_xmit);
 			
 			if (res < 0) {
 				DEBUG("Queueing failed!\n");
-			/* 	dsr_pkt_free(dp); */
-				dev_kfree_skb(skb);
-				return -1;
+				break;
 			}
 			res = dsr_rreq_send(dst);
 			
 			if (res < 0)
-				DEBUG("Transmission failed...");
+				DEBUG("RREQ Transmission failed...");
+
+			return 0;
 		}
 		break;
 	default:
 		DEBUG("Unkown packet type\n");
-		dev_kfree_skb(skb);
-	}	
+	}
+	kfree_skb(skb);	
 	return 0;
 }
 

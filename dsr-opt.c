@@ -2,51 +2,28 @@
 
 #include "debug.h"
 #include "dsr.h"
+#include "dsr-opt.h"
 #include "dsr-rreq.h"
 #include "dsr-rrep.h"
 #include "dsr-srt.h"
 #include "kdsr.h"
 
 
-dsr_pkt_t *dsr_pkt_alloc(void)
+struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, int len, unsigned int protocol)
 {
-	dsr_pkt_t *dp;
-
-	dp = kmalloc(sizeof(dsr_pkt_t), GFP_ATOMIC);
-	
-	memset(dp, 0, sizeof(dsr_pkt_t));
-	
-	return dp;
-}
-
-void dsr_pkt_free(dsr_pkt_t *dp)
-{
-	if (!dp)
-		return;
-	
-	/* Can't free skb, might be needed further down or up the stack */
-
-	if (dp->srt)
-		kfree(dp->srt);
-	
-	kfree(dp);
-}
-
-dsr_hdr_t *dsr_hdr_add(char *buf, int len, unsigned int protocol)
-{
-	dsr_hdr_t *dh;
+	struct dsr_opt_hdr *opt_hdr;
 	
 	if (len < DSR_OPT_HDR_LEN)
 		return NULL;
 	
-	dh = (dsr_hdr_t *)buf;
+	opt_hdr = (struct dsr_opt_hdr *)buf;
 
-	dh->nh = protocol;
-	dh->f = 0;
-	dh->res = 0;
-      	dh->length = htons(len - DSR_OPT_HDR_LEN);
+	opt_hdr->nh = protocol;
+	opt_hdr->f = 0;
+	opt_hdr->res = 0;
+      	opt_hdr->p_len = htons(len - DSR_OPT_HDR_LEN);
 
-	return dh;
+	return opt_hdr;
 }
 
 struct iphdr *dsr_build_ip(char *buf, int len, struct in_addr src, 
@@ -75,82 +52,89 @@ struct iphdr *dsr_build_ip(char *buf, int len, struct in_addr src,
 	return iph;
 }
 
-int dsr_opts_remove(dsr_pkt_t *dp)
+int dsr_opts_create(struct dsr_pkt *dp)
 {
-	struct iphdr *iph;
-	int dsr_len, ip_len;
+
+	return 0;
+}
+
+
+int dsr_opts_remove(struct dsr_pkt *dp)
+{
+	int ip_len, len;
+	char *off; /* Should point to the byte after the IP header */
 	
 	if (!dp)
 		return -1;
 
-       	dsr_len = ntohs(dp->dh->length) + DSR_OPT_HDR_LEN;
-	
-	if (dsr_len > dp->len) {
-		DEBUG("data to short according to DSR header len=%d dh->length=%d!\n", dp->len, dsr_len);
+	if (dp->dsr_opts_len > dp->data_len) {
+		DEBUG("data to short according to DSR header len=%d opt_hdr->p_len=%d!\n", dp->data_len, dp->dsr_opts_len);
 		return -1;
 	}
 	
 	/* Update IP header */
-	iph = dp->skb->nh.iph;
+	ip_len = (dp->iph->ihl << 2);
 
-	ip_len = (iph->ihl << 2);
+	dp->iph->protocol = dp->opt_hdr->nh;
+	dp->iph->tot_len = htons(dp->data_len);
 
-	iph->protocol = dp->dh->nh;
-	iph->tot_len = htons(ntohs(iph->tot_len) - dsr_len);
+	ip_send_check(dp->iph);
 
-	ip_send_check(iph);
-
+	off = (char *)dp->opt_hdr;
+	
 	/* Move data */
-	memmove(dp->data, dp->data + dsr_len, dp->len - dsr_len);
-		
-	dp->len -= dsr_len;
-	dp->dh = NULL;
-	dp->sopt = NULL;
-	dp->rreq = NULL;
-	dp->rrep = NULL;
+	memmove(off, off + dp->dsr_opts_len, dp->data_len);
+	
+	len = dp->dsr_opts_len;
+	dp->dsr_opts_len = 0;
+	dp->opt_hdr = NULL;
+	dp->srt_opt = NULL;
+	dp->rreq_opt = NULL;
+	dp->rrep_opt = NULL;
 	
 	/* Return bytes removed */
-	return dsr_len;
+	return len;
 }
-int dsr_recv(dsr_pkt_t *dp)
+int dsr_recv(struct dsr_pkt *dp)
 {	
 	int dsr_len, l;
-	int res = DSR_PKT_DROP;
-	dsr_opt_t *dopt;
-	
+	int action = 0;
+	struct dsr_opt *dopt;
+	struct in_addr my_addr;
+
 	if (!dp)
 		return DSR_PKT_ERROR;
 	
-	dp->dh = (dsr_hdr_t *)dp->data;
-
-	dsr_len = ntohs(dp->dh->length) + DSR_OPT_HDR_LEN;
+	dsr_node_lock(dsr_node);
+	my_addr = dsr_node->ifaddr;
+	dsr_node_unlock(dsr_node);
 	
-	if (dsr_len > dp->len) {
-		DEBUG("data to short, DSR header len=%d dh->length=%d!\n", 
-		      dp->len, dsr_len);
-		return -1;
-	}
 
-
+	/* Packet for us */
+	if (dp->dst.s_addr == my_addr.s_addr)
+		action |= DSR_PKT_DELIVER;
+	
+	dsr_len = dp->dsr_opts_len;
+	
 	l = DSR_OPT_HDR_LEN;
-	dopt = DSR_OPT_HDR(dp->dh);
+	dopt = DSR_GET_OPT(dp->opt_hdr);
 	
 	DEBUG("Parsing DSR packet l=%d dsr_len=%d\n", l, dsr_len);
 
 	while (l < dsr_len && (dsr_len - l) > 2) {
-		DEBUG("len=%d dsr_len=%d l=%d\n", dp->len, dsr_len, l);
+		DEBUG("dsr_len=%d l=%d\n", dsr_len, l);
 		switch (dopt->type) {
 		case DSR_OPT_PADN:
 			break;
 		case DSR_OPT_RREQ:
 			DEBUG("Received RREQ\n");
-			dp->rreq = (dsr_rreq_opt_t *)dopt;
-			res = dsr_rreq_recv(dp);
+			dp->rreq_opt = (struct dsr_rreq_opt *)dopt;
+			action |= dsr_rreq_opt_recv(dp);
 			break;
 		case DSR_OPT_RREP:
 			DEBUG("Received RREP\n");
-			dp->rrep = (dsr_rrep_opt_t *)dopt;
-			res = dsr_rrep_recv(dp);
+			dp->rrep_opt = (struct dsr_rrep_opt *)dopt;
+			action |= dsr_rrep_opt_recv(dp);
 			break;
 		case DSR_OPT_ERR:
 			DEBUG("Received RERR\n");
@@ -162,8 +146,8 @@ int dsr_recv(dsr_pkt_t *dp)
 			break;
 		case DSR_OPT_SRT:
 			DEBUG("Received SRT\n");
-			dp->sopt = (dsr_srt_opt_t *)dopt;
-			res = dsr_srt_recv(dp);
+			dp->srt_opt = (dsr_srt_opt_t *)dopt;
+			action |= dsr_srt_opt_recv(dp);
 			break;
 		case DSR_OPT_TIMEOUT:	
 			break;
@@ -177,9 +161,9 @@ int dsr_recv(dsr_pkt_t *dp)
 			DEBUG("Unknown DSR option type=%d\n", dopt->type);
 		}
 		l = l + dopt->length + 2;
-		dopt = DSR_NEXT_OPT(dopt);
+		dopt = DSR_GET_NEXT_OPT(dopt);
 	}
-	return res;
+	return action;
 }
 
 

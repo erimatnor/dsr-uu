@@ -38,20 +38,20 @@ typedef struct dsr_srt_opt {
 #define DSR_SRT_OPT_LEN(srt) (DSR_SRT_HDR_LEN + srt->laddrs)
 
 /* Internal representation of a source route */
-typedef struct dsr_srt {
+struct dsr_srt {
 	struct in_addr src;
 	struct in_addr dst;
 	unsigned int laddrs;  /* length in bytes if addrs */
 	struct in_addr addrs[0];  /* Intermediate nodes */
-} dsr_srt_t;
+};
 
-
-char *print_srt(dsr_srt_t *srt);
-dsr_srt_t *dsr_srt_new(struct in_addr src, struct in_addr dst, 
+struct in_addr dsr_srt_next_hop(struct dsr_srt *srt);
+char *print_srt(struct dsr_srt *srt);
+struct dsr_srt *dsr_srt_new(struct in_addr src, struct in_addr dst, 
 		       unsigned int length, char *addrs);
-dsr_srt_t *dsr_srt_new_rev(dsr_srt_t *srt);
-dsr_srt_opt_t *dsr_srt_opt_add(char *buf, int len, dsr_srt_t *srt);
-int dsr_srt_recv(struct dsr_pkt *dp);
-int dsr_srt_add(dsr_pkt_t *dp);
+struct dsr_srt *dsr_srt_new_rev(struct dsr_srt *srt);
+dsr_srt_opt_t *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt);
+int dsr_srt_opt_recv(struct dsr_pkt *dp);
+int dsr_srt_add(struct dsr_pkt *dp);
 
 #endif /* _DSR_SRT_H */
