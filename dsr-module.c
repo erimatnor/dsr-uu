@@ -7,11 +7,13 @@
 #include <net/protocol.h>
 #include <linux/netdevice.h>
 #include <linux/if_ether.h>
+#include <linux/proc_fs.h>
 #include <linux/socket.h>
 #include <net/arp.h>
 #include <net/ip.h>
 #include <net/dst.h>
 #include <net/neighbour.h>
+#include <linux/parser.h>
 #include <linux/netfilter_ipv4.h>
 #ifdef KERNEL26
 #include <linux/moduleparam.h>
@@ -42,6 +44,7 @@ module_param(ifname, charp, 0);
 MODULE_PARM(ifname, "s");
 #endif
 
+#define CONFIG_PROC_NAME "dsr_config"
 
 static int kdsr_arpset(struct in_addr addr, struct sockaddr *hw_addr, 
 		       struct net_device *dev)
@@ -289,6 +292,61 @@ int kdsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb)
 	return 0;
 }
 
+static int dsr_config_proc_read(char *buffer, char **start, off_t offset, int length, int* eof, void* data)
+{
+	int len = 0;
+	int i;
+	
+	for (i = 0; i < PARAMS_MAX; i++)
+		len += sprintf(buffer+len, "%s=%d\n", 
+			       params_def[i].name, get_param(i));
+    
+	*start = buffer + offset;
+	len -= offset;
+	if (len > length)
+		len = length;
+	else if (len < 0)
+		len = 0;
+	return len;    
+}
+static int dsr_config_proc_write(struct file* file, const char* buffer, 
+				unsigned long count, void* data) {
+#define CMD_MAX_LEN 256
+  char cmd[CMD_MAX_LEN ];
+  int i;
+  
+  memset(cmd, '\0', CMD_MAX_LEN);
+
+  if (count > CMD_MAX_LEN )
+	  return -EINVAL;
+  
+  /* Don't read the '\n' or '\0' character... */
+  if(copy_from_user(cmd, buffer, count))
+	  return -EFAULT;
+
+		  
+  for (i = 0; i < PARAMS_MAX; i++) {
+	  int n = strlen(params_def[i].name);
+	  
+	  if (strlen(cmd) - 2 <= n)
+		  return -EFAULT;
+
+	  if (strncmp(cmd, params_def[i].name, n) >= 0) {
+		  substring_t sub_str;
+		  int val = 0;
+		  
+		  sub_str.from = strstr(cmd, "=");
+		  sub_str.from++;  /* Exclude '=' */
+		  sub_str.to = cmd + count - 1; /* Exclude trailing '\n' */
+		  match_int(&sub_str, &val);
+		  set_param(i, val);
+		  DEBUG("Setting %s to %d\n",  params_def[i].name, val);
+	  }
+  }
+  return count;
+}
+
+
 /* We hook in before IP's routing so that IP doesn't get a chance to drop it
  * before we can look at it... Packet to this node can go through since it will
  * be routed to us anyway */
@@ -309,6 +367,10 @@ static unsigned int dsr_pre_routing_recv(unsigned int hooknum,
 
 	return NF_STOLEN;
 }
+/* static struct file_operations config_proc_fops = { */
+/* 	.read		= dsr_config_proc_read, */
+/* 	.write          = dsr_config_proc_write, */
+/* }; */
 
 static struct nf_hook_ops dsr_pre_routing_hook = {
 	
@@ -339,7 +401,8 @@ static struct net_protocol dsr_inet_prot = {
 
 static int __init dsr_module_init(void)
 {
-	int res = -EAGAIN;;
+	int res = -EAGAIN;
+	struct proc_dir_entry *proc;
 
 	res = dsr_dev_init(ifname);
 
@@ -369,6 +432,16 @@ static int __init dsr_module_init(void)
 
 	if (res < 0)
 		goto cleanup_neigh_tbl;
+
+	proc = create_proc_entry(CONFIG_PROC_NAME, S_IRUGO | S_IWUSR, proc_net);
+	if (!proc)
+		goto cleanup_nf_hook;
+	
+	proc->owner = THIS_MODULE;
+/* 	proc->proc_fops = &config_proc_fops; */
+	proc->read_proc = dsr_config_proc_read;
+	proc->write_proc = dsr_config_proc_write;
+
 #ifndef KERNEL26
 	inet_add_protocol(&dsr_inet_prot);
 	DEBUG("Setup finished\n");
@@ -377,16 +450,17 @@ static int __init dsr_module_init(void)
 	
 	if (inet_add_protocol(&dsr_inet_prot, IPPROTO_DSR) < 0) {
 		DEBUG("Could not register inet protocol\n");
-		goto cleanup_nf_hook;
+		goto cleanup_proc;
 	}
+	
 	DEBUG("Setup finished res=%d\n", res);
 	
 	return 0;
-
+ cleanup_proc:
+	proc_net_remove(CONFIG_PROC_NAME);
+#endif
  cleanup_nf_hook:
 	nf_unregister_hook(&dsr_pre_routing_hook);
-#endif
-      
  cleanup_neigh_tbl:
 	neigh_tbl_cleanup();
  cleanup_rreq_tbl:

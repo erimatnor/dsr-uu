@@ -106,6 +106,17 @@ static inline int crit_query(void *pos, void *query)
 	return 0;
 }
 
+static inline int timer_remove(void *entry, void *data)
+{
+	struct rreq_tbl_entry *e = entry;
+
+	if (timer_pending(&e->timer)) {
+		del_timer(&e->timer);
+		return 1;
+	}
+	return 0;
+}
+
 
 static void rreq_tbl_set_timer(struct rreq_tbl_entry *e)
 {
@@ -210,68 +221,6 @@ HZ);
 	
 	return 1;
 }
-
-static int rreq_tbl_print(char *buf)
-{
-	struct list_head *pos;
-	int len = 0;
-    
-	read_lock_bh(&rreq_tbl.lock);
-    
-	len += sprintf(buf, "# %-15s %-6s Time      entries=%d max_entries=%d\n", "Addr", "TTL",  rreq_tbl.len, rreq_tbl.max_len);
-
-	list_for_each(pos, &rreq_tbl.head) {
-		struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)pos;
-		
-		len += sprintf(buf+len, "  %-15s %-6u %lu\n", 
-			       print_ip(e->addr.s_addr), e->ttl,
-			       e->time ? ((jiffies - e->time) * HZ) : 0);
-	}
-    
-	read_unlock_bh(&rreq_tbl.lock);
-	return len;
-
-}
-
-
-static int rreq_tbl_proc_info(char *buffer, char **start, off_t offset, int length)
-{
-	int len;
-
-	len = rreq_tbl_print(buffer);
-    
-	*start = buffer + offset;
-	len -= offset;
-	if (len > length)
-		len = length;
-	else if (len < 0)
-		len = 0;
-	return len;    
-}
-
-int __init rreq_tbl_init(void)
-{
-	proc_net_create(RREQ_TBL_PROC_NAME, 0, rreq_tbl_proc_info);
-	return 0;
-}
-
-static inline int timer_remove(void *entry, void *data)
-{
-	struct rreq_tbl_entry *e = entry;
-
-	if (timer_pending(&e->timer)) {
-		del_timer(&e->timer);
-		return 1;
-	}
-	return 0;
-}
-
-void __exit rreq_tbl_cleanup(void)
-{
-	tbl_flush(&rreq_tbl, timer_remove);
-	proc_net_remove(RREQ_TBL_PROC_NAME);
-}
-
 
 
 static struct dsr_rreq_opt *dsr_rreq_opt_add(char *buf, int len, 
@@ -458,5 +407,54 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp)
 	}
 
 	return DSR_PKT_DROP;
+}
+static int rreq_tbl_print(char *buf)
+{
+	struct list_head *pos;
+	int len = 0;
+    
+	read_lock_bh(&rreq_tbl.lock);
+    
+	len += sprintf(buf, "# %-15s %-6s Time      entries=%d max_entries=%d\n", "Addr", "TTL",  rreq_tbl.len, rreq_tbl.max_len);
+
+	list_for_each(pos, &rreq_tbl.head) {
+		struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)pos;
+		
+		len += sprintf(buf+len, "  %-15s %-6u %lu\n", 
+			       print_ip(e->addr.s_addr), e->ttl,
+			       e->time ? ((jiffies - e->time) * HZ) : 0);
+	}
+    
+	read_unlock_bh(&rreq_tbl.lock);
+	return len;
+
+}
+
+
+static int rreq_tbl_proc_info(char *buffer, char **start, off_t offset, int length)
+{
+	int len;
+
+	len = rreq_tbl_print(buffer);
+    
+	*start = buffer + offset;
+	len -= offset;
+	if (len > length)
+		len = length;
+	else if (len < 0)
+		len = 0;
+	return len;    
+}
+
+int __init rreq_tbl_init(void)
+{
+	proc_net_create(RREQ_TBL_PROC_NAME, 0, rreq_tbl_proc_info);
+	return 0;
+}
+
+void __exit rreq_tbl_cleanup(void)
+{
+	tbl_flush(&rreq_tbl, timer_remove);
+	proc_net_remove(RREQ_TBL_PROC_NAME);
 }
 
