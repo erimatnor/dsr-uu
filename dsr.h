@@ -3,6 +3,7 @@
 
 #include <asm/byteorder.h>
 #include <linux/types.h>
+#include <linux/netdevice.h>
 #include <linux/in.h>
 #include <linux/skbuff.h>
 #include <linux/ip.h>

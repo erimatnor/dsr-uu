@@ -16,7 +16,7 @@
 #include <linux/moduleparam.h>
 #endif
 #include <net/icmp.h>
-#include <net/xfrm.h>
+//#include <net/xfrm.h>
 
 #include "dsr.h"
 #include "dsr-opt.h"

@@ -1,5 +1,5 @@
 
-SRC=kdsr.c dsr-dev.c dsr-opt.c dsr-rreq.c dsr-rrep.c dsr-srt.c p-queue.c 
+SRC=kdsr.c dsr-dev.c dsr-opt.c dsr-rreq.c dsr-rrep.c dsr-srt.c dsr-ack.c p-queue.c 
 
 DEFS=-DDEBUG 
 
@@ -59,7 +59,7 @@ $(KOBJS): %.o: %.c Makefile
 $(MODNAME).o: $(KOBJS)
 	$(LD) -r $^ -o $@
 
-$(RTC_SRC).o:
+$(RTC_TRG).o: $(RTC_SRC) Makefile
 	$(KCC) $(KCFLAGS) -c -o $@ $<
 
 depend:

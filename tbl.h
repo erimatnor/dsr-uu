@@ -2,7 +2,10 @@
 #define _TBL_H
 
 #include <linux/list.h>
+#include <linux/slab.h>
+#include <linux/errno.h>
 #include <linux/spinlock.h>
+#include <linux/interrupt.h>
 
 #define TBL_FIRST(tbl) (tbl)->head.next
 #define TBL_EMPTY(tbl) (TBL_FIRST(tbl) == &(tbl)->head)
