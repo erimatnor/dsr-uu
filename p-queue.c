@@ -228,10 +228,10 @@ int p_queue_set_verdict(int verdict, struct in_addr addr)
 	    pkts++;
 	    
 	    /* Inject packet */
-	    entry->okfn(entry->dp);
+	    /* entry->okfn(entry->dp); */
 /* 	    dsr_dev_queue_xmit(entry->dp); */
-/* 	    kfree_skb(entry->dp->skb); */
-/* 	    dsr_pkt_free(entry->dp); */
+	    kfree_skb(entry->dp->skb);
+	    dsr_pkt_free(entry->dp);
 	    kfree(entry);
 	}
 	DEBUG("Sent %d queued pkts\n", pkts);
