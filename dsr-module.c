@@ -99,7 +99,7 @@ static int parse_mackill(void)
 	return 0;
 }
 
-static int do_mackill(char *mac)
+int do_mackill(char *mac)
 {
 	int i;
 
@@ -133,30 +133,7 @@ static int dsr_arpset(struct in_addr addr, struct sockaddr *hw_addr,
 }
 #endif
 
-static int is_promisc_recv(struct sk_buff *skb)
-{
-	struct ethhdr *ethh;
-	char bc[ETH_ALEN] = { 0xff,0xff,0xff,0xff,0xff,0xff };
-	int res = 1;
-	
-	ethh = (struct ethhdr *)skb->mac.raw;
-	
-	dsr_node_lock(dsr_node);
-	if (dsr_node->slave_dev) {
-
-/* 		DEBUG("dst=%s\n",print_eth(ethh->h_dest)); */
-/* 		DEBUG("bc=%s\n",print_eth(bc)); */
-		
-		if (memcmp(ethh->h_dest, dsr_node->slave_dev->dev_addr,
-			   ETH_ALEN) == 0 ||
-		    memcmp(ethh->h_dest, bc, ETH_ALEN) == 0)
-			res = 0;
-	}
-	dsr_node_unlock(dsr_node);
-		
-	return res;
-}
-static int dsr_ip_recv(struct sk_buff *skb)
+int dsr_ip_recv(struct sk_buff *skb)
 {
 	struct dsr_pkt *dp;
 #ifdef DEBUG
@@ -171,7 +148,7 @@ static int dsr_ip_recv(struct sk_buff *skb)
 		return -1;
 	}
 	
-	if (is_promisc_recv(skb)) {
+	if (skb->pkt_type == PACKET_OTHERHOST) {
 		DEBUG("Setting flag PKT_PROMISC_RECV\n");
 		dp->flags |= PKT_PROMISC_RECV;
 	}
@@ -185,7 +162,6 @@ static int dsr_ip_recv(struct sk_buff *skb)
 	DEBUG("iph_len=%d iph_totlen=%d dsr_opts_len=%d data_len=%d\n", 
 	      (dp->nh.iph->ihl << 2), ntohs(dp->nh.iph->tot_len), dsr_pkt_opts_len(dp), dp->payload_len);
 
-	
 	/* Add mac address of previous hop to the arp table */
 	dsr_recv(dp);
 	
@@ -382,11 +358,6 @@ static unsigned int dsr_pre_routing_recv(unsigned int hooknum,
 		
 		if (do_mackill((*skb)->mac.raw + ETH_ALEN))
 			return NF_DROP;
-		
-		if (is_promisc_recv(*skb)) {
-			dsr_ip_recv(*skb);
-			return NF_STOLEN;
-		}
 	}
 	return NF_ACCEPT;	
 }
@@ -498,6 +469,7 @@ static int __init dsr_module_init(void)
 	
 	res = nf_register_hook(&dsr_pre_routing_hook);
 	
+	
 	if (res < 0)
 		goto cleanup_neigh_tbl;
 
@@ -519,7 +491,7 @@ static int __init dsr_module_init(void)
 	proc->owner = THIS_MODULE;
 	proc->read_proc = dsr_config_proc_read;
 	proc->write_proc = dsr_config_proc_write;
-
+	
 #ifndef KERNEL26
 	inet_add_protocol(&dsr_inet_prot);
 	DEBUG("Setup finished\n");

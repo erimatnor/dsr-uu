@@ -223,6 +223,8 @@ static inline void dsr_node_unlock(struct dsr_node *dnode)
 {
 	spin_unlock(&dnode->lock);
 }
+int dsr_ip_recv(struct sk_buff *skb);
+int do_mackill(char *mac);
 
 #endif
 

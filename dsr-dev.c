@@ -26,9 +26,23 @@
 
 /* Our dsr device */
 static struct net_device *dsr_dev;
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,4,20)
+/* dsr_node must be static on some older kernels, othewise it segfaults on
+ * module load */
 static struct dsr_node *dsr_node;
+#else
+struct dsr_node *dsr_node;
+#endif
 static int rp_filter = 0;
 static int forwarding = 0;
+static int dsr_dev_llrecv(struct sk_buff *skb, struct net_device *indev, 
+			  struct packet_type *pt);
+
+static struct packet_type dsr_packet_type = {
+	.type = __constant_htons(ETH_P_IP),
+	.func = dsr_dev_llrecv,
+};
+
 
 static int dsr_dev_inetaddr_event(struct notifier_block *this, 
 				  unsigned long event,
@@ -37,17 +51,20 @@ static int dsr_dev_inetaddr_event(struct notifier_block *this,
 	struct in_ifaddr *ifa = (struct in_ifaddr *)ptr;
 	struct in_device *indev;
 	struct in_addr addr, bc;
-	struct dsr_node *dnode;
 
 	if (!ifa)
 		return NOTIFY_DONE;
 	
 	indev = ifa->ifa_dev;
+	
+	if (!indev)
+		return NOTIFY_DONE;
 
 	switch (event) {
         case NETDEV_UP:
 		DEBUG("Netdev UP\n");
-		if (indev && indev->dev == dsr_dev) {
+		if (indev->dev == dsr_dev) {
+			struct dsr_node *dnode;
 			
 			dnode = indev->dev->priv;
 
@@ -57,29 +74,25 @@ static int dsr_dev_inetaddr_event(struct notifier_block *this,
 			
 			addr.s_addr = ifa->ifa_address;
 			bc.s_addr = ifa->ifa_broadcast;
-			
+						
 			dnode->slave_indev = in_dev_get(dnode->slave_dev);
-			
+
 			/* Disable rp_filter and enable forwarding */
 			if (dnode->slave_indev) {
 				rp_filter = dnode->slave_indev->cnf.rp_filter;
 				forwarding = dnode->slave_indev->cnf.forwarding;
-				dnode->slave_indev->cnf.rp_filter = 0; 
+				dnode->slave_indev->cnf.rp_filter = 0;
 				dnode->slave_indev->cnf.forwarding = 1;
  			}
 			dsr_node_unlock(dnode);
 
-			DEBUG("New ip=%s broadcast=%s\n", 
-			      print_ip(addr), 
+			DEBUG("New ip=%s broadcast=%s\n",
+			      print_ip(addr),
 			      print_ip(bc));
 		}
 		break;
         case NETDEV_DOWN:
 		DEBUG("notifier down\n");
-		/* Restore rp_filter and forwarding setting */
-		if (indev && indev->dev == dsr_dev) {
-			
-		}
                 break;
 	case NETDEV_REGISTER:
 	default:
@@ -90,8 +103,9 @@ static int dsr_dev_inetaddr_event(struct notifier_block *this,
 static int dsr_dev_netdev_event(struct notifier_block *this,
                               unsigned long event, void *ptr)
 {
-        struct net_device *dev = (struct net_device *) ptr;
+        struct net_device *dev = (struct net_device *)ptr;
 	struct dsr_node *dnode = dsr_dev->priv;
+	int slave_change = 0;
 
 	if (!dev)
 		return NOTIFY_DONE;
@@ -99,46 +113,66 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 	switch (event) {
         case NETDEV_REGISTER:
 		DEBUG("Netdev register %s\n", dev->name);
+		dsr_node_lock(dnode);
 		if (dnode->slave_dev == NULL && dev->get_wireless_stats) {
-			dsr_node_lock(dnode);
 			dnode->slave_dev = dev;
 			dev_hold(dnode->slave_dev);
-			dsr_node_unlock(dnode);
-			DEBUG("new dsr slave interface %s\n", dev->name);
-		} 
+			
+			if (!dsr_packet_type.func) {
+				dsr_packet_type.func = dsr_dev_llrecv;
+				dsr_packet_type.dev = dnode->slave_dev;
+				dev_add_pack(&dsr_packet_type);
+			}
+			slave_change = 1;
+		}
+		dsr_node_unlock(dnode);
+		
+		if (slave_change)
+			DEBUG("New DSR slave interface %s\n", dev->name);
 		break;
 	case NETDEV_CHANGE:
 		DEBUG("Netdev change\n");
 		break;
         case NETDEV_UP:
 		DEBUG("Netdev up %s\n", dev->name);
-		if (dev == dsr_dev && ConfVal(PromiscOperation)) 
-			dev_set_promiscuity(dnode->slave_dev, +1);
+		dsr_node_lock(dnode);
+		if (dev == dsr_dev && dnode->slave_dev) {
+			if (ConfVal(PromiscOperation)) 
+				dev_set_promiscuity(dnode->slave_dev, +1);
+		}
+		dsr_node_unlock(dnode);
 		break;
         case NETDEV_UNREGISTER:
 		DEBUG("Netdev unregister %s\n", dev->name); 
+		dsr_node_lock(dnode);
 		if (dev == dnode->slave_dev) {
-                        DEBUG("dsr slave interface %s went away\n", dev->name);
-			dsr_node_lock(dnode);
 			dev_put(dnode->slave_dev);
 			dnode->slave_dev = NULL;
-
-			dsr_node_unlock(dnode);
+			dev_remove_pack(&dsr_packet_type);
+			dsr_packet_type.func = NULL;
+			slave_change = 1;
                 }
+		dsr_node_unlock(dnode);
+
+		if (slave_change)
+			DEBUG("DSR slave interface %s unregisterd\n", dev->name);
 		break;
         case NETDEV_DOWN:
 		DEBUG("Netdev down %s\n", dev->name);
-		if (dev == dsr_dev) {
+		dsr_node_lock(dnode);
+		if (dev == dsr_dev && dnode->slave_dev) {
+
 			if (ConfVal(PromiscOperation))
 				dev_set_promiscuity(dnode->slave_dev, -1);
 			
-			if (dsr_node->slave_indev) {
-				dsr_node->slave_indev->cnf.rp_filter = rp_filter; 
-				dsr_node->slave_indev->cnf.forwarding = forwarding; 
-				in_dev_put(dsr_node->slave_indev);
-				dsr_node->slave_indev = NULL;	
+			if (dnode->slave_indev) {
+				dnode->slave_indev->cnf.rp_filter = rp_filter; 
+				dnode->slave_indev->cnf.forwarding = forwarding; 
+				in_dev_put(dnode->slave_indev);
+				dnode->slave_indev = NULL;	
 			}
 		}
+		dsr_node_unlock(dnode);
                 break;
         default:
                 break;
@@ -233,7 +267,23 @@ static void __init dsr_dev_setup(struct net_device *dev)
 	return 0;
 #endif
 }
+static int dsr_dev_llrecv(struct sk_buff *skb,
+		  struct net_device *indev,
+		  struct packet_type *pt)
+{
+	/* DEBUG("Packet recvd\n"); */
 
+/* 	if (do_mackill(skb->mac.raw + ETH_ALEN)) { */
+/* 		kfree_skb(skb); */
+/* 		return 0; */
+/* 	} */
+	if (skb->pkt_type == PACKET_OTHERHOST)
+		dsr_ip_recv(skb);
+	else
+		kfree_skb(skb);
+
+	return 0;
+}
 int dsr_dev_deliver(struct dsr_pkt *dp)
 {	
 	struct sk_buff *skb = NULL;
@@ -370,7 +420,6 @@ int  dsr_dev_init(char *ifname)
 	struct dsr_node *dnode;
 
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(2,4,20)
-       
 	dsr_dev = alloc_etherdev(sizeof(struct dsr_node));
 
 	if (!dsr_dev)
@@ -436,6 +485,9 @@ int  dsr_dev_init(char *ifname)
 	 * the DSR header. */
 	dsr_dev->mtu = dnode->slave_dev->mtu - DSR_OPTS_MAX_SIZE;
 	
+	dsr_packet_type.dev = dnode->slave_dev;
+	dev_add_pack(&dsr_packet_type);
+
 	res = register_netdev(dsr_dev);
 	
 	if (res < 0)
@@ -468,6 +520,9 @@ int  dsr_dev_init(char *ifname)
 
 void __exit dsr_dev_cleanup(void)
 {
+	if (dsr_packet_type.func)
+		dev_remove_pack(&dsr_packet_type);
+
         unregister_netdevice_notifier(&netdev_notifier);
 	unregister_inetaddr_notifier(&inetaddr_notifier);
 	unregister_netdev(dsr_dev);

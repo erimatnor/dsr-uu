@@ -219,7 +219,6 @@ static inline struct lc_node *lc_node_create(struct in_addr addr)
 	return n;
 };
 
-
 static inline struct lc_link *__lc_link_find(struct tbl *t, 
 					     struct in_addr src, 
 					     struct in_addr dst)
