@@ -29,7 +29,7 @@ static dsr_rreq_opt_t *dsr_rreq_opt_add(char *buf, int len,
 	return rreq;
 }
 
-int dsr_rreq_create(dsr_pkt_t *dp)
+int __dsr_rreq_create(dsr_pkt_t *dp)
 {
 	struct in_addr dst;
 	dsr_rreq_opt_t *rreq;
@@ -76,18 +76,22 @@ int dsr_rreq_send(struct in_addr target)
 	
 	dp->len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN;
 	
-	dp->skb = kdsr_pkt_alloc(dp->len, dsr_node->slave_dev);
+	dsr_node_lock(dsr_node);
+	
+	dp->skb = kdsr_skb_alloc(dp->len, dsr_node->slave_dev);
 	
 	if (!dp->skb) {
 		res = -1;
 		goto out_err;
 	}
 	
-	dp->skb->dev = dsr_node->slave_dev;
+/* 	dp->skb->dev = dsr_node->slave_dev; */
 	dp->data = dp->skb->data;
 	dp->dst.s_addr = target.s_addr;
 	
-	res = dsr_rreq_create(dp);
+	res = __dsr_rreq_create(dp);
+	
+	dsr_node_unlock(dsr_node);
 
 	if (res < 0) {
 		DEBUG("Could not create RREQ\n");
@@ -114,15 +118,19 @@ int dsr_rreq_send(struct in_addr target)
 int dsr_rreq_recv(dsr_pkt_t *dp)
 {
 	dsr_rreq_opt_t *rreq;
+	int ret = 0;
 	
 	if (!dp || !dp->rreq)
 		return DSR_PKT_DROP;
 
 	rreq = dp->rreq;
 
-	if (dp->src.s_addr == dsr_node->ifaddr.s_addr)
-		return DSR_PKT_DROP;
-
+	dsr_node_lock(dsr_node);
+	
+	if (dp->src.s_addr == dsr_node->ifaddr.s_addr) {
+		ret = DSR_PKT_DROP;
+		goto out;
+	}
 	dp->srt = dsr_srt_new(dp->src, dsr_node->ifaddr, 
 			      DSR_RREQ_ADDRS_LEN(rreq), (char *)rreq->addrs);
 #ifdef __KERNEL__
@@ -153,24 +161,27 @@ int dsr_rreq_recv(dsr_pkt_t *dp)
 
 	if (rreq->target == dsr_node->ifaddr.s_addr) {
 		dsr_srt_t *srt_rev;
-		
-		DEBUG("I am RREQ target\n");
 
+		DEBUG("RREQ for me\n");
+		
+	
+		DEBUG("srt: %s\n", print_srt(dp->srt));
+
+		/* Add reversed source route */
 		srt_rev = dsr_srt_new_rev(dp->srt);
 		
 		//DEBUG("srt_rev: %s\n", print_srt(srt_rev));
 
 		dsr_rtc_add(srt_rev, 60000, 0);
-
+		
+		/* send rrep.... */
+		dsr_rrep_send(dp->srt);
+		
 		/* Send buffered packets */
 		p_queue_set_verdict(P_QUEUE_SEND, srt_rev->dst.s_addr);
 
 		kfree(srt_rev);
 
-		DEBUG("srt: %s\n", print_srt(dp->srt));
-
-		/* send rrep.... */
-		dsr_rrep_send(dp->srt);
 	} else {
 		int i, n;
 		
@@ -179,14 +190,19 @@ int dsr_rreq_recv(dsr_pkt_t *dp)
 		/* Examine source route if this node already exists in it */
 		for (i = 0; i < n; i++)
 			if (dp->srt->addrs[i].s_addr == dsr_node->ifaddr.s_addr) {
-				return DSR_PKT_DROP;
+				ret = DSR_PKT_DROP;
+				goto out;
 			}		
 
 		/* FIXME: Add myself to source route.... */
 		
 		/* Forward RREQ */
-		return DSR_PKT_FORWARD;
+		ret = DSR_PKT_FORWARD;
 	}
-	return DSR_PKT_DROP;
+
+ out:
+	dsr_node_unlock(dsr_node);
+	       
+	return ret;
 }
 

@@ -96,6 +96,16 @@ struct dsr_node {
 
 extern struct dsr_node *dsr_node;
 
+static inline void dsr_node_lock(struct dsr_node *dnode)
+{
+	spin_lock(&dnode->lock);
+}
+
+static inline void dsr_node_unlock(struct dsr_node *dnode)
+{
+	spin_unlock(&dnode->lock);
+}
+
 dsr_pkt_t *dsr_pkt_alloc(void);
 void dsr_pkt_free(dsr_pkt_t *dp);
 

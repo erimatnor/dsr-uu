@@ -24,15 +24,6 @@ struct dsr_node *dsr_node;
 //static struct net_device *basedev = NULL;
 //static char *basedevname = NULL;
 
-static inline void dsr_dev_lock(struct dsr_node *dnode)
-{
-	spin_lock(&dnode->lock);
-}
-
-static inline void dsr_dev_unlock(struct dsr_node *dnode)
-{
-	spin_unlock(&dnode->lock);
-}
 
 //struct netdev_info ldev_info;
 static int dsr_dev_netdev_event(struct notifier_block *this,
@@ -58,10 +49,14 @@ static int dsr_dev_set_node_info(struct net_device *dev)
 				break;
 		
 		if (ifa) {
-			dsr_dev_lock(dnode);
+			dsr_node_lock(dnode);
 			dnode->ifaddr.s_addr = ifa->ifa_address;
 			dnode->bcaddr.s_addr = ifa->ifa_broadcast;
-			dsr_dev_unlock(dnode);
+			dsr_node_unlock(dnode);
+			
+			DEBUG("dsr ip=%s, broadcast=%s\n", 
+			      print_ip(ifa->ifa_address), 
+			      print_ip(ifa->ifa_broadcast));
 		}
 		in_dev_put(indev);
 	} else {
@@ -84,17 +79,21 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 	switch (event) {
         case NETDEV_REGISTER:
 		DEBUG("notifier register %s\n", dev->name);
-	
+		if (dnode->slave_dev == NULL && dev->get_wireless_stats) {
+			dsr_node_lock(dnode);
+			dnode->slave_dev = dev;
+			dsr_node_unlock(dnode);
+			dev_hold(dnode->slave_dev);
+			DEBUG("new dsr slave interface %s\n", dev->name);
+		} 
+		break;
+	case NETDEV_CHANGE:
+		DEBUG("Netdev change\n");
 		break;
         case NETDEV_UP:
+	case NETDEV_CHANGEADDR:
 		DEBUG("notifier up %s\n", dev->name);
-		if (dnode->slave_dev == NULL && dev->get_wireless_stats) {
-			dev_hold(dev);
-			dsr_dev_lock(dnode);
-			dnode->slave_dev = dev;
-			dsr_dev_unlock(dnode);
-			DEBUG("new dsr slave interface %s\n", dev->name);
-		} else if (dev == dsr_dev) {
+		if (dev == dsr_dev) {
 			int res;
 			
 			res = dsr_dev_set_node_info(dev);
@@ -104,17 +103,18 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 		}
 		break;
         case NETDEV_UNREGISTER:
-		DEBUG("notifier unregister %s\n", dev->name);		
+		DEBUG("notifier unregister %s\n", dev->name); 
+		if (dev == dnode->slave_dev) {
+                        DEBUG("dsr slave interface %s went away\n", dev->name);
+			dsr_node_lock(dnode);
+			dev_put(dnode->slave_dev);
+			dnode->slave_dev = NULL;
+			dsr_node_unlock(dnode);
+                }
 		break;
         case NETDEV_DOWN:
 		DEBUG("notifier down %s\n", dev->name);
-                if (dev == dnode->slave_dev) {
-                        DEBUG("dsr slave interface %s went away\n", dev->name);
-			dsr_dev_lock(dnode);
-			dev_put(dnode->slave_dev);
-			dnode->slave_dev = NULL;
-			dsr_dev_unlock(dnode);
-                }
+		
                 break;
 
         default:
@@ -164,10 +164,14 @@ static int dsr_dev_stop(struct net_device *dev)
 static void dsr_dev_uninit(struct net_device *dev)
 {
 	struct dsr_node *dnode = dev->priv;
-	dsr_dev_lock(dnode);
+	
+	DEBUG("Calling dev_put on interfaces dnode->slave_dev=%u dsr_dev=%u\n",
+	      (unsigned int)dnode->slave_dev, (unsigned int)dsr_dev);
+
+	dsr_node_lock(dnode);
 	if (dnode->slave_dev)
 		dev_put(dnode->slave_dev);
-	dsr_dev_unlock(dnode);
+	dsr_node_unlock(dnode);
 	dev_put(dsr_dev);
 	dsr_node = NULL;
 }
@@ -216,10 +220,10 @@ int dsr_dev_deliver(struct sk_buff *skb)
 	skb->protocol = htons(ETH_P_IP);
 	skb->pkt_type = PACKET_HOST;
 	
-	dsr_dev_lock(dnode);
+	dsr_node_lock(dnode);
 	dsr_node->stats.rx_packets++;
 	dsr_node->stats.rx_bytes += skb->len;
-	dsr_dev_unlock(dnode);
+	dsr_node_unlock(dnode);
 
 	skb->dev = dsr_dev;
 	dst_release(skb->dst);
@@ -274,10 +278,10 @@ int dsr_dev_deliver(struct sk_buff *skb)
 /* 	/\* Send packet *\/ */
 /* 	dev_queue_xmit(dp->skb); */
 	
-/* 	dsr_dev_lock(dnode); */
+/* 	dsr_node_lock(dnode); */
 /* 	dnode->stats.tx_packets++; */
 /* 	dnode->stats.tx_bytes+=dp->skb->len; */
-/* 	dsr_dev_unlock(dnode); */
+/* 	dsr_node_unlock(dnode); */
 /* 	/\* We must free the DSR packet *\/ */
 		
 /* 	dsr_pkt_free(dp); */
@@ -357,10 +361,10 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 			/* Send packet */
 			dev_queue_xmit(skb);
 			
-			dsr_dev_lock(dnode);
+			dsr_node_lock(dnode);
 			dnode->stats.tx_packets++;
 			dnode->stats.tx_bytes+=skb->len;
-			dsr_dev_unlock(dnode);
+			dsr_node_unlock(dnode);
 
 			/* We must free the DSR packet */
 			dsr_pkt_free(dp);
@@ -394,7 +398,6 @@ static struct net_device_stats *dsr_dev_get_stats(struct net_device *dev)
 int __init dsr_dev_init(char *ifname)
 { 
 	int res = 0;	
-	struct net_device *dev = NULL;
 	struct dsr_node *dnode;
 
 	dsr_dev = alloc_netdev(sizeof(struct dsr_node),
@@ -408,33 +411,40 @@ int __init dsr_dev_init(char *ifname)
 	spin_lock_init(&dnode->lock);
 
 	if (ifname) {
-		dev = dev_get_by_name(ifname);
-		if (!dev) {
+		dnode->slave_dev = dev_get_by_name(ifname);
+		
+		if (!dnode->slave_dev) {
 			DEBUG("device %s not found\n", ifname);
 			res = -1;
 			goto cleanup_netdev;
 		} 
 		
-		if (dev == dsr_dev) {
-			DEBUG("invalid base device %s\n", ifname);
+		if (dnode->slave_dev == dsr_dev) {
+			DEBUG("invalid slave device %s\n", ifname);
 			res = -1;
-			dev_put(dev);
+			dev_put(dnode->slave_dev);
 			goto cleanup_netdev;
-		}		
-		dnode->slave_dev = dev;
-	
+		}	
 	} else {
 		read_lock(&dev_base_lock);
-		for (dev = dev_base; dev != NULL; dev = dev->next) {
-			if (dev->get_wireless_stats)
+		for (dnode->slave_dev = dev_base; 
+		     dnode->slave_dev != NULL; 
+		     dnode->slave_dev = dnode->slave_dev->next) {
+			
+			if (dnode->slave_dev->get_wireless_stats)
 				break;
 		}
-		if (dev) {
-			dev_hold(dev);
-			dnode->slave_dev = dev;
-			DEBUG("wireless interface is %s\n", dev->name);
-		}
 		read_unlock(&dev_base_lock);
+		
+		if (dnode->slave_dev) {
+			dev_hold(dnode->slave_dev);
+			DEBUG("wireless interface is %s\n", 
+			      dnode->slave_dev->name);
+		} else {
+			DEBUG("No proper slave device found\n");
+			res = -1;
+			goto cleanup_netdev;
+		}
 	}
 	
 	DEBUG("Setting %s as slave interface\n", dnode->slave_dev->name);
@@ -449,6 +459,7 @@ int __init dsr_dev_init(char *ifname)
 	if (res < 0)
 		goto cleanup_netdev_register;
 	
+	/* We must increment usage count since we hold a reference */
 	dev_hold(dsr_dev);
 	return res;
 	

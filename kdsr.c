@@ -38,8 +38,6 @@ module_param(ifname, charp, 0);
 MODULE_PARM(ifname, "s");
 #endif
 
-
-
 static int kdsr_recv(struct sk_buff *skb)
 {
 	dsr_pkt_t *dp;
@@ -187,20 +185,24 @@ int kdsr_arpset(struct in_addr addr, struct sockaddr *hw_addr,
 }
 
 /* Allocate DSR packet, dev is send device */
-struct sk_buff *kdsr_pkt_alloc(unsigned int size, struct net_device *dev)
+struct sk_buff *kdsr_skb_alloc(unsigned int size, struct net_device *dev)
 {
 	struct sk_buff *skb;
 	
+	DEBUG("min len=%d requested=%d size(aligned)=%d dev=%u\n", DSR_PKT_MIN_LEN, size, SKB_DATA_ALIGN(size), (unsigned int)dev);
+		
 	if (size < DSR_PKT_MIN_LEN)
 		return NULL;
 	
 	if (!dev) 
 		return NULL;
 
-	/* skb = dev_alloc_skb(size); */
+/* 	skb = dev_alloc_skb(size); */
+	DEBUG("dev->hard_header_len=%d\n", dev->hard_header_len);
+
 	skb = alloc_skb(dev->hard_header_len + 15 + size, GFP_ATOMIC);
 	
-	if (!skb)
+	if (!skb) 
 		return NULL;
 	
 	/* We align to 16 bytes, for ethernet: 2 bytes + 14 bytes header */

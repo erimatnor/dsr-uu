@@ -31,6 +31,9 @@ dsr_srt_t *dsr_srt_new(struct in_addr src, struct in_addr dst,
 	dsr_srt_t *sr;
 
 	sr = kmalloc(sizeof(dsr_srt_t) + length, GFP_ATOMIC);
+	
+	if (!sr)
+		return NULL;
 
 	sr->src.s_addr = src.s_addr;
 	sr->dst.s_addr = dst.s_addr;
@@ -155,15 +158,21 @@ int dsr_srt_recv(struct dsr_pkt *dp)
 	/* We should add this source route info to the cache... */
 	n = (sopt->length - 2) / sizeof(struct in_addr);
 	
+	dsr_node_lock(dsr_node);
+	
 	if (sopt->sleft == 0) {
 		if (dp->dst.s_addr == dsr_node->ifaddr.s_addr) {
 			DEBUG("Source route remove and deliver\n");
+			dsr_node_unlock(dsr_node);
 			return DSR_PKT_DELIVER;
 		} else {
 			DEBUG("Remove source route...\n");
+			dsr_node_unlock(dsr_node);
 			return DSR_PKT_SRT_REMOVE;
 		}
 	}
+	dsr_node_unlock(dsr_node);
+	
 	if (sopt->sleft > n) {
 		// Send ICMP parameter error
 		return DSR_PKT_SEND_ICMP;

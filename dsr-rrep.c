@@ -46,7 +46,7 @@ static dsr_rrep_opt_t *dsr_rrep_opt_add(char *buf, int len, dsr_srt_t *srt)
 	return rrep;	
 }
 
-int dsr_rrep_create(dsr_pkt_t *dp)
+int __dsr_rrep_create(dsr_pkt_t *dp)
 {
 	dsr_srt_t *srt_rev;
 	dsr_rrep_opt_t *rrep;
@@ -58,6 +58,8 @@ int dsr_rrep_create(dsr_pkt_t *dp)
 	
 	l = IP_HDR_LEN + DSR_OPT_HDR_LEN + 
 		DSR_SRT_OPT_LEN(dp->srt) + DSR_RREP_OPT_LEN(dp->srt);
+	
+	DEBUG("RREP len=%d\n", l);
 	
 	if (dp->len < l)
 		return -1;
@@ -75,31 +77,37 @@ int dsr_rrep_create(dsr_pkt_t *dp)
 	off += DSR_OPT_HDR_LEN;
 	l -= DSR_OPT_HDR_LEN;
 
-	srt_rev = dsr_srt_new_rev(dp->srt);
+	dp->nh.s_addr = dp->srt->src.s_addr;
 
-	if (!srt_rev)
-		return -1;
+/* /\* 	srt_rev = dsr_srt_new_rev(dp->srt); *\/ */
 	
-	if (srt_rev->laddrs == 0) {
-		DEBUG("source route is one hop\n");
-		dp->nh.s_addr = srt_rev->dst.s_addr;
-	} else
-		dp->nh.s_addr = srt_rev->addrs[0].s_addr;
+/* 	srt_rev = dsr_rtc_find(dp->dst); */
 	
-	/* Add the source route option to the packet */
-	dsr_srt_opt_add(off, l, srt_rev);
+/* 	if (!srt_rev) */
+/* 		return -1; */
 	
-	kfree(srt_rev);
+/* 	if (srt_rev->laddrs == 0) { */
+/* 		DEBUG("source route is one hop\n"); */
+/* 		dp->nh.s_addr = srt_rev->dst.s_addr; */
+/* 	} else */
+/* 		dp->nh.s_addr = srt_rev->addrs[0].s_addr; */
 	
-	off += DSR_SRT_OPT_LEN(dp->srt);
-	l -= DSR_SRT_OPT_LEN(dp->srt);
+/* 	/\* Add the source route option to the packet *\/ */
+/* 	dsr_srt_opt_add(off, l, srt_rev); */
+	
+/* 	kfree(srt_rev); */
 
-	rrep = dsr_rrep_opt_add(off, l, dp->srt);
+	/* dp->nh.s_addr = dp->srt->src.s_addr; */
 
-	if (!rrep) {
-		DEBUG("Could not create RREQ\n");
-		return -1;
-	}
+/* 	off += DSR_SRT_OPT_LEN(dp->srt); */
+/* 	l -= DSR_SRT_OPT_LEN(dp->srt); */
+
+/* 	rrep = dsr_rrep_opt_add(off, l, dp->srt); */
+
+/* 	if (!rrep) { */
+/* 		DEBUG("Could not create RREP\n"); */
+/* 		return -1; */
+/* 	} */
 	return 0;
 }
 
@@ -179,27 +187,42 @@ int dsr_rrep_send(dsr_srt_t *srt)
 	}
 	
 	dp->len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) + DSR_RREP_OPT_LEN(srt);
-
-	DEBUG("RREP len=%d\n", dp->len);
-		
-	dp->skb = kdsr_pkt_alloc(dp->len, dsr_node->slave_dev);
 	
-	if (dp->skb == NULL)
+	dsr_node_lock(dsr_node);
+
+	DEBUG("RREP len=%d dsr_node->slave_dev=%u\n", dp->len, (unsigned int)dsr_node->slave_dev);
+
+	dp->skb = kdsr_skb_alloc(dp->len, dsr_node->slave_dev);
+	
+	if (dp->skb == NULL) {
+		DEBUG("Could not allocate RREP packet\n");
+		dsr_node_unlock(dsr_node);
 		goto out_err;
+	}
+
+	DEBUG("skb->len=%d headroom=%d\n", dp->skb->len, skb_headroom(dp->skb));
 
 	/* Make a copy of the source route */
-	dp->srt = dsr_srt_new(srt->src, dsr_node->ifaddr, 
+	dp->srt = dsr_srt_new(srt->src, dsr_node->ifaddr,
 			      srt->laddrs, (char *)srt->addrs);
 	
+	if (!dp->srt) {
+		DEBUG("Could not allocate source route\n");
+		dsr_node_unlock(dsr_node);
+		goto out_err;
+	}
+
 	DEBUG("srt copy: %s\n", print_srt(dp->srt));
 
-	dp->data = dp->skb->data; 
+	dp->data = dp->skb->data;
 
-	res = dsr_rrep_create(dp);
+	res = __dsr_rrep_create(dp);
+
 
 	if (res < 0) {
 		DEBUG("Could not create RREP\n");
 		kfree_skb(dp->skb);
+		dsr_node_unlock(dsr_node);
 		goto out_err;
 	}
 	
@@ -207,9 +230,12 @@ int dsr_rrep_send(dsr_srt_t *srt)
 		DEBUG("Could not get hardware address for %s\n",
 		      print_ip(dp->nh.s_addr));
 		kfree_skb(dp->skb);
+		dsr_node_unlock(dsr_node);
 		goto out_err;
 	}
 	
+	dsr_node_unlock(dsr_node);
+
 	res = dsr_dev_build_hw_hdr(dp->skb, &dest);
 	
 	if (res < 0) {
@@ -218,10 +244,10 @@ int dsr_rrep_send(dsr_srt_t *srt)
 		goto out_err;
 	}
 	
-	DEBUG("Sending RREP\n");
-		
+	DEBUG("Sending RREP for %s headroom=%d len=%d tailroom=%d\n", print_ip(dp->dst.s_addr), skb_headroom(dp->skb), dp->skb->len, skb_tailroom(dp->skb));
+	
 	dev_queue_xmit(dp->skb);
-
+/* 	kfree_skb(dp->skb); */
  out_err:
 	dsr_pkt_free(dp);
 	/* dev_put(dev); */

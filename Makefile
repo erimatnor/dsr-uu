@@ -66,7 +66,7 @@ depend:
 	@makedepend -Y./ -- $(DEFS) -- $(SRC) &>/dev/null
 
 clean:
-	rm -rf .*ko* .*mod* .*cmd *mod* .tmp_versions *~ *.ko *.o *.ver Makefile.bak
+	rm -rf .*ko* .*mod* .*cmd *mod* .tmp_versions *~ *.ko *.o *.ver Makefile.bak .*o.d
 endif
 # DO NOT DELETE
 
