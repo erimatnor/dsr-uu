@@ -29,6 +29,10 @@ static TBL(rreq_tbl, RREQ_TBL_MAX_LEN);
 static unsigned int rreq_seqno;
 #endif
 
+#ifndef MAXTTL
+#define MAXTTL 255
+#endif
+
 #define STATE_IDLE          0
 #define STATE_IN_ROUTE_DISC 1
 

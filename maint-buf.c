@@ -284,6 +284,7 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 
 	/* Check if we should add an ACK REQ */
 	if (dp->flags & PKT_REQUEST_ACK &&
+	    !timer_pending(&ack_timer) &&
 	    (usecs_t) timeval_diff(&m->tx_time, &neigh_info.last_ack_req) >
 	    ConfValToUsecs(MaintHoldoffTime)) {
 
@@ -293,8 +294,8 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 
 		dsr_ack_req_opt_add(dp, m->id);
 
-		if (!timer_pending(&ack_timer))
-			maint_buf_set_timeout();
+	/* 	if (!timer_pending(&ack_timer)) */
+/* 			maint_buf_set_timeout(); */
 	} else {
 		DEBUG("Deferring ACK REQ for %s since_last=%ld id=%u\n",
 		      print_ip(dp->nxt_hop), timeval_diff(&m->tx_time,
