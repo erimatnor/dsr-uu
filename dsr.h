@@ -152,6 +152,10 @@ static inline unsigned long time_add_msec(unsigned long msecs)
 
 	return jiffies + t;
 }
+
+#define MSEC_TO_JIFFIES(msec) ((msec) * HZ / 1000)
+#define JIFFIES_TO_MSEC(j) ((j) * 1000 / HZ)
+
 /* struct dsr_pkt *dsr_pkt_alloc(int size); */
 /* void dsr_pkt_free(struct dsr_pkt *dp); */
 

@@ -296,13 +296,12 @@ int dsr_rreq_send(struct in_addr target, int ttl, unsigned long timeout)
 	dp->data_len = 0;
 	dp->dst.s_addr = DSR_BROADCAST;
 	dp->nxt_hop.s_addr = DSR_BROADCAST;
-	dp->dsr_opts_len = len;
+	dp->dsr_opts_len = len - IP_HDR_LEN;
 	dp->src = my_addr();
 	
 	buf = dp->dsr_data;
 	
-	dp->nh.iph = dsr_build_ip(buf, IP_HDR_LEN, IP_HDR_LEN + len, 
-				  dp->src, dp->dst, ttl);
+	dp->nh.iph = dsr_build_ip(buf, IP_HDR_LEN, len, dp->src, dp->dst, ttl);
 	
 	if (!dp->nh.iph) 
 		goto out_err;

@@ -86,6 +86,8 @@ int maint_buf_add(struct dsr_pkt *dp)
 
 int maint_buf_del(struct in_addr nxt_hop)
 {
+	DEBUG("Emptying maint_buf for next hop %s\n", print_ip(nxt_hop.s_addr));
+
 	return tbl_for_each_del(&maint_buf, &nxt_hop, crit_nxt_hop_del);
 }
 

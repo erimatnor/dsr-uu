@@ -228,6 +228,8 @@ int send_buf_set_verdict(int verdict, unsigned long daddr)
 				} else {
 					
 					/* Send packet */
+/* 					maint_buf_add(entry->dp); */
+					
 					entry->okfn(entry->dp);
 				    
 				}

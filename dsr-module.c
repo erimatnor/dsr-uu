@@ -195,8 +195,8 @@ static int dsr_ip_recv(struct sk_buff *skb)
 			action = DSR_PKT_NONE;
 		} else {
 			DEBUG("Forwarding (dev_queue_xmit)\n");
-			if (dp->data_len)
-				maint_buf_add(dp);
+			/* if (dp->data_len) */
+/* 				maint_buf_add(dp); */
 
 			dsr_dev_xmit(dp);
 			return 0;

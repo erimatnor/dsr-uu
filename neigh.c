@@ -5,6 +5,7 @@
 #include "neigh.h"
 #include "debug.h"
 #include "dsr-rtc.h"
+#include "dsr-ack.h"
 
 #define NEIGH_TBL_MAX_LEN 50
 #define MAX_AREQ_TX 2
@@ -16,6 +17,20 @@ static TBL(neigh_tbl, NEIGH_TBL_MAX_LEN);
 #define RTT_DEF 10
 
 #define NEIGH_TBL_PROC_NAME "dsr_neigh_tbl"
+
+
+struct neighbor {
+	struct list_head l;
+	struct in_addr addr;
+	struct sockaddr hw_addr;
+        unsigned short id_req, id_ack;
+	struct timer_list ack_req_timer;
+	struct timer_list ack_timer;
+	unsigned long last_ack_tx_time;
+	unsigned long last_ack_rx_time;
+	unsigned long last_ack_req_tx_time;
+	int rtt, reqs, jitter;
+};
 
 static struct timer_list garbage_timer;
 
@@ -48,28 +63,49 @@ static inline int crit_addr_get_id(void *pos, void *data)
 {
 	struct {
 		struct in_addr *a;
-		unsigned int *id;
+		unsigned short *id;
 	} *d;
 	
 	struct neighbor *e = pos;
 	d = data;
 
 	if (e->addr.s_addr == d->a->s_addr) {
-		d->id = e->id_req++;
+		*(d->id) = ++e->id_req;
 		return 1;
 	}
 	return 0;
 }
 
-static inline int timer_remove(void *entry, void *data)
+static inline int crit_addr_id_reset(void *entry, void *data)
 {
+	struct {
+		struct in_addr *a;
+		unsigned short *id;
+	} *d;
+	
 	struct neighbor *n = entry;
 
-	if (timer_pending(&n->ack_req_timer))
-		del_timer(&n->ack_req_timer);
+	if (data) {
+		d = data;
+
+		DEBUG("neigh=%s id=%u ent->neigh=%s, ent->id=%u\n", print_ip(d->a->s_addr), *(d->id), print_ip(n->addr.s_addr), n->id_req);
+
+		if (n->addr.s_addr == d->a->s_addr &&
+		    n->id_req == *(d->id)) {
+			
+			if (timer_pending(&n->ack_req_timer))
+				del_timer(&n->ack_req_timer);
+			
+			n->reqs = 0;
+			n->rtt = JIFFIES_TO_MSEC(jiffies - n->last_ack_req_tx_time);
+			DEBUG("New RTT=%u\n", n->rtt);
+		}
 		
-	if (timer_pending(&n->ack_timer))
-		del_timer(&n->ack_timer);
+	} else {
+		if (timer_pending(&n->ack_req_timer))
+			del_timer(&n->ack_req_timer);
+		n->reqs = 0;
+	}
 	
 	return 0;
 }
@@ -81,7 +117,7 @@ static inline int crit_not_send_req(void *pos, void *addr)
 	
 	if (neigh->addr.s_addr == a->s_addr &&
 	    neigh->reqs >= MAX_AREQ_TX &&
-	    jiffies < neigh->last_req_tx_time + neigh->rtt + (HZ/2))
+	    jiffies < neigh->last_ack_req_tx_time + neigh->rtt + (HZ/2))
 		return 1;
 	return 0;
 }
@@ -91,9 +127,9 @@ static inline int crit_garbage(void *pos, void *foo)
 	struct neighbor *neigh = pos;
 
 	if (neigh->reqs >= MAX_AREQ_TX ||
-	    jiffies - neigh->last_ack_tx_time > NEIGH_TBL_TIMEOUT/1000*HZ 
+	    jiffies - neigh->last_ack_req_tx_time > NEIGH_TBL_TIMEOUT/1000*HZ 
 	    /* jiffies - neigh->last_ack_rx_time > NEIGH_TBL_TIMEOUT/1000*HZ */) {
-		timer_remove(neigh, foo);		
+		crit_addr_id_reset(neigh, NULL);		
 		return 1;
 	}
 	return 0;
@@ -107,41 +143,44 @@ static void neigh_tbl_garbage_timeout(unsigned long data)
 	
 	if (!TBL_EMPTY(&neigh_tbl)) {
 		garbage_timer.expires = jiffies + 
-			NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT / 1000*HZ;
+			MSEC_TO_JIFFIES(NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT);
 		add_timer(&garbage_timer);	
 	}
 
 	read_unlock_bh(&neigh_tbl.lock);
 }
 
-/* static void neigh_tbl_ack_req_timeout(unsigned long data) */
-/* { */
-/* 	struct neighbor *neigh; */
-	
-/* 	write_lock_bh(&neigh_tbl.lock); */
-	
-/* 	neigh = (struct neighbor *)data; */
-	
-/* 	if (!neigh) */
-/* 		goto out; */
-	
-/* 	DEBUG("ACK REQ Timeout %s\n", print_ip(neigh->addr.s_addr)); */
-	
-/* 	if (neigh->reqs >= MAX_AREQ_TX) { */
-/* 		lc_link_del(my_addr(), neigh->addr); */
-/* 		DEBUG("Send RERR!!!\n"); */
-/* 	} /\* else *\/ */
-/* /\* 		dsr_ack_req_send(neigh); *\/ */
-/*  out: */
-/* 	write_unlock_bh(&neigh_tbl.lock); */
-/* } */
 
-static void neigh_tbl_timeout(unsigned long data)
+static inline void __neigh_tbl_set_ack_req_timer(struct neighbor *neigh)
+{
+	neigh->ack_req_timer.data = (unsigned long)neigh;
+
+	if (timer_pending(&neigh->ack_req_timer))
+		mod_timer(&neigh->ack_req_timer, jiffies + MSEC_TO_JIFFIES(neigh->rtt + 5));
+	else {
+		neigh->ack_req_timer.expires = jiffies + MSEC_TO_JIFFIES(neigh->rtt + 5);
+		add_timer(&neigh->ack_req_timer);
+
+	}
+}
+
+void neigh_tbl_set_ack_req_timer(struct in_addr neigh_addr)
+{
+	struct neighbor *neigh;
+
+	write_lock_bh(&neigh_tbl.lock);
+	
+	neigh = __tbl_find(&neigh_tbl, &neigh_addr, crit_addr);
+	
+	__neigh_tbl_set_ack_req_timer(neigh);
+
+	write_unlock_bh(&neigh_tbl.lock);
+}
+
+static void neigh_tbl_ack_req_timeout(unsigned long data)
 {
 	struct neighbor *neigh;
 	
-	DEBUG("ACK timeout\n");
-
 	write_lock_bh(&neigh_tbl.lock);
 	
 	neigh = (struct neighbor *)data;
@@ -149,14 +188,45 @@ static void neigh_tbl_timeout(unsigned long data)
 	if (!neigh)
 		goto out;
 	
-	/* Time to send ACK REP */
-	/* dsr_ack_send(neigh); */
+	DEBUG("ACK REQ Timeout %s\n", print_ip(neigh->addr.s_addr));
 	
-	neigh->id_ack = -1;
-
-out:
-	write_unlock_bh(&neigh_tbl.lock);	
+	if (++neigh->reqs >= MAX_AREQ_TX) {
+		lc_link_del(my_addr(), neigh->addr);
+		DEBUG("Send RERR!!!\n");
+	} else {	       
+		dsr_ack_req_send(neigh->addr, ++neigh->id_req);
+		__neigh_tbl_set_ack_req_timer(neigh);
+	}
+ out:
+	write_unlock_bh(&neigh_tbl.lock);
 }
+void neigh_tbl_update_ack_req_tx_time(struct in_addr neigh_addr)
+{
+	struct neighbor *neigh;
+
+	write_lock_bh(&neigh_tbl.lock);
+	
+	neigh = __tbl_find(&neigh_tbl, &neigh_addr, crit_addr);
+	
+	if (neigh)
+		neigh->last_ack_req_tx_time = jiffies;
+
+	write_unlock_bh(&neigh_tbl.lock);
+
+}
+void neigh_tbl_reset_ack_req_timer(struct in_addr neigh_addr, unsigned short id)
+{
+	struct {
+		struct in_addr *a;
+		unsigned short *id;
+	} data;
+
+	data.a = &neigh_addr;
+	data.id = &id;
+
+	tbl_do_for_each(&neigh_tbl, &data, crit_addr_id_reset);
+}
+
 
 static struct neighbor *neigh_tbl_create(struct in_addr addr, 
 					 struct sockaddr *hw_addr,
@@ -182,8 +252,8 @@ static struct neighbor *neigh_tbl_create(struct in_addr addr,
 	init_timer(&neigh->ack_req_timer);
 	init_timer(&neigh->ack_timer);
 	
-	/* neigh->ack_req_timer.function = neigh_tbl_ack_req_timeout; */
-/* 	neigh->ack_req_timer.data = (unsigned long)neigh; */
+	neigh->ack_req_timer.function = neigh_tbl_ack_req_timeout;
+	neigh->ack_req_timer.data = (unsigned long)neigh;
 
 /* 	neigh->ack_timer.function = neigh_tbl_ack_timeout; */
 /* 	neigh->ack_timer.data = (unsigned long)neigh; */
@@ -227,13 +297,13 @@ int neigh_tbl_get_hwaddr(struct in_addr neigh_addr, struct sockaddr *hw_addr)
 	return in_tbl(&neigh_tbl, &data, crit_addr_get_hwaddr);
 }
 
-unsigned int neigh_tbl_get_id(struct in_addr neigh_addr)
+unsigned short neigh_tbl_get_id(struct in_addr neigh_addr)
 {
-	unsigned int id;
+	unsigned short id;
 
 	struct {
 		struct in_addr *a;
-		unsigned int *id;
+		unsigned short *id;
 	} data;
 	
 	data.a = &neigh_addr;
@@ -251,18 +321,18 @@ static int neigh_tbl_print(char *buf)
     
 	read_lock_bh(&neigh_tbl.lock);
     
-	len += sprintf(buf, "# %-15s %-17s %-6s %-6s %-6s %-12s %-12s %-12s\n", "Addr", "HwAddr", "Reqs", "RTT", "Id", "AckReqTxTime", "AckRxTime", "AckTxTime");
+	len += sprintf(buf, "# %-15s %-17s %-6s %-6s %-6s %-12s\n", "Addr", "HwAddr", "Reqs", "RTT", "Id", "AckReqTxTime" /*, "AckRxTime","AckTxTime" */);
 
 	list_for_each(pos, &neigh_tbl.head) {
 		struct neighbor *neigh =(struct neighbor *)pos;
 		
-		len += sprintf(buf+len, "  %-15s %-17s %-6d %-6u %-6u %-12lu %-12lu %-12lu\n", 
+		len += sprintf(buf+len, "  %-15s %-17s %-6d %-6u %-6u %-12lu\n", 
 			       print_ip(neigh->addr.s_addr), 
 			       print_eth(neigh->hw_addr.sa_data), neigh->reqs,
 			       neigh->rtt, neigh->id_req,
-			       neigh->last_req_tx_time ? (jiffies - neigh->last_req_tx_time) * 1000 / HZ : 0,
-			       neigh->last_ack_rx_time ? (jiffies - neigh->last_ack_rx_time) * 1000 / HZ : 0,
-			       neigh->last_ack_tx_time ? (jiffies - neigh->last_ack_tx_time) * 1000 / HZ : 0);
+			       neigh->last_ack_req_tx_time ? JIFFIES_TO_MSEC(jiffies - neigh->last_ack_req_tx_time) : 0
+/* 			       neigh->last_ack_rx_time ? (jiffies - neigh->last_ack_rx_time) * 1000 / HZ : 0, */
+			       /* neigh->last_ack_tx_time ? (jiffies - neigh->last_ack_tx_time) * 1000 / HZ : 0 */);
 	}
     
 	read_unlock_bh(&neigh_tbl.lock);
@@ -299,6 +369,6 @@ int __init neigh_tbl_init(void)
 
 void __exit neigh_tbl_cleanup(void)
 {
-	tbl_flush(&neigh_tbl, timer_remove);
+	tbl_flush(&neigh_tbl, crit_addr_id_reset);
 	proc_net_remove(NEIGH_TBL_PROC_NAME);
 }

@@ -136,7 +136,11 @@ int dsr_opts_remove(struct dsr_pkt *dp)
 	/* Update IP header */
 	ip_len = (dp->nh.iph->ihl << 2);
 
-	dp->nh.iph->protocol = dp->dh.opth->nh;
+	if (dp->dh.opth->nh == 0 && dp->data_len == 0)		
+		dp->nh.iph->protocol = IPPROTO_DSR;
+	else
+		dp->nh.iph->protocol = dp->dh.opth->nh;
+
 	dp->nh.iph->tot_len = htons(ip_len + dp->data_len);
 
 	ip_send_check(dp->nh.iph);
@@ -208,7 +212,7 @@ int dsr_opt_recv(struct dsr_pkt *dp)
 			break;
 		case DSR_OPT_ACK:
 			DEBUG("ACK opt:\n");
-		/* 	action |= dsr_ack_opt_recv((struct dsr_ack_opt *)dopt); */
+			action |= dsr_ack_opt_recv((struct dsr_ack_opt *)dopt);
 			break;
 		case DSR_OPT_SRT:
 			DEBUG("SRT opt:\n");
@@ -221,7 +225,7 @@ int dsr_opt_recv(struct dsr_pkt *dp)
 			break;
 		case DSR_OPT_ACK_REQ:
 			DEBUG("ACK REQ opt:\n");
-		/* 	action |= dsr_ack_req_opt_recv(dp, (struct dsr_ack_req_opt *)dopt); */
+			action |= dsr_ack_req_opt_recv(dp, (struct dsr_ack_req_opt *)dopt);
 			break;
 		case DSR_OPT_PAD1:
 			DEBUG("PAD1 opt\n");

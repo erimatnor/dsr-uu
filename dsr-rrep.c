@@ -220,7 +220,7 @@ int dsr_rrep_send(struct dsr_srt *srt_to_me)
 	dp->src = my_addr();
 	dp->dst = dp->srt->dst;
 	dp->nxt_hop = dsr_srt_next_hop(dp->srt, 0);
-	dp->dsr_opts_len = len;
+	dp->dsr_opts_len = len - IP_HDR_LEN;
 	dp->data = NULL;
 	dp->data_len = 0;
 	
@@ -234,7 +234,7 @@ int dsr_rrep_send(struct dsr_srt *srt_to_me)
 
 	buf = dp->dsr_data;
 
-	dp->nh.iph = dsr_build_ip(buf, IP_HDR_LEN, IP_HDR_LEN + len, dp->src, dp->dst, ttl);
+	dp->nh.iph = dsr_build_ip(buf, IP_HDR_LEN, len, dp->src, dp->dst, ttl);
 	
 	buf += IP_HDR_LEN;
 	len -= IP_HDR_LEN;

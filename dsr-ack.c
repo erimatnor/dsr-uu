@@ -8,13 +8,14 @@
 #include "dsr-dev.h"
 #include "dsr-rtc.h"
 #include "neigh.h"
+#include "maint-buf.h"
 
 unsigned short ID = 0;
 
 #define ACK_TBL_MAX_LEN 24
 #define MAX_AREQ_TX 2
 
-int dsr_send_ack_req(struct in_addr, unsigned short id);
+/* int dsr_send_ack_req(struct in_addr, unsigned short id); */
 
 struct dsr_ack_opt *dsr_ack_opt_add(char *buf, int len, struct in_addr addr, unsigned short id)
 {
@@ -34,7 +35,7 @@ struct dsr_ack_opt *dsr_ack_opt_add(char *buf, int len, struct in_addr addr, uns
 }
 
 
-static int dsr_ack_send(struct in_addr neigh_addr, unsigned int id)
+static int dsr_ack_send(struct in_addr neigh_addr, unsigned short id)
 {
 	struct dsr_pkt *dp;
 	struct dsr_ack_opt *ack_opt;
@@ -47,13 +48,12 @@ static int dsr_ack_send(struct in_addr neigh_addr, unsigned int id)
 	dp->data_len = 0;
 	dp->dst = neigh_addr;
 	dp->nxt_hop = neigh_addr;
-	dp->dsr_opts_len = len;
+	dp->dsr_opts_len = len - IP_HDR_LEN;
 	dp->src = my_addr();
 
 	buf = dp->dsr_data;	
 
-	dp->nh.iph = dsr_build_ip(buf, IP_HDR_LEN, IP_HDR_LEN + len, 
-				  dp->src, dp->dst, 1);
+	dp->nh.iph = dsr_build_ip(buf, IP_HDR_LEN, len, dp->src, dp->dst, 1);
 	
 	if (!dp->nh.iph) {
 		DEBUG("Could not create IP header\n");
@@ -96,7 +96,8 @@ static int dsr_ack_send(struct in_addr neigh_addr, unsigned int id)
 }
 
 struct dsr_ack_req_opt *dsr_ack_req_opt_add(char *buf, int len, 
-					    struct in_addr addr)
+					    struct in_addr addr,
+					    unsigned short id)
 {
 	struct dsr_ack_req_opt *ack_req = (struct dsr_ack_req_opt *)buf;
 	
@@ -105,36 +106,15 @@ struct dsr_ack_req_opt *dsr_ack_req_opt_add(char *buf, int len,
 	
 	DEBUG("Adding ACK REQ opt\n");
 	
-	/* write_lock_bh(&neigh_tbl.lock); */
-	
-/* 	neigh = __tbl_find(&neigh_tbl, &addr, crit_addr); */
-
-/* 	if (!neigh) */
-/* 		neigh = __neigh_create(addr, ++ID, -1); */
-
-/* 	if (!neigh) */
-/* 		return NULL; */
-	
-/* 	neigh->ack_req_timer.expires = time_add_msec(neigh->rtt); */
-/* 	neigh->last_req_tx_time = jiffies; */
-/* 	neigh->reqs++; */
-
-/* 	if (timer_pending(&neigh->ack_req_timer)) */
-/* 		mod_timer(&neigh->ack_req_timer, neigh->ack_req_timer.expires); */
-/* 	else */
-/* 		add_timer(&neigh->ack_req_timer); */
-	
 	/* Build option */
 	ack_req->type = DSR_OPT_ACK_REQ;
 	ack_req->length = DSR_ACK_REQ_OPT_LEN;
-/* 	ack_req->id = htons(neigh->id_req); */
+	ack_req->id = htons(id);
 	
-/* 	write_unlock_bh(&neigh_tbl.lock); */
-
 	return ack_req;
 }
 
-int dsr_ack_req_send(struct in_addr neigh_addr, unsigned int id)
+int dsr_ack_req_send(struct in_addr neigh_addr, unsigned short id)
 {
 	struct dsr_pkt *dp;
 	struct dsr_ack_req_opt *ack_req;
@@ -147,13 +127,12 @@ int dsr_ack_req_send(struct in_addr neigh_addr, unsigned int id)
 	dp->data_len = 0;
 	dp->dst = neigh_addr;
 	dp->nxt_hop = neigh_addr;
-	dp->dsr_opts_len = len;
+	dp->dsr_opts_len = len - IP_HDR_LEN;
 	dp->src = my_addr();
 
 	buf = dp->dsr_data;
 
-	dp->nh.iph = dsr_build_ip(buf, IP_HDR_LEN, IP_HDR_LEN + len, 
-				  dp->src, dp->dst, 1);
+	dp->nh.iph = dsr_build_ip(buf, IP_HDR_LEN, len, dp->src, dp->dst, 1);
 	
 	if (!dp->nh.iph) {
 		DEBUG("Could not create IP header\n");
@@ -173,7 +152,7 @@ int dsr_ack_req_send(struct in_addr neigh_addr, unsigned int id)
 	buf += DSR_OPT_HDR_LEN;
 	len -= DSR_OPT_HDR_LEN;
 	
-	ack_req = dsr_ack_req_opt_add(buf, len, neigh_addr);
+	ack_req = dsr_ack_req_opt_add(buf, len, neigh_addr, id);
 
 	if (!ack_req) {
 		DEBUG("Could not create ACK REQ opt\n");
@@ -181,6 +160,7 @@ int dsr_ack_req_send(struct in_addr neigh_addr, unsigned int id)
 	}
 	
 	DEBUG("Sending ACK REQ for %s id=%u\n", print_ip(neigh_addr.s_addr), id);
+	neigh_tbl_update_ack_req_tx_time(neigh_addr);
 
 	dsr_dev_xmit(dp);
 	
@@ -191,39 +171,19 @@ int dsr_ack_req_send(struct in_addr neigh_addr, unsigned int id)
 	return -1;
 }
 
-/* int dsr_ack_add_ack_req(struct in_addr addr) */
-/* { */
-/* 	return !in_tbl(&neigh_tbl, &addr, crit_not_send_req); */
-/* } */
 
 int dsr_ack_req_opt_recv(struct dsr_pkt *dp, struct dsr_ack_req_opt *ack_req)
 {
-	struct neighbor *neigh;
+	unsigned short id;
 
 	if (!ack_req || !dp)
 		return DSR_PKT_ERROR;
 	
-	DEBUG("ACK REQ: src=%s id=%u\n", print_ip(dp->src.s_addr), ntohs(ack_req->id));
-	/* write_lock_bh(&neigh_tbl.lock); */
+	id = ntohs(ack_req->id);
+
+	DEBUG("ACK REQ: src=%s id=%u\n", print_ip(dp->src.s_addr), id);
 	
-	/* neigh = __tbl_find(&neigh_tbl, &dp->src, crit_addr); */
-
-/* 	if (!neigh) */
-/* 		neigh = __neigh_create(dp->src, -1, ntohs(ack_req->id)); */
-/* 	else  */
-
-/* 	if (!neigh) */
-/* 		return DSR_PKT_ERROR; */
-
-/* 	neigh->ack_timer.expires = time_add_msec(neigh->rtt / 3); */
-/*      	neigh->id_ack = ntohs(ack_req->id); */
-
-/* 	if (timer_pending(&neigh->ack_timer)) */
-/* 		mod_timer(&neigh->ack_timer, neigh->ack_timer.expires); */
-/* 	else */
-/* 		add_timer(&neigh->ack_timer); */
-		
-/* 	write_unlock_bh(&neigh_tbl.lock); */
+	dsr_ack_send(dp->src, id);
 
 	return DSR_PKT_NONE;
 }
@@ -231,30 +191,27 @@ int dsr_ack_req_opt_recv(struct dsr_pkt *dp, struct dsr_ack_req_opt *ack_req)
 
 int dsr_ack_opt_recv(struct dsr_ack_opt *ack)
 {
-	struct neighbor *neigh;
-
+	unsigned short id;
+	struct in_addr dst, src, myaddr;
+	
 	if (!ack)
 		return DSR_PKT_ERROR;
 
-	DEBUG("ACK dst=%s src=%s id=%u\n", print_ip(ack->dst), print_ip(ack->src), ntohs(ack->id));
+	myaddr = my_addr();
+	
+	dst.s_addr = ack->dst;
+	src.s_addr = ack->src;
+	id = ntohs(ack->id);
+	
+	DEBUG("ACK dst=%s src=%s id=%u\n", print_ip(ack->dst), print_ip(ack->src), id);
 
-	/* write_lock_bh(&neigh_tbl.lock); */
-	
-/* 	neigh = __tbl_find(&neigh_tbl, ack, crit_ack); */
+	if (dst.s_addr != myaddr.s_addr)
+		return DSR_PKT_ERROR;
 
-/* 	if (!neigh) { */
-/* 		DEBUG("No ACK REQ sent for this ACK??\n"); */
-/* 		write_unlock_bh(&neigh_tbl.lock); */
-/* 		return DSR_PKT_NONE; */
-/* 	} */
-/* 	if (timer_pending(&neigh->ack_req_timer)) */
-/* 		del_timer(&neigh->ack_req_timer); */
-	
-/* 	neigh->last_ack_rx_time = jiffies; */
-/* 	neigh->id_req = ++ID; */
-/* 	neigh->reqs = 0; */
-	
-/* 	write_unlock_bh(&neigh_tbl.lock); */
+	/* Purge packets buffered for this next hop */
+	maint_buf_del(src);
+
+	neigh_tbl_reset_ack_req_timer(src, id);
 
 	return DSR_PKT_NONE;
 }
