@@ -38,6 +38,9 @@
 			       * probably be found... */
 
 enum confval {
+#ifdef DEBUG
+	PrintDebug,
+#endif
 	BroadCastJitter,
 	RouteCacheTimeout,
 	SendBufferTimeout,
@@ -79,7 +82,10 @@ static struct {
 	const unsigned int val; 
 	enum confval_type type;
 } confvals_def[CONFVAL_MAX] = {
-	{ "BroadCastJitter", 10 , MILLISECONDS },
+#ifdef DEBUG
+	{ "PrintDebug", 0, BIN },
+#endif
+	{ "BroadCastJitter", 10, MILLISECONDS },
 	{ "RouteCacheTimeout", 300, SECONDS },
 	{ "SendBufferTimeout", 30, SECONDS },
 	{ "SendBufferSize", SEND_BUF_MAX_LEN, QUANTA },
@@ -118,7 +124,6 @@ struct dsr_node {
 #define MALLOC(s, p)        kmalloc(s, p)
 #define FREE(p)             kfree(p)
 #define NSCLASS
-#define TimeNow             jiffies
 #define XMIT(pkt)           dsr_dev_xmit(pkt)
 #else
 #define DSR_SPIN_LOCK(l)
@@ -212,7 +217,6 @@ static inline void dsr_node_unlock(struct dsr_node *dnode)
 {
 	spin_unlock(&dnode->lock);
 }
-
 
 #endif
 

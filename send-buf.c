@@ -189,8 +189,6 @@ int NSCLASS send_buf_set_verdict(int verdict, struct in_addr dst)
 		    
 			if (e->dp->srt) {
 				
-				DEBUG("SR=%s\n", print_srt(e->dp->srt));
-				
 				if (dsr_srt_add(e->dp) < 0) {
 					DEBUG("Could not add source route\n");
 					dsr_pkt_free(e->dp);
@@ -209,7 +207,8 @@ int NSCLASS send_buf_set_verdict(int verdict, struct in_addr dst)
 			pkts++;
 			FREE(e);
 		}
-		
+		DEBUG("Sent %d queued packets\n", pkts);
+
 	/* 	if (pkts == 0) */
 /* 			DEBUG("No packets for dest %s\n", print_ip(dst)); */
 		break;

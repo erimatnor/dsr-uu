@@ -22,7 +22,8 @@ extern atomic_t num_pkts;
 #ifdef DEBUG
 #undef DEBUG
 #define DEBUG_PROC
-#define DEBUG(f, args...) trace(__FUNCTION__, f, ## args) 
+#define DEBUG(f, args...) do { if (get_confval(PrintDebug)) trace(__FUNCTION__, f, ## args); } while (0)
+//#define DEBUG(f, args...) trace(__FUNCTION__, f, ## args)
 #else 
 #define DEBUG(f, args...)
 #endif

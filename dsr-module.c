@@ -171,8 +171,6 @@ static void dsr_ip_recv_err(struct sk_buff *skb, u32 info)
 	kfree_skb(skb);
 }
 
-
-
 struct sk_buff *dsr_skb_create(struct dsr_pkt *dp,
 			       struct net_device *dev)
 {
@@ -186,7 +184,7 @@ struct sk_buff *dsr_skb_create(struct dsr_pkt *dp,
 	
 	tot_len = ip_len + dsr_opts_len + dp->payload_len;
 	
-	DEBUG("iph_len=%d dsr_opts_len=%d dp->payload_len=%d tot_len=%d\n", 
+	DEBUG("ip_len=%d dsr_opts_len=%d payload_len=%d tot_len=%d\n", 
 	      ip_len, dsr_opts_len, dp->payload_len, tot_len);
 #ifdef KERNEL26
 	skb = alloc_skb(tot_len +  LL_RESERVED_SPACE(dev), GFP_ATOMIC);
@@ -302,7 +300,11 @@ static int dsr_config_proc_write(struct file* file, const char* buffer,
 		  from = strstr(cmd, "="); 
 		  from++; /* Exclude '=' */
 		  val = simple_strtol(from, &to, 10); 
-		  set_confval(i, val);
+
+		  if (confvals_def[i].type == BIN)
+			  set_confval(i, val ? 1 : 0);
+		  else
+			  set_confval(i, val);
 		  
 		  if (i == RequestTableSize)
 			  rreq_tbl_set_max_len(val);

@@ -174,7 +174,7 @@ struct dsr_ack_req_opt *NSCLASS dsr_ack_req_opt_add(struct dsr_pkt *dp, unsigned
 	} else {
 		buf = dsr_pkt_alloc_opts_expand(dp, DSR_ACK_REQ_HDR_LEN);
 		
-		DEBUG("Expanding options for ACK REQ p_len=%d\n", dp->dh.opth->p_len);
+		DEBUG("Expanding options for ACK REQ p_len=%d\n", ntohs(dp->dh.opth->p_len));
 		if (!buf)
 			return NULL;
 	
@@ -184,7 +184,7 @@ struct dsr_ack_req_opt *NSCLASS dsr_ack_req_opt_add(struct dsr_pkt *dp, unsigned
 		
 		dp->dh.opth = dsr_opt_hdr_add(dp->dsr_opts, DSR_OPT_HDR_LEN + ntohs(dp->dh.opth->p_len) + DSR_ACK_REQ_HDR_LEN, dp->dh.opth->nh);
 	}
-	DEBUG("Added ACK REQ option id=%u\n", id, dp->dh.opth->p_len);
+	DEBUG("Added ACK REQ option id=%u\n", id, ntohs(dp->dh.opth->p_len));
  end:		
 	return dsr_ack_req_opt_create(buf, DSR_ACK_REQ_HDR_LEN, id);
 }

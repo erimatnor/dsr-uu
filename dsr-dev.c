@@ -27,7 +27,6 @@
 struct net_device *dsr_dev;
 struct dsr_node *dsr_node;
 
-
 static int dsr_dev_inetaddr_event(struct notifier_block *this, 
 				  unsigned long event,
 				  void *ptr)
@@ -227,10 +226,6 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 	dsr_node->stats.rx_bytes += skb->len;
 	dsr_node_unlock(dsr_node);
 
-	/* DEBUG("skb->len=%d skb->dev=%lu\n", skb->len, (unsigned long)skb->dev); */
-	
-/* 	DEBUG("%s\n", print_pkt(skb->data, skb->len)); */
-				
 	netif_rx(skb);
 
 	dsr_pkt_free(dp);
@@ -241,16 +236,20 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 int dsr_dev_xmit(struct dsr_pkt *dp)
 {
 	struct sk_buff *skb;
+	struct net_device *slave_dev;
 	int res = -1;
 	
 	if (!dp)
 		return -1;
 
-	maint_buf_add(dp);
+	if (dp->flags & PKT_REQUEST_ACK)
+		maint_buf_add(dp);
 
 	dsr_node_lock(dsr_node);
-	skb = dsr_skb_create(dp, dsr_node->slave_dev);
+	slave_dev = dsr_node->slave_dev;
 	dsr_node_unlock(dsr_node);
+	
+	skb = dsr_skb_create(dp, slave_dev);
 
 	if (!skb) {
 		DEBUG("Could not create skb!\n");	
@@ -268,7 +267,8 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 	res = dev_queue_xmit(skb);
 	
 	if (res >= 0) {
-		DEBUG("Sent %d bytes skb->data_len=%s headroom=%d tailroom=%d %u:%u %d\n", skb->len, skb->data_len, skb_headroom(skb), skb_tailroom(skb), skb->head, skb->tail, skb->tail - skb->head);
+		DEBUG("Sent %d bytes skb->data_len=%d\n", 
+		      skb->len, skb->data_len);
 		
 		dsr_node_lock(dsr_node);
 		dsr_node->stats.tx_packets++;
@@ -295,9 +295,9 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	switch (ntohs(ethh->h_proto)) {
 	case ETH_P_IP:
 
-		DEBUG("headroom=%d skb->data=%lu skb->nh.iph=%lu\n", 
-		      skb_headroom(skb), (unsigned long)skb->data, 
-		      (unsigned long)skb->nh.iph);
+		DEBUG("dst=%s len=%d\n", 
+		      print_ip(*((struct in_addr *)&skb->nh.iph->daddr)),
+		      skb->len);
 		
 		dp = dsr_pkt_alloc(skb);
 		

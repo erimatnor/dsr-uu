@@ -145,10 +145,10 @@ void NSCLASS rreq_tbl_timeout(unsigned long data)
 	if (!e)
 		return;
        
-	DEBUG("RREQ Resend Timeout\n");
-
 	DSR_WRITE_LOCK(&rreq_tbl);
 	
+	DEBUG("RREQ Resend Timeout for dst=%s\n", print_ip(e->node_addr));
+
 	/* Put at end of list */
 	__tbl_detach(&rreq_tbl, &e->l);
 	__tbl_add_tail(&rreq_tbl, &e->l);
