@@ -57,5 +57,6 @@ int dsr_opt_recv(struct dsr_pkt *dp);
 struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, int len, unsigned int protocol);
 int dsr_opts_remove(struct dsr_pkt *dp);
 int dsr_opts_create(struct dsr_pkt *dp);
+char *dsr_opt_make_room_skb(struct dsr_pkt *dp, struct sk_buff *skb, int len);
 
 #endif

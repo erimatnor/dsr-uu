@@ -1,5 +1,4 @@
 #include <linux/slab.h>
-#include <linux/icmp.h>
 #include <net/ip.h>
 
 #include "dsr.h"
@@ -102,67 +101,6 @@ dsr_srt_opt_t *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt)
 	return srt_opt;
 }
 
-char *dsr_srt_opt_make_room(struct dsr_srt *srt, struct sk_buff *skb, int len)
-{
-	char *dsr_opts;
-
-	if (!srt || !skb || !len)
-		return NULL;
-
-	DEBUG("Adding %d bytes to end of skb, skb->len=%d headroom=%d tailroom=%d\n", len, skb->len, skb_headroom(skb), skb_tailroom(skb));
-
-	if (skb->nh.iph->protocol == IPPROTO_ICMP) {
-					
-		struct icmphdr *icmp;
-		icmp = skb->h.icmph;
-		
-		DEBUG("ICMP type=%u code=%u\n", icmp->type, icmp->code);
-		
-	}
-	/* Check if there are already enough tailroom for doing
-	 * skb_put. That way it is not always necessary to create a new skb. */
-
-	if (skb_tailroom(skb) >= len) {
-		DEBUG("Tailroom large enough\n");
-		skb_put(skb, len);
-	} else {
-		struct sk_buff *nskb;
-		
-		DEBUG("Not enough tailroom!!!, fix skb_copy_expand!!!\n");
-		return NULL;
-
-		/* Allocate new data space at head */
-		nskb = skb_copy_expand(skb, skb_headroom(skb),
-				       skb_tailroom(skb) + len,
-				       GFP_ATOMIC);
-		
-		if (nskb == NULL) {
-			printk("Could not allocate new skb\n");
-			return NULL;
-		}
-		/* Set old owner */
-		if (skb->sk != NULL)
-			skb_set_owner_w(nskb, skb->sk);
-		
-		/* Move tail len bytes (add data space at end of skb) */
-		skb_put(nskb, len);
-		
-		kfree_skb(skb);
-		skb = nskb;
-	}
-	
-	DEBUG("Moving %d amount of data\n", skb->tail - skb->h.raw - len);
-	
-	/* Move data (from after iph and up) towards tail */
-	memmove(skb->h.raw + len, skb->h.raw, skb->tail - skb->h.raw - len);
-	
-	dsr_opts = skb->h.raw;
-	skb->h.raw += len;
-
-	DEBUG("New skb->len=%d\n", skb->len);
-
-	return dsr_opts;
-}
 
 int dsr_srt_add(struct dsr_pkt *dp, struct sk_buff *skb)
 {
@@ -178,10 +116,8 @@ int dsr_srt_add(struct dsr_pkt *dp, struct sk_buff *skb)
 	
 	DEBUG("dsr_opts_len=%d\n", dp->dsr_opts_len);
 	
-	buf = dsr_srt_opt_make_room(dp->srt, skb, len);
+	buf = dsr_opt_make_room_skb(dp, skb, len);
 	
-	dp->data = buf + dp->dsr_opts_len;
-
 	if (!buf) {
 		DEBUG("Could not make room!\n");
 		return -1;

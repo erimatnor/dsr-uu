@@ -197,7 +197,7 @@ static void kdsr_ip_recv_err(struct sk_buff *skb, u32 info)
 
 
 
-int kdsr_get_hwaddr(struct in_addr addr, struct sockaddr *hwaddr, 
+static int kdsr_get_hwaddr(struct in_addr addr, struct sockaddr *hwaddr, 
 		    struct net_device *dev)
 {	
 	struct neighbour *neigh;
@@ -216,13 +216,11 @@ int kdsr_get_hwaddr(struct in_addr addr, struct sockaddr *hwaddr,
 	}
 	return -1;
 }
-struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp, struct sockaddr *dest, 
+
+struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp,
 				struct net_device *dev)
 {
 	struct sk_buff *skb;
-/* 	struct ethhdr *ethh; */
-	struct sockaddr broadcast = {AF_UNSPEC, {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
-	struct sockaddr dest2;
 	char *buf;
 	int ip_len;
 	int tot_len;
@@ -261,32 +259,43 @@ struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp, struct sockaddr *dest,
 
 	if (dp->data_len && dp->data)
 		memcpy(buf, dp->data, dp->data_len);
+	
+	return skb;
+}
 
-	if (!dest && dp->nxt_hop.s_addr == DSR_BROADCAST)
-		dest = &broadcast;
+int kdsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb, 
+			  struct sockaddr *dest) 
+{
+
 		
+	struct sockaddr broadcast = {AF_UNSPEC, {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
+	struct sockaddr dest2;
+	
+	if (!dest && dp->nxt_hop.s_addr == DSR_BROADCAST)
+	       dest = &broadcast;
+	
 	/* Get hardware destination address */
  	if (!dest) {
 		dest = &dest2;
 		
-		if (kdsr_get_hwaddr(dp->nxt_hop, dest, dev) < 0) {
+		if (kdsr_get_hwaddr(dp->nxt_hop, dest, skb->dev) < 0) {
 			DEBUG("Could not get hardware address for next hop %s\n", print_ip(dp->nxt_hop.s_addr));
-			kfree_skb(skb);
-			return NULL;
+			return -1;
 		}
 	}
 
-	if (dev->hard_header) {
-		dev->hard_header(skb, dev, ETH_P_IP,
+	DEBUG("dest=%s\n", print_eth(dest->sa_data));
+
+	if (skb->dev->hard_header) {
+		skb->dev->hard_header(skb, skb->dev, ETH_P_IP,
 				      dest->sa_data, 0, skb->len);
 	} else {
 		DEBUG("Missing hard_header\n");
-		kfree_skb(skb);
-		return NULL;
+		return -1;
 	}
-	
-	return skb;
+	return 0;
 }
+
 /* This is kind of a mess */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7)
 static struct inet_protocol dsr_inet_prot = {

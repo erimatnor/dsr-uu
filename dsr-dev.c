@@ -188,61 +188,47 @@ static void __init dsr_dev_setup(struct net_device *dev)
 int dsr_dev_deliver(struct dsr_pkt *dp)
 {	
 	struct sk_buff *skb;
-	struct sockaddr dest;
-	int res = NET_RX_DROP;
+	struct ethhdr *ethh;
 	
-	memcpy(dest.sa_data, dsr_dev->dev_addr, ETH_ALEN);
-	
-	skb = kdsr_skb_create(dp, &dest, dsr_dev);
+	skb = kdsr_skb_create(dp, dsr_dev);
 
 	if (!skb) {
 		DEBUG("Could not allocate skb\n");
 		return -1;
 	}
-
-/* 	kfree_skb(skb); */
-/* 	return 0; */
-
-	skb->pkt_type = PACKET_HOST;
-	
-/* 	secpath_reset(skb); */
 	
 	/* Need to make hardware header visible again since we are going down a
 	 * layer */	
 	DEBUG("skb->len=%d headroom=%d tailroom=%d\n", 
 	      skb->len, skb_headroom(skb), skb_tailroom(skb));
 
-	skb->mac.raw = skb->data;
+	skb->mac.raw = skb->data - dsr_dev->hard_header_len;
+	skb->ip_summed = CHECKSUM_UNNECESSARY;
+
+	ethh = (struct ethhdr *)skb->mac.raw;
 	
+	memcpy(ethh->h_dest, dsr_dev->dev_addr, ETH_ALEN);
+	memset(ethh->h_source, 0, ETH_ALEN);
+	ethh->h_proto = htons(ETH_P_IP);
+
+	DEBUG("ethh dest=%s\n", print_eth(ethh->h_dest));
+
 	dsr_node_lock(dsr_node);
 	dsr_node->stats.rx_packets++;
 	dsr_node->stats.rx_bytes += skb->len;
 	dsr_node_unlock(dsr_node);
 
-	dst_release(skb->dst);
-	skb->dst = NULL;
-#ifdef CONFIG_NETFILTER
-	nf_conntrack_put(skb->nfct);
-	skb->nfct = NULL;
-#ifdef CONFIG_NETFILTER_DEBUG
-	skb->nf_debug = 0;
-#endif
-#endif
-	res = netif_rx(skb);
+	netif_rx(skb);
 	
-	if (res == NET_RX_DROP) {
-		DEBUG("Netif_rx DROP\n");
-	}
-	/* kfree_skb(skb); */
-	return res;
+	return 0;
 }
 
 int dsr_dev_xmit(struct dsr_pkt *dp)
 {
 	struct sk_buff *skb;
-	
+
 	dsr_node_lock(dsr_node);
-	skb = kdsr_skb_create(dp, NULL, dsr_node->slave_dev);
+	skb = kdsr_skb_create(dp, dsr_node->slave_dev);
 	dsr_node_unlock(dsr_node);
 
 	if (!skb) {
@@ -250,6 +236,14 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 		return -1;
 	}
        
+	/* Create hardware header */
+
+	if (kdsr_hw_header_create(dp, skb, NULL) < 0) {
+		DEBUG("Could not create harware header\n");
+		kfree_skb(skb);
+		return -1;
+	}
+		
 	dev_queue_xmit(skb);
 	
 	dsr_node_lock(dsr_node);
