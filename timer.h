@@ -90,10 +90,7 @@ static inline void gettime(struct timeval *tv)
 #else
 	tv->tv_sec = now / HZ;
 
-	if (HZ < 1000000)
-		tv->tv_usec = now * (1000000l / HZ);
-	else
-		tv->tv_usec = (now * HZ) / 1000000UL;
+	tv->tv_usec = (now % HZ) * 1000000l / HZ; 
 #endif	
 }
 #endif /* NS2 */

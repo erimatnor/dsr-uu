@@ -175,10 +175,13 @@ int dsr_vprintk(const char *func, const char *fmt, va_list args)
 	
 	gettime(&now);
 	
-	prefix_len = sprintf(printk_buf, "%ld:%ld:%03ld:%s: ", now.tv_sec / 60, now.tv_sec % 60, now.tv_usec / 1000, func);
+	prefix_len = sprintf(printk_buf, "%ld:%ld:%03lu:%s: ", 
+			     now.tv_sec / 60, now.tv_sec % 60, 
+			     now.tv_usec / 1000, func);
 	
 	/* Emit the output into the temporary buffer */
-	printed_len = vsnprintf(printk_buf+prefix_len, sizeof(printk_buf) - prefix_len, fmt, args);
+	printed_len = vsnprintf(printk_buf+prefix_len, 
+				sizeof(printk_buf) - prefix_len, fmt, args);
 
 	for (p = printk_buf; *p; p++)
 		dsr_emit_log_char(*p);
@@ -191,10 +194,6 @@ int trace(const char *func, const char *fmt, ...)
 	va_list args;
 	int r;
 
-/* 	printk(KERN_DEBUG "%s\n", func); */
-/* 	if (!ConfVal(PrintDebug)) */
-/* 		return 0; */
-
 	va_start(args, fmt);
 	r = dsr_vprintk(func, fmt, args);
 	va_end(args);
@@ -204,7 +203,6 @@ int trace(const char *func, const char *fmt, ...)
 
 static int dbg_log_open(struct inode * inode, struct file * file)
 {
-/* 	printk(KERN_DEBUG "dbg_log_open\n"); */
 	return do_dbglog(1,NULL,0);
 }
 
