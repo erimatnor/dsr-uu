@@ -77,8 +77,6 @@ int NSCLASS dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 		return -1;
 	}
 	
-	printf("Send RERR\n");
-
 	GET_SALVAGE(dp_trigg->srt_opt, salv);
 
 	if (salv == 0)

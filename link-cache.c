@@ -616,7 +616,7 @@ static int lc_print(struct lc_graph *LC, char *buf)
 
 	gettime(&now);
 
-	DSR_READ_LOCK(&LC.lock);
+	DSR_READ_LOCK(&LC->lock);
     
 	len += sprintf(buf, "# %-15s %-15s %-4s Timeout\n", "Src Addr", "Dst Addr", "Cost");
 
@@ -644,7 +644,7 @@ static int lc_print(struct lc_graph *LC, char *buf)
 			       (unsigned long)n->pred);
 	}
     
-	DSR_READ_UNLOCK(&LC.lock);
+	DSR_READ_UNLOCK(&LC->lock);
 	return len;
 
 }
@@ -657,7 +657,7 @@ static int lc_proc_info(char *buffer, char **start, off_t offset, int length)
 {
 	int len;
 
-	len = lc_print(buffer);
+	len = lc_print(&LC, buffer);
     
 	*start = buffer + offset;
 	len -= offset;
@@ -673,6 +673,7 @@ EXPORT_SYMBOL(lc_srt_add);
 EXPORT_SYMBOL(lc_srt_find);
 EXPORT_SYMBOL(lc_flush);
 EXPORT_SYMBOL(lc_link_del);
+EXPORT_SYMBOL(lc_link_add);
 
 module_init(lc_init);
 module_exit(lc_cleanup);

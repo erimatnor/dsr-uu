@@ -15,6 +15,7 @@
 #include "link-cache.h"
 #include "dsr-rerr.h"
 #include "timer.h"
+#include "maint-buf.h"
 
 #define MAINT_BUF_PROC_FS_NAME "maint_buf"
 
@@ -44,9 +45,6 @@ struct maint_buf_query {
 	DSRUUTimer *t;
 #endif
 };
-	
-/* static void maint_buf_set_timeout(void); */
-/* static void maint_buf_timeout(unsigned long data); */
 
 static inline int crit_addr_id_del(void *pos, void *data)
 {	

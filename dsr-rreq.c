@@ -18,6 +18,7 @@
 #include "dsr-opt.h"
 #include "link-cache.h"
 #include "send-buf.h"
+#include "neigh.h"
 
 #ifndef NS2
 

@@ -12,6 +12,8 @@
 #include "dsr-opt.h"
 #include "dsr-ack.h"
 #include "link-cache.h"
+#include "neigh.h"
+#include "dsr-rrep.h"
 #include "debug.h"
 
 
