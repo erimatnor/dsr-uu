@@ -91,6 +91,7 @@ struct dsr_node {
 	struct net_device_stats	stats;
 	struct in_addr ifaddr;
 	struct in_addr bcaddr;
+	spinlock_t lock;
 };
 extern struct net_device *dsr_dev;
 extern struct dsr_node *dsr_node;

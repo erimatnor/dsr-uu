@@ -24,6 +24,16 @@ struct dsr_node *dsr_node;
 //static struct net_device *basedev = NULL;
 //static char *basedevname = NULL;
 
+static inline void dsr_dev_lock(struct dsr_node *dnode)
+{
+	spin_lock(&dnode->lock);
+}
+
+static inline void dsr_dev_unlock(struct dsr_node *dnode)
+{
+	spin_unlock(&dnode->lock);
+}
+
 //struct netdev_info ldev_info;
 static int dsr_dev_netdev_event(struct notifier_block *this,
 				unsigned long event, void *ptr);
@@ -48,8 +58,10 @@ static int dsr_dev_set_node_info(struct net_device *dev)
 				break;
 		
 		if (ifa) {
+			dsr_dev_lock(dnode);
 			dnode->ifaddr.s_addr = ifa->ifa_address;
 			dnode->bcaddr.s_addr = ifa->ifa_broadcast;
+			dsr_dev_unlock(dnode);
 		}
 		in_dev_put(indev);
 	} else {
@@ -76,6 +88,7 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 		break;
         case NETDEV_UP:
 		DEBUG("notifier up %s\n", dev->name);
+		dsr_dev_lock(dnode);
 		if (dnode->slave_dev == NULL && dev->get_wireless_stats) {
 			dev_hold(dev);
 			dnode->slave_dev = dev;
@@ -88,17 +101,20 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 			if (res < 0)
 				return NOTIFY_DONE;
 		}
+		dsr_dev_unlock(dnode);
 		break;
         case NETDEV_UNREGISTER:
 		DEBUG("notifier unregister %s\n", dev->name);		
 		break;
         case NETDEV_DOWN:
 		DEBUG("notifier down %s\n", dev->name);
+		dsr_dev_lock(dnode);
                 if (dev == dnode->slave_dev) {
                         DEBUG("dsr slave interface %s went away\n", dev->name);
 			dev_put(dnode->slave_dev);
 			dnode->slave_dev = NULL;
                 }
+		dsr_dev_unlock(dnode);
                 break;
 
         default:
@@ -148,8 +164,10 @@ static int dsr_dev_stop(struct net_device *dev)
 static void dsr_dev_uninit(struct net_device *dev)
 {
 	struct dsr_node *dnode = dev->priv;
+	dsr_dev_lock(dnode);
 	if (dnode->slave_dev)
 		dev_put(dnode->slave_dev);
+	dsr_dev_unlock(dnode);
 	dev_put(dsr_dev);
 	dsr_node = NULL;
 }
@@ -224,9 +242,10 @@ int dsr_dev_queue_xmit(dsr_pkt_t *dp)
 	/* Send packet */
 	dev_queue_xmit(dp->skb);
 	
+	dsr_dev_lock(dnode);
 	dnode->stats.tx_packets++;
 	dnode->stats.tx_bytes+=dp->skb->len;
-	
+	dsr_dev_unlock(dnode);
 	/* We must free the DSR packet */
 		
 	dsr_pkt_free(dp);
@@ -292,10 +311,12 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 
 			/* Send packet */
 			dev_queue_xmit(skb);
-		
+			
+			dsr_dev_lock(dnode);
 			dnode->stats.tx_packets++;
 			dnode->stats.tx_bytes+=skb->len;
-			
+			dsr_dev_unlock(dnode);
+
 			/* We must free the DSR packet */
 			dsr_pkt_free(dp);
 		} else {			
@@ -339,6 +360,8 @@ int __init dsr_dev_init(char *ifname)
 		return -ENOMEM;
 
 	dnode = dsr_node = (struct dsr_node *)dsr_dev->priv;
+
+	spin_lock_init(&dnode->lock);
 
 	if (ifname) {
 		dev = dev_get_by_name(ifname);
