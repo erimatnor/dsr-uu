@@ -5,6 +5,9 @@
 #include <net/protocol.h>
 #include <linux/netdevice.h>
 #include <linux/if_ether.h>
+#include <linux/socket.h>
+#include <net/arp.h>
+#include <net/neighbour.h>
 #ifdef KERNEL26
 #include <linux/moduleparam.h>
 #endif
@@ -13,6 +16,7 @@
 #include "dsr-dev.h"
 #include "dsr-rreq.h"
 #include "dsr-rrep.h"
+#include "dsr-srt.h"
 #include "p-queue.h"
 #include "debug.h"
 
@@ -58,9 +62,28 @@ static struct inet_protocol dsr_inet_prot = {
 #endif
 };
 
+static int get_hwaddr(struct in_addr addr, struct sockaddr *hwaddr, 
+		      struct net_device *dev)
+{	
+	struct neighbour *neigh;
+
+	neigh = neigh_lookup(&arp_tbl, &addr.s_addr, dev);
+	
+	if (neigh) {
+		
+		hwaddr->sa_family = AF_UNSPEC;
+	      
+		read_lock_bh(&neigh->lock);
+		memcpy(hwaddr->sa_data, neigh->ha, ETH_ALEN);
+		read_unlock_bh(&neigh->lock);
+
+		return 0;
+	}
+	return -1;
+}
 
 /* Allocate DSR packet, dev is send device */
-struct sk_buff *kdsr_pkt_alloc(unsigned int size, struct net_device *dev)
+static struct sk_buff *kdsr_pkt_alloc(unsigned int size, struct net_device *dev)
 {
 	struct sk_buff *skb;
 	
@@ -87,40 +110,13 @@ struct sk_buff *kdsr_pkt_alloc(unsigned int size, struct net_device *dev)
 	return skb;
 }
 
-struct sk_buff *dsr_rreq_create(__u32 taddr, struct net_device *dev)
+int dsr_rreq_send(u_int32_t target)
 {
-	struct sk_buff *skb;
-	struct in_addr target;
-	dsr_rreq_opt_t *dsr_rreq;
-	
-	if (!dev) {
-		DEBUG("nod send device specified!\n");
-		return NULL;
-	}
-	
-	skb = kdsr_pkt_alloc(DSR_RREQ_TOT_LEN, dev);
-	
-	if (!skb)
-		return NULL;
-
-	target.s_addr = taddr;
-
-	dsr_rreq = dsr_rreq_hdr_add(skb->data, skb->len, target);
-
-	if (!dsr_rreq) {
-		DEBUG("Could not create RREQ\n");
-		return NULL;
-	}
-	return skb;
-}
-
-int dsr_rrep_send(dsr_src_rte_t *sr)
-{
-	int res = 0;
+	int len, res = 0;
 	struct net_device *dev;
 	struct sk_buff *skb;
-	dsr_rrep_opt_t *rrep;
-	
+	struct in_addr t;
+	struct sockaddr broadcast = {AF_UNSPEC, {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
 
 	dev = dev_get_by_index(ldev_info.ifindex);
 	
@@ -129,32 +125,87 @@ int dsr_rrep_send(dsr_src_rte_t *sr)
 		res = -1;
 		goto out_err;
 	}
+
+	len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN;
 	
-	if (!sr) {
-		DEBUG("no source route!\n");
+	skb = kdsr_pkt_alloc(len, dev);
+	
+	if (!skb) {
 		res = -1;
 		goto out_err;
 	}
 	
-	skb = kdsr_pkt_alloc(DSR_RREP_LEN_FROM_SRC_RTE(sr), dev);
+	t.s_addr = target;
+	
+	res = dsr_rreq_create(skb->data, skb->len, t);
+
+	if (res < 0) {
+		DEBUG("Could not create RREQ\n");
+		goto out_err;
+	}
+	
+	res = dsr_pkt_send(skb, &broadcast, dev);
+	
+	if (res < 0) {
+		DEBUG("RREQ transmission failed...\n");
+		dev_kfree_skb(skb);
+	}
+ out_err:	
+	dev_put(dev);
+	return res;
+}
+
+int dsr_rrep_send(dsr_srt_t *srt)
+{
+	int len, res = 0;
+	struct net_device *dev;
+	struct sk_buff *skb;
+	struct sockaddr dest;
+	struct in_addr addr;
+	
+	dev = dev_get_by_index(ldev_info.ifindex);
+	
+	if (!dev) {
+		DEBUG("no send device!\n");
+		res = -1;
+		goto out_err;
+	}
+	
+	if (!srt) {
+		DEBUG("no source route!\n");
+		res = -1;
+		goto out_err;
+	}
+	len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_RREP_OPT_LEN(srt);
+	
+	skb = kdsr_pkt_alloc(len, dev);
 	
 	if (!skb) {
 		res = -1;
 		goto out_err;
 	}
 
-	rrep = dsr_rrep_hdr_add(skb->data, skb->len, sr);
+	res = dsr_rrep_create(skb->data, skb->len, srt);
 
-	if (!rrep) {
+	if (res < 0) {
 		DEBUG("Could not create RREP\n");
-		res = -1;
+		goto out_err;
+	}
+
+	if (srt->laddrs == 0)
+		addr.s_addr = srt->src.s_addr;
+	else
+		
+		addr.s_addr = srt->addrs[0].s_addr;
+	
+	if (get_hwaddr(addr, &dest, dev) < 0) {
+		DEBUG("Could not get hardware address for %s\n", 
+		      print_ip(addr.s_addr));
 		goto out_err;
 	}
 	
-	/* Call whatever send function we have */
+	res = dsr_pkt_send(skb, &dest, dev);
 
-	
-	return res;
  out_err:	
 	dev_put(dev);
 	return res;

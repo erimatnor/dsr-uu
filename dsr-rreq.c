@@ -8,43 +8,56 @@
 
 static unsigned int rreq_seqno = 1;
 
-dsr_rreq_opt_t *dsr_rreq_hdr_add(char *buf, int buflen, struct in_addr target)
+static dsr_rreq_opt_t *dsr_rreq_opt_add(char *buf, int len, 
+					struct in_addr target)
 {
-	struct iphdr *iph;
-	dsr_hdr_t *dsr_hdr;
 	dsr_rreq_opt_t *rreq;
 
-	if (buflen < DSR_RREQ_TOT_LEN || buf == NULL)
+	if (!buf || len < DSR_RREQ_HDR_LEN)
 		return NULL;
 
-	iph = (struct iphdr *)buf;
-	
-	iph->version = IPVERSION;
-	iph->ihl = 5;
-	iph->tos = 0;
-	iph->tot_len = htons(DSR_RREQ_TOT_LEN);
-	iph->id = 0;
-	iph->frag_off = 0;
-	iph->ttl = 1; /* Should probably change dynamically */
-	iph->protocol = IPPROTO_DSR;
-	iph->saddr = ldev_info.ifaddr.s_addr;		
-	iph->daddr = DSR_BROADCAST;
-	
-	ip_send_check(iph);
-
-	dsr_hdr = dsr_hdr_add(buf + IP_HDR_LEN, buflen - IP_HDR_LEN, 0);
-
-	if (!dsr_hdr)
-		return NULL;
-
-	rreq = (dsr_rreq_opt_t *)DSR_OPT_HDR(dsr_hdr);
+	rreq = (dsr_rreq_opt_t *)buf;
 	
 	rreq->type = DSR_OPT_RREQ;
-	rreq->length = DSR_RREQ_HDR_LEN;
+	rreq->length = 6;
 	rreq->id = htons(rreq_seqno++);
 	rreq->target = target.s_addr;
 	
 	return rreq;
+}
+
+int dsr_rreq_create(char *buf, int len, struct in_addr target)
+{
+	struct in_addr dst;
+	dsr_rreq_opt_t *rreq;
+	char *off;
+	int l;
+	
+	l = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN;
+	
+	if (!buf || len < l)
+		return -1;
+
+	dst.s_addr = DSR_BROADCAST;
+	off = buf;
+	
+	dsr_build_ip(off, l, ldev_info.ifaddr, dst, 1);
+
+	off += IP_HDR_LEN;
+	l -= IP_HDR_LEN;
+	
+	dsr_hdr_add(off, l, 0);
+	     
+	off += DSR_OPT_HDR_LEN;
+	l -= DSR_OPT_HDR_LEN;
+
+	rreq = dsr_rreq_opt_add(off, l, target);
+
+	if (!rreq) {
+		DEBUG("Could not create RREQ\n");
+		return -1;
+	}
+	return 0;
 }
 
 void dsr_rreq_recv(struct in_addr initiator, dsr_rreq_opt_t *rreq)
@@ -57,15 +70,15 @@ void dsr_rreq_recv(struct in_addr initiator, dsr_rreq_opt_t *rreq)
 	
 	
 	if (rreq->target == ldev_info.ifaddr.s_addr) {
-		dsr_src_rte_t *sr;
+		dsr_srt_t *srt;
 		DEBUG("I am RREQ target\n");
-		sr = dsr_src_rte_new(initiator, ldev_info.ifaddr, 
-				     DSR_RREQ_ADDRS_LEN(rreq), rreq->addrs);
+		srt = dsr_srt_new(initiator, ldev_info.ifaddr, 
+				  DSR_RREQ_ADDRS_LEN(rreq), rreq->addrs);
 		
 		/* send rrep.... */
-		dsr_rrep_send(sr);
+		dsr_rrep_send(srt);
 
-		kfree(sr);
+		kfree(srt);
 
 	} else {
 		/* Forward RREQ */

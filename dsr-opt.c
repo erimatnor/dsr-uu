@@ -1,4 +1,4 @@
-#include <linux/ip.h>
+#include <net/ip.h>
 
 #include "debug.h"
 #include "dsr.h"
@@ -22,27 +22,31 @@ dsr_hdr_t *dsr_hdr_add(char *buf, int len, unsigned int protocol)
 	return dh;
 }
 
-dsr_src_rte_t *dsr_src_rte_new(struct in_addr initiator, struct in_addr target,
-			       unsigned int length, u_int32_t *addrs)
+struct iphdr *dsr_build_ip(char *buf, int len, struct in_addr src, 
+			   struct in_addr dst, int ttl)
 {
-	dsr_src_rte_t *sr;
+	struct iphdr *iph;
+	
+	if (len < sizeof(struct iphdr))
+		return NULL;
+	
+	iph = (struct iphdr *)buf;
+	
+	iph->version = IPVERSION;
+	iph->ihl = 5;
+	iph->tos = 0;
+	iph->tot_len = htons(len);
+	iph->id = 0;
+	iph->frag_off = 0;
+	iph->ttl = (ttl ? ttl : IPDEFTTL);
+	iph->protocol = IPPROTO_DSR;
+	iph->saddr = src.s_addr;		
+	iph->daddr = dst.s_addr;
+	
+	ip_send_check(iph);
 
-	sr = kmalloc(sizeof(dsr_src_rte_t) + length, GFP_ATOMIC);
-
-	sr->initiator.s_addr = initiator.s_addr;
-	sr->target.s_addr = target.s_addr;
-	sr->length = length;
-	memcpy(sr->addrs, addrs, length);
-
-	return sr;
+	return iph;
 }
-
-void dsr_parse_source_route(struct in_addr initiator, dsr_src_rte_t *sr)
-{
-	DEBUG("Parse source route\n");
-	return;
-}
-
 
 void dsr_recv(char *buf, int len)
 {	
@@ -87,7 +91,8 @@ void dsr_recv(char *buf, int len)
 	case DSR_OPT_ACK:
 		DEBUG("Received ACK\n");
 		break;
-	case DSR_OPT_SRC_RTE:
+	case DSR_OPT_SRT:
+		DEBUG("Received SRT\n");
 		break;
 	case DSR_OPT_TIMEOUT:	
 		break;

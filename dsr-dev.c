@@ -1,4 +1,3 @@
-
 #include <linux/config.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -174,8 +173,8 @@ static void __init dsr_dev_setup(struct net_device *dev)
 	get_random_bytes(dev->dev_addr, 6);
 }
 
-static int dsr_pkt_send(struct sk_buff *skb, struct sockaddr *dest, 
-			struct net_device *dev)
+int dsr_pkt_send(struct sk_buff *skb, struct sockaddr *dest, 
+		 struct net_device *dev)
 {
 	int res = 0;
 	
@@ -199,8 +198,6 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 	struct net_device_stats *stats = dev->priv;
 	struct ethhdr *ethh;
 	struct iphdr *iph;
-	struct sk_buff *rreq_skb;
-	struct sockaddr broadcast = {AF_UNSPEC, {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
 	int res = 0;
 
 	ethh = (struct ethhdr *)skb->data;
@@ -211,16 +208,10 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 			
 		p_queue_enqueue_packet(skb, dev_queue_xmit);
 		
-		rreq_skb = dsr_rreq_create(iph->daddr, basedev);
-		
-		if (!rreq_skb) {
-			DEBUG("RREQ creation failed!\n");
-			return -1;
-		}
-		res = dsr_pkt_send(rreq_skb, &broadcast, basedev);
+		res = dsr_rreq_send(iph->daddr);
 		
 		if (res < 0) 
-			DEBUG("RREQ transmission failed... Free skb?\n");
+			DEBUG("Transmission failed...");
 		break;
 	default:
 		DEBUG("Unkown packet type\n");

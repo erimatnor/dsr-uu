@@ -2,61 +2,89 @@
 #include <net/ip.h>
 
 #include "dsr.h"
+#include "debug.h"
 #include "dsr-rrep.h"
+#include "dsr-srt.h"
 
-static inline int dsr_rrep_add_src_rte(dsr_rrep_opt_t *rrep, dsr_src_rte_t *sr)
+static inline int dsr_rrep_add_srt(dsr_rrep_opt_t *rrep, dsr_srt_t *srt)
 {
 	int n;
 
-	if (!rrep | !sr)
+	if (!rrep | !srt)
 		return -1;
 
-	n = sr->length / sizeof(struct in_addr);
+	n = srt->laddrs / sizeof(struct in_addr);
 
-	memcpy(rrep->addrs, sr->addrs, sr->length);
-	memcpy(&rrep->addrs[n], &sr->target, sizeof(struct in_addr));
+	memcpy(rrep->addrs, srt->addrs, srt->laddrs);
+	memcpy(&rrep->addrs[n], &srt->dst, sizeof(struct in_addr));
 	
 	return 0;
 }
 
-dsr_rrep_opt_t *dsr_rrep_hdr_add(char *buf, int len, dsr_src_rte_t *sr)
+static dsr_rrep_opt_t *dsr_rrep_opt_add(char *buf, int len, dsr_srt_t *srt)
 {
-	struct iphdr *iph;
-	dsr_hdr_t *dsr_hdr;
 	dsr_rrep_opt_t *rrep;
 	
-	if (buf == NULL || sr == NULL || len < DSR_RREP_LEN_FROM_SRC_RTE(sr))
+	if (!buf || !srt || len < DSR_RREP_OPT_LEN(srt))
 		return NULL;
 
-	iph = (struct iphdr *)buf;
-	
-	iph->version = IPVERSION;
-	iph->ihl = 5;
-	iph->tos = 0;
-	iph->tot_len = htons(len);
-	iph->id = 0;
-	iph->frag_off = 0;
-	iph->ttl = IPDEFTTL; /* Should probably change dynamically */
-	iph->protocol = IPPROTO_DSR;
-	iph->saddr = ldev_info.ifaddr.s_addr;		
-	iph->daddr = sr->initiator.s_addr;
-	
-	ip_send_check(iph);
-
-	dsr_hdr = dsr_hdr_add(buf + IP_HDR_LEN, len - IP_HDR_LEN, 0);
-
-	if (!dsr_hdr)
-		return NULL;
-
-	rrep = (dsr_rrep_opt_t *)DSR_OPT_HDR(dsr_hdr);
+	rrep = (dsr_rrep_opt_t *)buf;
 	
 	rrep->type = DSR_OPT_RREP;
-	rrep->length = DSR_RREP_HDR_LEN + sr->length + sizeof(u_int32_t);
+	rrep->length = srt->laddrs + sizeof(struct in_addr) + 1;
 	rrep->l = 0;
 	rrep->res = 0;
 
 	/* Add source route to RREP */
-	dsr_rrep_add_src_rte(rrep, sr);
+	dsr_rrep_add_srt(rrep, srt);
 	
 	return rrep;	
+}
+
+int dsr_rrep_create(char *buf, int len, dsr_srt_t *srt)
+{
+	struct in_addr dst;
+	dsr_srt_t *srt_rev;
+	dsr_rrep_opt_t *rrep;
+	char *off;
+	int l;
+	
+	l = IP_HDR_LEN + DSR_OPT_HDR_LEN + 
+		DSR_SRT_OPT_LEN(srt) + DSR_RREP_OPT_LEN(srt);
+	
+	if (!buf || len < l)
+		return -1;
+
+	dst.s_addr = srt->src.s_addr;
+	off = buf;
+	
+	dsr_build_ip(off, l, ldev_info.ifaddr, dst, 1);
+
+	off += IP_HDR_LEN;
+	l -= IP_HDR_LEN;
+	
+	dsr_hdr_add(off, l, 0);
+	     
+	off += DSR_OPT_HDR_LEN;
+	l -= DSR_OPT_HDR_LEN;
+
+	/* Reverse the source route */
+	srt_rev = dsr_srt_new_rev(srt);
+
+	/* Add the source route option to the packet */
+	dsr_srt_opt_add(off, l, srt_rev);
+	
+	off += DSR_SRT_OPT_LEN(srt_rev);
+	l -= DSR_SRT_OPT_LEN(srt_rev);
+
+	/* Free new reversed source route */
+	kfree(srt_rev);
+
+	rrep = dsr_rrep_opt_add(off, l, srt);
+
+	if (!rrep) {
+		DEBUG("Could not create RREQ\n");
+		return -1;
+	}
+	return 0;
 }
