@@ -107,6 +107,54 @@ struct dsr_srt *dsr_srt_new_rev(struct dsr_srt *srt)
 	return srt_rev;
 }
 
+struct dsr_srt *dsr_srt_new_splice(struct dsr_srt *srt, struct in_addr addr)
+{
+	struct dsr_srt *srt_spliced;
+	int i, n;
+
+	if (!srt)
+		return NULL;
+	
+	n = srt->laddrs / sizeof(struct in_addr);
+
+	if (n == 0)
+		return NULL;
+
+	for (i = 0; i < n; i++) {
+		if (addr.s_addr == srt->addrs[i].s_addr)
+			goto splice;	
+	}
+	/* Nothing to splice */
+	return NULL;
+ splice:
+	srt_spliced =  (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) + 
+						i * sizeof(struct in_addr), 
+						GFP_ATOMIC);
+
+	srt_spliced->src.s_addr = srt->src.s_addr;
+	srt_spliced->dst.s_addr = srt->addrs[i].s_addr;
+	srt_spliced->laddrs = sizeof(struct in_addr) * i;
+
+	memcpy(srt_spliced->addrs, srt->addrs, sizeof(struct in_addr) * i);
+	
+	return srt_spliced;
+}
+struct dsr_srt *dsr_srt_new_splice_rev(struct dsr_srt *srt, struct in_addr addr)
+{
+	struct dsr_srt *srt_spliced, *srt_spliced_rev;
+
+	srt_spliced = dsr_srt_new_splice(srt, addr);
+
+	if (!srt_spliced)
+		return NULL;
+		     
+	srt_spliced_rev = dsr_srt_new_rev(srt_spliced);
+
+	FREE(srt_spliced);
+	
+	return srt_spliced_rev;
+}
+
 struct dsr_srt *dsr_srt_shortcut(struct dsr_srt *srt, struct in_addr a1, 
 				 struct in_addr a2)
 {
@@ -319,7 +367,7 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp)
 			return DSR_PKT_DROP;
 		
 		/* srt = dsr_rtc_find(myaddr, dp->src); */
-		srt = dsr_srt_new_rev(srt_cut);
+		srt = dsr_srt_new_splice_rev(srt_cut, myaddr);
 
 		if (!srt) {
 			DEBUG("No route to %s\n", print_ip(dp->src));
@@ -334,6 +382,7 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp)
 		dsr_rrep_send(srt, srt_cut);
 		
 		FREE(srt_cut);
+		FREE(srt);
 		
 	}
 	
