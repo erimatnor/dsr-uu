@@ -9,9 +9,7 @@
 
 static unsigned int rreq_seqno = 1;
 
-#define DSR_RREQ_TOT_LEN IP_HDR_LEN + sizeof(dsr_hdr_t) + sizeof(dsr_rreq_opt_t)
-
-static dsr_rreq_opt_t *dsr_rreq_hdr_add(char *buf, int buflen, struct in_addr taddr)
+dsr_rreq_opt_t *dsr_rreq_hdr_add(char *buf, int buflen, struct in_addr taddr)
 {
 	struct iphdr *iph;
 	dsr_hdr_t *dsr_hdr;
@@ -40,39 +38,34 @@ static dsr_rreq_opt_t *dsr_rreq_hdr_add(char *buf, int buflen, struct in_addr ta
 	if (!dsr_hdr)
 		return NULL;
 
-	dsr_rreq = (dsr_rreq_opt_t *)dsr_hdr->options;
+	dsr_rreq = (dsr_rreq_opt_t *)DSR_OPT_HDR(dsr_hdr);
 	
 	dsr_rreq->type = DSR_OPT_RREQ;
 	dsr_rreq->length = DSR_RREQ_HDR_LEN;
 	dsr_rreq->id = htons(rreq_seqno++);
-	dsr_rreq->taddr = taddr.s_addr;
+	dsr_rreq->target = taddr.s_addr;
 	
 	return dsr_rreq;
 }
 
-struct sk_buff *dsr_rreq_create(__u32 taddr, struct net_device *dev)
+void dsr_rreq_recv(struct in_addr initiator, dsr_rreq_opt_t *rreq)
 {
-	struct sk_buff *skb;
-	struct in_addr target;
-	dsr_rreq_opt_t *dsr_rreq;
+	if (!rreq)
+		return;
+
+	dsr_parse_source_route(initiator, rreq->addrs);
 	
-	if (!dev) {
-		DEBUG("nod send device specified!\n");
-		return NULL;
+	
+	if (rreq->target == ldev_info.ip_addr) {
+		DEBUG("I am RREQ target\n");
+		
+		/* send rrep.... */
+
+	} else {
+		/* Forward RREQ */
+
+
 	}
 	
-	skb = kdsr_pkt_alloc(DSR_RREQ_TOT_LEN, dev);
-	
-	if (!skb)
-		return NULL;
-
-	target.s_addr = taddr;
-
-	dsr_rreq = dsr_rreq_hdr_add(skb_put(skb, DSR_RREQ_TOT_LEN), skb->len, target);
-
-	if (!dsr_rreq) {
-		DEBUG("Could not create RREQ\n");
-		return NULL;
-	}
-	return skb;
+	return;
 }

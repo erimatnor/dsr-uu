@@ -12,6 +12,7 @@
 
 #include "debug.h"
 #include "dsr.h"
+#include "kdsr.h"
 #include "dsr-rreq.h"
 #include "p-queue.h"
 

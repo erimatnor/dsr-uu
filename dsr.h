@@ -5,6 +5,11 @@
 #include <linux/types.h>
 #include <linux/in.h>
 
+typedef struct dsr_opt {
+	u_int8_t type;
+	u_int8_t length;
+} dsr_opt_t;
+
 typedef struct dsr_hdr {
 	u_int8_t nh;
 #if defined(__LITTLE_ENDIAN_BITFIELD)
@@ -18,7 +23,7 @@ typedef struct dsr_hdr {
 #error  "Please fix <asm/byteorder.h>"
 #endif
 	u_int16_t length;
-	char options[0];
+	dsr_opt_t option[0];
 } dsr_hdr_t;
 
 #define DSR_OPT_PADN       0
@@ -33,18 +38,20 @@ typedef struct dsr_hdr {
 #define DSR_OPT_AREQ     160
 #define DSR_OPT_PAD1     224
 
-typedef struct dsr_opt {
-	u_int8_t type;
-	u_int8_t length;
-} dsr_opt_t;
 
+/* Header lengths */
+#define DSR_FIXED_HDR_LEN sizeof(struct dsr_opt)
+#define DSR_PKT_MIN_LEN 24 /* IP header + DSR header =  20 + 4 */
+
+#define DSR_FIXED_HDR(iph) (dsr_hdr_t *)((char *)iph + (iph->ihl << 2))
+//#define DSR_OPT_HDR(iph) (dsr_opt_t *)((char *)iph + (iph->ihl << 2) + DSR_FIXED_HDR_LEN)
+#define DSR_OPT_HDR(dh) (dh->option)
 
 struct netdev_info {
     __u32 ip_addr;
     __u32 bc_addr;
     int ifindex;
 };
-#define DSR_PKT_MIN_LEN 24 /* IP header + DSR header =  20 + 4 */
 
 #define DSR_BROADCAST ((unsigned long int) 0xffffffff)
 #define IPPROTO_DSR 168 /* Is this correct? */
@@ -54,5 +61,6 @@ struct netdev_info {
 extern struct netdev_info ldev_info;  /* defined in dsr-dev.c */
 
 dsr_hdr_t *dsr_hdr_add(char *buf, int len, unsigned int protocol);
-
+void dsr_parse_source_route(struct in_addr initiator, u_int32_t *addrs);
+void dsr_recv(char *buf, int len);
 #endif

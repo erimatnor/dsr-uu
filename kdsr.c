@@ -11,6 +11,7 @@
 
 #include "dsr.h"
 #include "dsr-dev.h"
+#include "dsr-rreq.h"
 #include "p-queue.h"
 #include "debug.h"
 
@@ -21,6 +22,7 @@ static int kdsr_recv(struct sk_buff *skb)
 	DEBUG("received dsr packet\n");
 
 	// dsr_recv();
+	dsr_recv(skb->data, skb->len);
 
 	kfree_skb(skb);
 
@@ -73,6 +75,69 @@ struct sk_buff *kdsr_pkt_alloc(unsigned int size, struct net_device *dev)
 	//skb->nh.iph = (struct iphdr *)skb->data;
 	
 	return skb;
+}
+
+struct sk_buff *dsr_rreq_create(__u32 taddr, struct net_device *dev)
+{
+	struct sk_buff *skb;
+	struct in_addr target;
+	dsr_rreq_opt_t *dsr_rreq;
+	
+	if (!dev) {
+		DEBUG("nod send device specified!\n");
+		return NULL;
+	}
+	
+	skb = kdsr_pkt_alloc(DSR_RREQ_TOT_LEN, dev);
+	
+	if (!skb)
+		return NULL;
+
+	target.s_addr = taddr;
+
+	dsr_rreq = dsr_rreq_hdr_add(skb_put(skb, DSR_RREQ_TOT_LEN), skb->len, target);
+
+	if (!dsr_rreq) {
+		DEBUG("Could not create RREQ\n");
+		return NULL;
+	}
+	return skb;
+}
+
+struct sk_buff *dsr_rreq_create(struct in_addr initiator)
+{
+	struct sk_buff *skb;
+	struct in_addr target;
+	dsr_rreq_opt_t *dsr_rreq;
+	
+	if (!dev) {
+		DEBUG("nod send device specified!\n");
+		return NULL;
+	}
+	
+	skb = kdsr_pkt_alloc(DSR_RREQ_TOT_LEN, dev);
+	
+	if (!skb)
+		return NULL;
+
+	target.s_addr = taddr;
+
+	dsr_rreq = dsr_rreq_hdr_add(skb_put(skb, DSR_RREQ_TOT_LEN), skb->len, target);
+
+	if (!dsr_rreq) {
+		DEBUG("Could not create RREQ\n");
+		return NULL;
+	}
+	return skb;
+
+	
+}
+
+int dsr_send_rrep(struct in_addr initiator)
+{
+	
+
+	return 0;
 }
 
 #ifdef KERNEL26
