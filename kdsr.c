@@ -3,6 +3,8 @@
 #include <linux/kernel.h>
 #include <linux/skbuff.h>
 #include <net/protocol.h>
+#include <linux/netdevice.h>
+#include <linux/if_ether.h>
 #ifdef KERNEL26
 #include <linux/moduleparam.h>
 #endif
@@ -35,7 +37,12 @@ static void kdsr_recv_err(struct sk_buff *skb, u32 info)
 static struct inet_protocol dsr_inet_prot = {
 	.handler = kdsr_recv,
 	.err_handler = kdsr_recv_err,
+#ifdef KERNEL26
 	.no_policy = 1,
+#else
+	.protocol    = IPPROTO_DSR,
+	.name        = "DSR"
+#endif
 };
 
 
@@ -90,17 +97,23 @@ static int __init kdsr_init(void)
 	if (res < 0)
 		goto cleanup_dsr_dev;
 
+#ifndef KERNEL26
+	inet_add_protocol(&dsr_inet_prot);
+	return res;
+#else
 	res = inet_add_protocol(&dsr_inet_prot, IPPROTO_DSR);
 	
 	if (res < 0) {
 		DEBUG("Could not register inet protocol\n");
 		goto cleanup_p_queue;
 	}
-	
 	return res;
-
+	
  cleanup_p_queue:
 	p_queue_cleanup();
+#endif
+	
+
  cleanup_dsr_dev:
 	dsr_dev_cleanup();
 	
@@ -109,7 +122,11 @@ static int __init kdsr_init(void)
 
 static void __exit kdsr_cleanup(void)
 {
+#ifdef KERNEL26
 	inet_del_protocol(&dsr_inet_prot, IPPROTO_DSR);
+#else
+	inet_del_protocol(&dsr_inet_prot);
+#endif
 	dsr_dev_cleanup();
 	p_queue_cleanup();
 }

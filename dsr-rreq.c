@@ -22,7 +22,6 @@ static dsr_rreq_opt_t *dsr_rreq_hdr_add(char *buf, int buflen, struct in_addr ta
 
 	iph = (struct iphdr *)buf;
 	
-	printk("iph=%lu\n", iph);
 	iph->version = IPVERSION;
 	iph->ihl = 5;
 	iph->tos = 0;

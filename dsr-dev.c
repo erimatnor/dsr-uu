@@ -8,6 +8,7 @@
 #include <linux/init.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
+#include <linux/random.h>
 
 #include "debug.h"
 #include "dsr.h"
@@ -166,7 +167,8 @@ static void __init dsr_dev_setup(struct net_device *dev)
 	dev->flags |= IFF_NOARP;
 	dev->flags &= ~IFF_MULTICAST;
 	SET_MODULE_OWNER(dev);
-	random_ether_addr(dev->dev_addr);
+	//random_ether_addr(dev->dev_addr);
+	get_random_bytes(dev->dev_addr, 6);
 }
 
 static int dsr_pkt_send(struct sk_buff *skb, struct sockaddr *dest, 

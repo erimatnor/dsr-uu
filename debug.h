@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <linux/types.h>
 #include <linux/string.h>
+#include <linux/ctype.h>
 #include <linux/kernel.h>
 
 #ifdef DEBUG
@@ -31,15 +32,16 @@ static inline char *print_ip(__u32 addr)
 static inline void dsr_print(const char *func, char *fmt, ...)
 {
     char buf[DEBUG_BUFLEN];
+    va_list args;
     
-    va_list ap;
-    
-    va_start(ap, fmt);
+    va_start(args, fmt);
 
-    vsnprintf(buf, DEBUG_BUFLEN, fmt, ap);
+    vsnprintf(buf, DEBUG_BUFLEN, fmt, args);
 
-    va_end(ap);
+    va_end(args);
 
     printk("k-dsr::%s: %s", func, buf);
 }
-#endif
+
+
+#endif /* _DEBUG_H */
