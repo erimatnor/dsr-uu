@@ -128,7 +128,7 @@ static inline int do_relax(void *pos, void *node)
 	if (link->src == u) {
 		unsigned int w = link->cost;
 		
-		if (v->cost > (u->cost + w)) {
+		if ((u->cost + w) < v->cost) {
 			v->cost = u->cost + w;
 			v->hops = u->hops + 1;
 			v->pred = u;
@@ -199,6 +199,8 @@ static inline struct lc_node *lc_node_create(struct in_addr addr)
 	n->addr = addr;
 	n->links = 0;
 	n->cost = LC_COST_INF;
+	n->pred = NULL;
+
 	return n;
 };
 
@@ -240,6 +242,8 @@ static int __lc_link_tbl_add(struct lc_node *src, struct lc_node *dst,
 		
 		__tbl_add_tail(&LC.links, &link->l);
 		
+		link->src = src;
+		link->dst = dst;
 		src->links++;
 		dst->links++;
 
@@ -247,9 +251,7 @@ static int __lc_link_tbl_add(struct lc_node *src, struct lc_node *dst,
 	} else
 		res = 0;
 	
-	link->src = src;
-	link->dst = dst;
-	link->status = status;
+      	link->status = status;
 	link->cost = cost;
 	link->expire = jiffies + (timeout / 1000 * HZ);
 	
@@ -265,7 +267,6 @@ int lc_link_add(struct in_addr src, struct in_addr dst,
 	write_lock_bh(&LC.lock);
 	
 	sn = __tbl_find(&LC.nodes, &src, crit_addr);
-	dn = __tbl_find(&LC.nodes, &dst, crit_addr);
 
 	if (!sn) {
 		sn = lc_node_create(src);
@@ -278,6 +279,9 @@ int lc_link_add(struct in_addr src, struct in_addr dst,
 		__tbl_add_tail(&LC.nodes, &sn->l);
 		
 	}
+
+	dn = __tbl_find(&LC.nodes, &dst, crit_addr);
+
 	if (!dn) {
 		dn = lc_node_create(dst);
 		if (!dn) {
@@ -481,8 +485,6 @@ int dsr_rtc_add(struct dsr_srt *srt, unsigned long timeout, unsigned short flags
 	
 	addr1 = srt->src;
 	
-	write_lock_bh(&LC.lock);
-
 	for (i = 0; i < n; i++) {
 		addr2 = srt->addrs[i];
 		
@@ -505,55 +507,11 @@ int dsr_rtc_add(struct dsr_srt *srt, unsigned long timeout, unsigned short flags
 		links++;
 	}
 	
-	/* Set currently calculated source to NULL since we have modified the
-	 * link cache. */
-	LC.src = NULL;
-
-	write_unlock_bh(&LC.lock);
 	return links;
 }
-int dsr_rtc_del(struct dsr_srt *srt)
+int dsr_rtc_del(struct in_addr src, struct in_addr dst)
 {
-	int i, n, links = 0;
-	struct in_addr addr1, addr2;
-	
-	
-	if (!srt)
-		return -1;
-
-	n = srt->laddrs / sizeof(struct in_addr);
-	
-	addr1 = srt->src;
-	
-	write_lock_bh(&LC.lock);
-
-	for (i = 0; i < n; i++) {
-		addr2 = srt->addrs[i];
-		
-		lc_link_del(addr1, addr2);
-		links++;
-		
-		if (srt->flags & SRT_BIDIR) {
-			lc_link_del(addr2, addr1);
-			links++;
-		}
-		addr1 = addr2;
-	}
-	addr2 = srt->dst;
-	
-	lc_link_del(addr1, addr2);
-	links++;
-	
-	if (srt->flags & SRT_BIDIR) {
-		lc_link_del(addr2, addr1);
-		links++;
-	}
-	/* Set currently calculated source to NULL since we have modified the
-	 * link cache. */
-	LC.src = NULL;
-	
-	write_unlock_bh(&LC.lock);
-	return links;
+	return 0;
 }
 
 

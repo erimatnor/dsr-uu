@@ -6,6 +6,7 @@
 #include <linux/in.h>
 
 #include "dsr.h"
+#include "debug.h"
 
 /* Source route options header */
 struct dsr_srt_opt {
@@ -52,6 +53,26 @@ struct dsr_srt {
 	unsigned int laddrs;  /* length in bytes if addrs */
 	struct in_addr addrs[0];  /* Intermediate nodes */
 };
+
+static inline char *print_srt(struct dsr_srt *srt)
+{
+#define BUFLEN 256
+	static char buf[BUFLEN];
+	int i, len;
+
+	if (!srt)
+		return NULL;
+	
+	len = sprintf(buf, "%s<->", print_ip(srt->src.s_addr));
+	
+	for (i = 0; i < (srt->laddrs / sizeof(u_int32_t)) && 
+		     (len + 16) < BUFLEN; i++)
+		len += sprintf(buf+len, "%s<->", print_ip(srt->addrs[i].s_addr));
+	
+	if ((len + 16) < BUFLEN)
+		len = sprintf(buf+len, "%s", print_ip(srt->dst.s_addr));
+	return buf;
+}
 
 struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, int index);
 struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt);

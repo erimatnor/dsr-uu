@@ -200,6 +200,7 @@ int dsr_rerr_opt_recv(struct dsr_rerr_opt *rerr_opt)
 
 		/* Remove broken link from cache */
 		lc_link_del(err_src, unr_addr);
+/* 		dsr_rtc_del(my_addr(), err_dst); */
 		break;
 	case FLOW_STATE_NOT_SUPPORTED:
 		DEBUG("FLOW_STATE_NOT_SUPPORTED\n");

@@ -9,6 +9,7 @@
 #include <linux/timer.h>
 #include <linux/proc_fs.h>
 
+#undef DEBUG
 #include "tbl.h"
 #include "dsr-rtc.h"
 #include "dsr-srt.h"
@@ -161,14 +162,14 @@ static inline int __dsr_rtc_del(struct rtc_entry *e)
 	return 1;
 }
 
-int dsr_rtc_del(struct in_addr addr)
+int dsr_rtc_del(struct in_addr src, struct in_addr dst)
 {
 	int res;
 	struct rtc_entry *e;
   
 	write_lock_bh(&rtc_lock); 
     
-	e = __dsr_rtc_find(addr.s_addr);
+	e = __dsr_rtc_find(dst.s_addr);
 
 	if (e == NULL) {
 		res = 0;
@@ -185,14 +186,14 @@ int dsr_rtc_del(struct in_addr addr)
 	return res;
 }
 
-struct dsr_srt *dsr_rtc_find(struct in_addr addr)
+struct dsr_srt *dsr_rtc_find(struct in_addr src, struct in_addr dst)
 {
 	struct rtc_entry *e;
 	struct dsr_srt *srt;
     
 /*     printk("Checking activeness\n"); */
 	read_lock_bh(&rtc_lock);
-	e = __dsr_rtc_find(addr.s_addr);
+	e = __dsr_rtc_find(dst.s_addr);
     
 	if (e) {
 		/* We must make a copy of the source route so that we do not
@@ -213,7 +214,7 @@ int dsr_rtc_add(struct dsr_srt *srt, unsigned long time,
 	struct rtc_entry *e;
 	int status = 0;
     
-	if (!srt || dsr_rtc_find(srt->dst))
+	if (!srt || dsr_rtc_find(srt->src, srt->dst))
 		return 0;
     
 	DEBUG("Adding source route to route cache\n");
@@ -301,36 +302,19 @@ static int dsr_rtc_print(char *buf)
     
 	read_lock_bh(&rtc_lock);
     
-	len += sprintf(buf, "# %-15s %-15s %-5s Expires\n", "Addr", "Nhop", "Flags");
+	len += sprintf(buf, "# %-5s %-8s Source Route\n", "Flags", "Expires");
 
 	list_for_each(pos, &rtc_head) {
-		char addr[16], nhop[16], flags[4];
+		char flags[4];
 		int num_flags = 0;
 		struct rtc_entry *e = (struct rtc_entry *)pos;
 	
-		sprintf(addr, "%d.%d.%d.%d",
-			0x0ff & e->srt.dst.s_addr,
-			0x0ff & (e->srt.dst.s_addr >> 8),
-			0x0ff & (e->srt.dst.s_addr >> 16),
-			0x0ff & (e->srt.dst.s_addr >> 24));
 	
-		if (e->srt.laddrs == 0)
-			sprintf(nhop, "%d.%d.%d.%d",
-				0x0ff & e->srt.dst.s_addr,
-				0x0ff & (e->srt.dst.s_addr >> 8),
-				0x0ff & (e->srt.dst.s_addr >> 16),
-				0x0ff & (e->srt.dst.s_addr >> 24));
-		else
-			sprintf(nhop, "%d.%d.%d.%d",
-				0x0ff & e->srt.addrs[0].s_addr,
-				0x0ff & (e->srt.addrs[0].s_addr >> 8),
-				0x0ff & (e->srt.addrs[0].s_addr >> 16),
-				0x0ff & (e->srt.addrs[0].s_addr >> 24));
-
 		flags[num_flags] = '\0';
 	
-		len += sprintf(buf+len, "  %-15s %-15s %-5s %lu\n", addr, nhop, flags, 
-			       (e->expires - jiffies) * 1000 / HZ);
+		len += sprintf(buf+len, "  %-5s %-8lu %s\n", flags, 
+			       (e->expires - jiffies) * 1000 / HZ,
+			       print_srt(&e->srt));
 	}
     
 	read_unlock_bh(&rtc_lock);

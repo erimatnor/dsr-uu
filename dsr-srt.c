@@ -69,25 +69,6 @@ struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt)
 	return prev_hop;
 }
 
-char *print_srt(struct dsr_srt *srt)
-{
-#define BUFLEN 256
-	static char buf[BUFLEN];
-	int i, len;
-
-	if (!srt)
-		return NULL;
-	
-	len = sprintf(buf, "%s<->", print_ip(srt->src.s_addr));
-	
-	for (i = 0; i < (srt->laddrs / sizeof(u_int32_t)) && 
-		     (len + 16) < BUFLEN; i++)
-		len += sprintf(buf+len, "%s<->", print_ip(srt->addrs[i].s_addr));
-	
-	if ((len + 16) < BUFLEN)
-		len = sprintf(buf+len, "%s", print_ip(srt->dst.s_addr));
-	return buf;
-}
 
 struct dsr_srt *dsr_srt_new(struct in_addr src, struct in_addr dst,
 		       unsigned int length, char *addrs)

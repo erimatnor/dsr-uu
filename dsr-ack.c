@@ -35,24 +35,24 @@ int dsr_ack_send(struct in_addr dst, unsigned short id)
 {
 	struct dsr_pkt *dp;
 	struct dsr_ack_opt *ack_opt;
-	struct dsr_srt *srt;
+/* 	struct dsr_srt *srt; */
 	int len;
 	char *buf;
 	
-	srt = dsr_rtc_find(my_addr(), dst);
+	/* srt = dsr_rtc_find(my_addr(), dst); */
 	
-	if (!srt) {
-		DEBUG("No source route to %s\n", print_ip(dst.s_addr));
-		return -1;
-	}
+/* 	if (!srt) { */
+/* 		DEBUG("No source route to %s\n", print_ip(dst.s_addr)); */
+/* 		return -1; */
+/* 	} */
 
-	len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) + DSR_ACK_HDR_LEN;
+	len = DSR_OPT_HDR_LEN + /* DSR_SRT_OPT_LEN(srt) +  */DSR_ACK_HDR_LEN;
 
 	dp = dsr_pkt_alloc(NULL);
 	
 	dp->dst = dst;
-	dp->srt = srt;
-	dp->nxt_hop = dsr_srt_next_hop(dp->srt, 0);
+	/* dp->srt = srt; */
+	dp->nxt_hop = dst; //dsr_srt_next_hop(dp->srt, 0);
 	dp->src = my_addr();
 	
 	buf = dsr_pkt_alloc_opts(dp, len);
@@ -78,15 +78,15 @@ int dsr_ack_send(struct in_addr dst, unsigned short id)
 	buf += DSR_OPT_HDR_LEN;
 	len -= DSR_OPT_HDR_LEN;
 
-	dp->srt_opt = dsr_srt_opt_add(buf, len, dp->srt);
+	/* dp->srt_opt = dsr_srt_opt_add(buf, len, dp->srt); */
 
-	if (!dp->srt_opt) {
-		DEBUG("Could not create Source Route option header\n");
-		goto out_err;
-	}
+/* 	if (!dp->srt_opt) { */
+/* 		DEBUG("Could not create Source Route option header\n"); */
+/* 		goto out_err; */
+/* 	} */
 
-	buf += DSR_SRT_OPT_LEN(dp->srt);
-	len -= DSR_SRT_OPT_LEN(dp->srt);
+/* 	buf += DSR_SRT_OPT_LEN(dp->srt); */
+/* 	len -= DSR_SRT_OPT_LEN(dp->srt); */
 
 	ack_opt = dsr_ack_opt_add(buf, len, dst, id);
 

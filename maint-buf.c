@@ -226,7 +226,8 @@ static void maint_buf_timeout(unsigned long data)
 	if (++m->rexmt >= PARAM(MaxMaintRexmt)) {
 		DEBUG("MaxMaintRexmt reached, send RERR\n");
 		lc_link_del(my_addr(), m->nxt_hop);
-		neigh_tbl_del(m->nxt_hop);
+/* 		dsr_rtc_del(my_addr(), m->nxt_hop); */
+/* 		neigh_tbl_del(m->nxt_hop); */
 
 		dsr_rerr_send(m->dp, m->nxt_hop);
 
