@@ -119,8 +119,7 @@ static int kdsr_ip_recv(struct sk_buff *skb)
 	/* Check action... */
 
 	if (action & DSR_PKT_SRT_REMOVE) {
-		DEBUG("DSR options remove!\n");
-		dsr_opts_remove(&dp);
+		DEBUG("DSR srt options remove!\n");
 		
 	}
 	if (action & DSR_PKT_FORWARD) {
@@ -168,18 +167,21 @@ static int kdsr_ip_recv(struct sk_buff *skb)
 		DEBUG("Freeing source route\n");
 		kfree(dp.srt);
 	}
-	if (action & DSR_PKT_DROP || action & DSR_PKT_ERROR) {
-		DEBUG("DSR_PKT_DROP or DSR_PKT_ERROR\n");
-		kfree_skb(skb);
-		return 0;
-	}
+
 	if (action & DSR_PKT_DELIVER) {
+		dsr_opts_remove(&dp);
 		DEBUG("Deliver to DSR device\n");
 		dsr_dev_deliver(&dp);
 		kfree_skb(skb);
 		return 0;
 	}
 
+	if (action & DSR_PKT_DROP || action & DSR_PKT_ERROR) {
+		DEBUG("DSR_PKT_DROP or DSR_PKT_ERROR\n");
+		kfree_skb(skb);
+		return 0;
+	}
+	
 	return 0;
 };
 
@@ -315,10 +317,18 @@ static int __init kdsr_init(void)
 	DEBUG("Creating packet queue\n"),
 	res = p_queue_init();
 
-	if (res < 0) {
-		DEBUG("Could not create packet queue\n");
+	if (res < 0) 
 		goto cleanup_dsr_dev;
-	}
+	
+	res = rreq_tbl_init();
+
+	if (res < 0) 
+		goto cleanup_p_queue;
+			
+	res = neigh_tbl_init();
+
+	if (res < 0) 
+		goto cleanup_rreq_tbl;
 
 #ifndef KERNEL26
 	inet_add_protocol(&dsr_inet_prot);
@@ -328,18 +338,19 @@ static int __init kdsr_init(void)
 	
 	if (inet_add_protocol(&dsr_inet_prot, IPPROTO_DSR) < 0) {
 		DEBUG("Could not register inet protocol\n");
-		goto cleanup_p_queue;
+		goto cleanup_neigh_tbl;
 	}
-	rreq_tbl_init();
-	neigh_tbl_init();
-	
 	DEBUG("Setup finished res=%d\n", res);
-	return 0;
 	
+	return 0;
+ cleanup_neigh_tbl:
+	neigh_tbl_cleanup();
+#endif
+      
+ cleanup_rreq_tbl:
+	rreq_tbl_cleanup();
  cleanup_p_queue:
 	p_queue_cleanup();
-#endif
-
  cleanup_dsr_dev:
 	dsr_dev_cleanup();
 	

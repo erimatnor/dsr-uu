@@ -43,7 +43,7 @@ struct dsr_pad1_opt {
 #define DSR_OPT_SRT       96
 #define DSR_OPT_TIMEOUT  128
 #define DSR_OPT_FLOWID   129
-#define DSR_OPT_AREQ     160
+#define DSR_OPT_ACK_REQ  160
 #define DSR_OPT_PAD1     224
 
 #define DSR_FIXED_HDR(iph) (struct dsr_opt_hdr *)((char *)iph + (iph->ihl << 2))

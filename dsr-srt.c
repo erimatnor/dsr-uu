@@ -124,7 +124,7 @@ int dsr_srt_add(struct dsr_pkt *dp, struct sk_buff *skb)
 
 	if (add_ack_req)
 		
-		dp->dsr_opts_len = len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(dp->srt) + DSR_AREQ_HDR_LEN;
+		dp->dsr_opts_len = len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(dp->srt) + DSR_ACK_REQ_HDR_LEN;
 	else
 		dp->dsr_opts_len = len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(dp->srt);
 	
@@ -171,8 +171,8 @@ int dsr_srt_add(struct dsr_pkt *dp, struct sk_buff *skb)
 			DEBUG("Could not create ACK REQ option header!\n");
 			return -1;
 		}
-		buf += DSR_AREQ_HDR_LEN;
-		len -= DSR_AREQ_HDR_LEN;
+		buf += DSR_ACK_REQ_HDR_LEN;
+		len -= DSR_ACK_REQ_HDR_LEN;
 	}
 
 	iph = skb->nh.iph;

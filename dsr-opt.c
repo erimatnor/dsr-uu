@@ -160,7 +160,7 @@ int dsr_opts_remove(struct dsr_pkt *dp)
 int dsr_opt_recv(struct dsr_pkt *dp)
 {	
 	int dsr_len, l;
-	int action = 0;
+	int action = DSR_PKT_DROP;
 	int num_rreq_opts = 0;
 	struct dsr_opt *dopt;
 	struct in_addr myaddr;
@@ -219,7 +219,7 @@ int dsr_opt_recv(struct dsr_pkt *dp)
 			break;
 		case DSR_OPT_FLOWID:
 			break;
-		case DSR_OPT_AREQ:
+		case DSR_OPT_ACK_REQ:
 			DEBUG("ACK REQ opt:\n");
 			action |= dsr_ack_req_opt_recv(dp, (struct dsr_ack_req_opt *)dopt);
 			break;

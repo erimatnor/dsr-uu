@@ -1,5 +1,6 @@
 #include <linux/proc_fs.h>
 #include <linux/timer.h>
+#include <linux/module.h>
 
 #include "dsr-rtc.h"
 #include "dsr-srt.h"
@@ -18,6 +19,10 @@
 #ifdef LC_TIMER
 #define LC_GARBAGE_COLLECT_INTERVAL 5 /* Seconds */
 #endif
+
+MODULE_AUTHOR("erik.nordstrom@it.uu.se");
+MODULE_DESCRIPTION("DSR link cache kernel module");
+MODULE_LICENSE("GPL");
 
 struct lc_node {
 	struct list_head l;
@@ -508,15 +513,10 @@ int dsr_rtc_add(struct dsr_srt *srt, unsigned long timeout, unsigned short flags
 	 * link cache. */
 	LC.src = NULL;
 
-/* #ifdef LC_TIMER	 */
-/* 	if (!timer_pending(&LC.timer)) */
-/* 		add_timer(&LC.timer); */
-/* #endif */
 	write_unlock_bh(&LC.lock);
 	return links;
 }
-
-int __dsr_rtc_del(struct dsr_srt *srt)
+int dsr_rtc_del(struct dsr_srt *srt)
 {
 	int i, n, links = 0;
 	struct in_addr addr1, addr2;
@@ -560,6 +560,7 @@ int __dsr_rtc_del(struct dsr_srt *srt)
 	return links;
 }
 
+
 void lc_flush(void)
 {
 	write_lock_bh(&LC.lock);
@@ -601,9 +602,9 @@ void __exit lc_cleanup(void)
 }
 
 EXPORT_SYMBOL(dsr_rtc_add);
-/* EXPORT_SYMBOL(dsr_rtc_del); */
 EXPORT_SYMBOL(dsr_rtc_find);
 EXPORT_SYMBOL(dsr_rtc_flush);
+EXPORT_SYMBOL(lc_link_del);
 
 module_init(lc_init);
 module_exit(lc_cleanup);
