@@ -2,6 +2,7 @@
 #include <linux/proc_fs.h>
 #include <linux/timer.h>
 #include <net/ip.h>
+#include <linux/random.h>
 
 #include "dsr-dev.h"
 #endif
@@ -25,7 +26,7 @@
 #define RREQ_TBL_PROC_NAME "dsr_rreq_tbl"
 
 static TBL(rreq_tbl, RREQ_TBL_MAX_LEN);
-static unsigned int rreq_seqno = 1;
+static unsigned int rreq_seqno;
 #endif
 
 #define STATE_IDLE          0
@@ -625,6 +626,7 @@ int __init NSCLASS rreq_tbl_init(void)
 #ifdef __KERNEL__
 	proc_net_create(RREQ_TBL_PROC_NAME, 0, rreq_tbl_proc_info);
 #endif
+	get_random_bytes(&rreq_seqno, sizeof(unsigned int));
 	return 0;
 }
 

@@ -213,12 +213,12 @@ static int neigh_tbl_print(char *buf)
     
 	DSR_READ_LOCK(&neigh_tbl.lock);
     
-	len += sprintf(buf, "# %-15s %-17s %-3s %-6s\n", "Addr", "HwAddr", "RTT", "Id" /*, "AckRxTime","AckTxTime" */);
+	len += sprintf(buf, "# %-15s %-17s %-10s %-6s\n", "Addr", "HwAddr", "RTT (usec)", "Id" /*, "AckRxTime","AckTxTime" */);
 
 	list_for_each(pos, &neigh_tbl.head) {
 		struct neighbor *neigh =(struct neighbor *)pos;
 		
-		len += sprintf(buf+len, "  %-15s %-17s %-3lu %-6u\n", 
+		len += sprintf(buf+len, "  %-15s %-17s %-10lu %-6u\n", 
 			       print_ip(neigh->addr), 
 			       print_eth(neigh->hw_addr.sa_data),
 			       neigh->rtt, neigh->id);

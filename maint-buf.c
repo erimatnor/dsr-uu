@@ -248,7 +248,7 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 	struct maint_entry *m;
 	struct neighbor_info neigh_info;
 	int res;
-	char buf[2048];
+/* 	char buf[2048]; */
 
 	if (!dp) {
 		DEBUG("dp is NULL!?\n");
@@ -293,9 +293,9 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 		DEBUG("Deferring ACK REQ for %s since_last=%ld id=%u\n", print_ip(dp->nxt_hop), timeval_diff(&m->tx_time, &neigh_info.last_ack_req), m->id);
 	}
 
-	maint_buf_print(&maint_buf, buf);
+/* 	maint_buf_print(&maint_buf, buf); */
 	
-	DEBUG("\n%s\n", buf);
+/* 	DEBUG("\n%s\n", buf); */
 
 	return 1;
 }
