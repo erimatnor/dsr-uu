@@ -79,7 +79,7 @@ static int kdsr_recv(struct sk_buff *skb)
 			DEBUG("ttl=0, dropping!\n");
 			break;
 		}
-		dsr_dev_queue_xmit(dp);
+		dev_queue_xmit(dp->skb);
 		
 		break;
 	case DSR_PKT_DELIVER:

@@ -243,72 +243,69 @@ int dsr_dev_deliver(struct sk_buff *skb)
 
 /* Transmit a DSR packet... this function assumes that the packet has a valid
  * source route already. */
-int dsr_dev_queue_xmit(dsr_pkt_t *dp)
-{
-	struct dsr_node *dnode = dsr_dev->priv;
-	struct ethhdr *ethh;
-	struct sockaddr hw_addr;
+/* int dsr_dev_queue_xmit(dsr_pkt_t *dp) */
+/* { */
+/* 	struct dsr_node *dnode = dsr_dev->priv; */
+/* 	struct ethhdr *ethh; */
+/* 	struct sockaddr hw_addr; */
 		
-	if (!dp)
-		return -1;
+/* 	if (!dp) */
+/* 		return -1; */
 
-	if (!dp->skb) {
-		dsr_pkt_free(dp);
-		return -1;
-	}	
+/* 	if (!dp->skb) { */
+/* 		dsr_pkt_free(dp); */
+/* 		return -1; */
+/* 	}	 */
 
-	dp->skb->dev = dnode->slave_dev;
+/* 	dp->skb->dev = dnode->slave_dev; */
 
-	ethh = (struct ethhdr *)dp->skb->data;
+/* 	ethh = (struct ethhdr *)dp->skb->data; */
 
-	if (kdsr_get_hwaddr(dp->nh, &hw_addr, dp->skb->dev) < 0)
-		goto out_err;
+/* 	if (kdsr_get_hwaddr(dp->nh, &hw_addr, dp->skb->dev) < 0) */
+/* 		goto out_err; */
 	
-	DEBUG("Transmitting head=%d skb->data=%lu skb->nh.iph=%lu\n", skb_headroom(dp->skb), (unsigned long)dp->skb->data, (unsigned long)dp->skb->nh.iph);
+/* 	DEBUG("Transmitting head=%d skb->data=%lu skb->nh.iph=%lu\n", skb_headroom(dp->skb), (unsigned long)dp->skb->data, (unsigned long)dp->skb->nh.iph); */
 
- 	/* Build hw header */ 
-	dp->skb->dev->rebuild_header(dp->skb);
+/*  	/\* Build hw header *\/  */
+/* 	dp->skb->dev->rebuild_header(dp->skb); */
 
-	memcpy(ethh->h_source, dp->skb->dev->dev_addr, dp->skb->dev->addr_len);
+/* 	memcpy(ethh->h_source, dp->skb->dev->dev_addr, dp->skb->dev->addr_len); */
 
-	/* Send packet */
-	dev_queue_xmit(dp->skb);
+/* 	/\* Send packet *\/ */
+/* 	dev_queue_xmit(dp->skb); */
 	
-	dsr_dev_lock(dnode);
-	dnode->stats.tx_packets++;
-	dnode->stats.tx_bytes+=dp->skb->len;
-	dsr_dev_unlock(dnode);
-	/* We must free the DSR packet */
+/* 	dsr_dev_lock(dnode); */
+/* 	dnode->stats.tx_packets++; */
+/* 	dnode->stats.tx_bytes+=dp->skb->len; */
+/* 	dsr_dev_unlock(dnode); */
+/* 	/\* We must free the DSR packet *\/ */
 		
-	dsr_pkt_free(dp);
-	return 0;
-/* 	default: */
-/* 		DEBUG("Unkown packet type\n"); */
-/* 	} */
- out_err:
-	DEBUG("Could not send packet, freeing...\n");
-	dev_kfree_skb(dp->skb);
-	dsr_pkt_free(dp);
-	return -1;
-}
+/* 	dsr_pkt_free(dp); */
+/* 	return 0; */
+/* /\* 	default: *\/ */
+/* /\* 		DEBUG("Unkown packet type\n"); *\/ */
+/* /\* 	} *\/ */
+/*  out_err: */
+/* 	DEBUG("Could not send packet, freeing...\n"); */
+/* 	dev_kfree_skb(dp->skb); */
+/* 	dsr_pkt_free(dp); */
+/* 	return -1; */
+/* } */
 
 /* Main receive function for packets originated in user space */
 static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct dsr_node *dnode = (struct dsr_node *)dev->priv;
 	struct ethhdr *ethh;
-	dsr_pkt_t *dp;
+	dsr_srt_t *srt = NULL;
+	struct in_addr dst;
 	int res = 0;
 	
-	/* Allocate a DSR packet */
-	dp = dsr_pkt_alloc();
-	dp->skb = skb;
-	dp->data = skb->data;
-	dp->len = skb->len;
-
 	ethh = (struct ethhdr *)skb->data;
 
-	DEBUG("headroom=%d skb->data=%lu skb->nh.iph=%lu\n", skb_headroom(dp->skb), (unsigned long)dp->skb->data, (unsigned long)dp->skb->nh.iph);
+	DEBUG("headroom=%d skb->data=%lu skb->nh.iph=%lu\n", 
+	      skb_headroom(skb), (unsigned long)skb->data, 
+	      (unsigned long)skb->nh.iph);
 
 	switch (ntohs(ethh->h_proto)) {
 	case ETH_P_IP:
@@ -316,26 +313,42 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 		/* slave_dev = dev_get_by_index(.ifindex); */
 		skb->dev = dnode->slave_dev;
 	/* 	dev_put(slave_dev); */
+		dst.s_addr = skb->nh.iph->daddr;
+
+		srt = dsr_rtc_find(dst);
 		
-		dp->src.s_addr = skb->nh.iph->saddr;
-		dp->dst.s_addr = skb->nh.iph->daddr;
-					
-		dp->srt = dsr_rtc_find(dp->dst);
-		
-		if (dp->srt) {
+		if (srt) {
+			dsr_pkt_t *dp;
 			struct sockaddr hw_addr;
 		       
+				/* Allocate a DSR packet */
+			dp = dsr_pkt_alloc();
+			dp->skb = skb;
+			dp->data = skb->data;
+			dp->len = skb->len;
+	
+			dp->src.s_addr = skb->nh.iph->saddr;
+			dp->dst.s_addr = skb->nh.iph->daddr;
+			
+			dp->srt = srt;
+		
 			if (dp->srt->laddrs == 0)
 				dp->nh.s_addr = dp->srt->dst.s_addr;
 			else
 				dp->nh.s_addr = dp->srt->addrs[0].s_addr;
 			
 			/* Add source route */
-			if (dsr_srt_add(dp) < 0)
+			if (dsr_srt_add(dp) < 0) {
+				dev_kfree_skb(skb);
+				dsr_pkt_free(dp);
 				break;
-			
-			if (kdsr_get_hwaddr(dp->nh, &hw_addr, skb->dev) < 0)
+			}
+				
+			if (kdsr_get_hwaddr(dp->nh, &hw_addr, skb->dev) < 0) {
+				dev_kfree_skb(skb);
+				dsr_pkt_free(dp);
 				break;
+			}
 			
 			dp->skb->dev->rebuild_header(dp->skb);
 
@@ -352,15 +365,15 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 			/* We must free the DSR packet */
 			dsr_pkt_free(dp);
 		} else {			
-			res = p_queue_enqueue_packet(dp, dsr_dev_queue_xmit);
+			res = p_queue_enqueue_packet(skb, dev_queue_xmit);
 			
 			if (res < 0) {
 				DEBUG("Queueing failed!\n");
-				dsr_pkt_free(dp);
+			/* 	dsr_pkt_free(dp); */
 				dev_kfree_skb(skb);
 				return -1;
 			}
-			res = dsr_rreq_send(dp->dst);
+			res = dsr_rreq_send(dst);
 			
 			if (res < 0)
 				DEBUG("Transmission failed...");
@@ -368,7 +381,6 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 		break;
 	default:
 		DEBUG("Unkown packet type\n");
-		dsr_pkt_free(dp);
 		dev_kfree_skb(skb);
 	}	
 	return 0;

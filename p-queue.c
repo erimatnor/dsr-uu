@@ -26,8 +26,9 @@
 
 struct p_queue_entry {
 	struct list_head list;
-	struct dsr_pkt *dp;
-	int (*okfn)(struct dsr_pkt *);
+/* 	struct dsr_pkt *dp; */
+	struct sk_buff *skb;
+	int (*okfn)(struct sk_buff *);
 };
 
 typedef int (*p_queue_cmpfn)(struct p_queue_entry *, unsigned long);
@@ -88,8 +89,8 @@ static inline void __p_queue_flush(void)
 	int n = 0;
 	
 	while ((entry = __p_queue_find_dequeue_entry(NULL, 0))) {
-	    kfree_skb(entry->dp->skb);
-	    dsr_pkt_free(entry->dp);
+	    kfree_skb(entry->skb);
+	    /* dsr_pkt_free(entry->dp); */
 	    kfree(entry);
 	    n++;
 	}
@@ -118,7 +119,7 @@ void p_queue_flush(void)
 	write_unlock_bh(&queue_lock);
 }
 
-int p_queue_enqueue_packet(dsr_pkt_t *dp, int (*okfn)(dsr_pkt_t *))
+int p_queue_enqueue_packet(struct sk_buff *skb, int (*okfn)(struct sk_buff *))
 {
 	int status = -EINVAL;
 	struct p_queue_entry *entry;
@@ -131,7 +132,7 @@ int p_queue_enqueue_packet(dsr_pkt_t *dp, int (*okfn)(dsr_pkt_t *))
 	}
 	
 	entry->okfn = okfn;
-	entry->dp = dp;
+	entry->skb = skb;
 	
 	write_lock_bh(&queue_lock);
 
@@ -140,7 +141,7 @@ int p_queue_enqueue_packet(dsr_pkt_t *dp, int (*okfn)(dsr_pkt_t *))
 	if (status < 0)
 		goto err_out_unlock;
 
-	DEBUG("enquing packet for %s queue_len=%d\n", print_ip(dp->dst.s_addr),
+	DEBUG("enquing packet, queue_len=%d\n",
 	      queue_total);
 
 	write_unlock_bh(&queue_lock);
@@ -155,7 +156,7 @@ err_out_unlock:
 
 static inline int dest_cmp(struct p_queue_entry *e, unsigned long daddr)
 {
-	return (daddr == e->dp->dst.s_addr);
+	return (daddr == e->skb->nh.iph->daddr);
 }
 
 int p_queue_find(__u32 daddr)
@@ -173,7 +174,7 @@ int p_queue_find(__u32 daddr)
 }
 
 
-int p_queue_set_verdict(int verdict, struct in_addr addr)
+int p_queue_set_verdict(int verdict, unsigned long daddr)
 {
     struct p_queue_entry *entry;
     int pkts = 0;
@@ -181,7 +182,7 @@ int p_queue_set_verdict(int verdict, struct in_addr addr)
     if (verdict == P_QUEUE_DROP) {
 	
 	while (1) {
-	    entry = p_queue_find_dequeue_entry(dest_cmp, addr.s_addr);
+	    entry = p_queue_find_dequeue_entry(dest_cmp, daddr);
 	    
 	    if (entry == NULL)
 		    break;
@@ -189,10 +190,10 @@ int p_queue_set_verdict(int verdict, struct in_addr addr)
 	    /* Send an ICMP message informing the application that the
 	     * destination was unreachable. */
 	    if (pkts == 0)
-		icmp_send(entry->dp->skb, ICMP_DEST_UNREACH, ICMP_HOST_UNREACH, 0);	    
+		icmp_send(entry->skb, ICMP_DEST_UNREACH, ICMP_HOST_UNREACH, 0);	    
 	    
-	    kfree_skb(entry->dp->skb);
-	    dsr_pkt_free(entry->dp);
+	    kfree_skb(entry->skb);
+	  /*   dsr_pkt_free(entry->dp); */
 	    kfree(entry);
 	    pkts++;
 	}
@@ -203,35 +204,33 @@ int p_queue_set_verdict(int verdict, struct in_addr addr)
 	/* struct expl_entry e; */
 
 	while (1) {
-	    entry = p_queue_find_dequeue_entry(dest_cmp, addr.s_addr);
+	    entry = p_queue_find_dequeue_entry(dest_cmp, daddr);
 	    
 	    if (entry == NULL) {
 		    if (pkts == 0)
-			    DEBUG("No packets for dest %s\n", print_ip(addr.s_addr));
+			    DEBUG("No packets for dest %s\n", print_ip(daddr));
 		    break;
 	    }
-	    entry->dp->srt = dsr_rtc_find(entry->dp->dst);
+	    /* entry->dp->srt = dsr_rtc_find(entry->dp->dst); */
 	    
-	    /* Add source route */
-	    if (!entry->dp->srt || dsr_srt_add(entry->dp) < 0) {
-		    kfree_skb(entry->dp->skb);
-		    dsr_pkt_free(entry->dp);
-		    kfree(entry);
-		    continue;
-	    }
+/* 	    /\* Add source route *\/ */
+/* 	    if (!entry->dp->srt || dsr_srt_add(entry->dp) < 0) { */
+/* 		    kfree_skb(entry->dp->skb); */
+/* 		    dsr_pkt_free(entry->dp); */
+/* 		    kfree(entry); */
+/* 		    continue; */
+/* 	    } */
 	    /* Set next hop address */
-	    if (entry->dp->srt->laddrs == 0) {
-		    entry->dp->nh.s_addr = entry->dp->srt->dst.s_addr;
-	    } else
-		    entry->dp->nh.s_addr = entry->dp->srt->addrs[0].s_addr;
+	    /* if (entry->dp->srt->laddrs == 0) { */
+/* 		    entry->dp->nh.s_addr = entry->dp->srt->dst.s_addr; */
+/* 	    } else */
+/* 		    entry->dp->nh.s_addr = entry->dp->srt->addrs[0].s_addr; */
 	    
 	    pkts++;
 	    
 	    /* Inject packet */
-	    /* entry->okfn(entry->dp); */
+	    entry->okfn(entry->skb); 
 /* 	    dsr_dev_queue_xmit(entry->dp); */
-	    kfree_skb(entry->dp->skb);
-	    dsr_pkt_free(entry->dp);
 	    kfree(entry);
 	}
 	DEBUG("Sent %d queued pkts\n", pkts);
@@ -239,8 +238,7 @@ int p_queue_set_verdict(int verdict, struct in_addr addr)
     return pkts;
 }
 
-static int
-p_queue_get_info(char *buffer, char **start, off_t offset, int length)
+static int p_queue_get_info(char *buffer, char **start, off_t offset, int length)
 {
 	struct list_head *p;
 	int len;
@@ -252,8 +250,8 @@ p_queue_get_info(char *buffer, char **start, off_t offset, int length)
 	list_for_each_prev(p, &queue_list) {
 		struct p_queue_entry *entry = (struct p_queue_entry *)p;
 		
-		if (entry && entry->dp)
-			len += sprintf(buffer+len, "%s\n", print_ip(entry->dp->dst.s_addr));
+		if (entry && entry->skb)
+			len += sprintf(buffer+len, "%s\n", print_ip(entry->skb->nh.iph->daddr));
 	}
 
 	len += sprintf(buffer+len,
@@ -266,6 +264,7 @@ p_queue_get_info(char *buffer, char **start, off_t offset, int length)
 	
 	*start = buffer + offset;
 	len -= offset;
+
 	if (len > length)
 		len = length;
 	else if (len < 0)

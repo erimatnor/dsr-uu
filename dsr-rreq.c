@@ -160,7 +160,7 @@ int dsr_rreq_recv(dsr_pkt_t *dp)
 		dsr_rtc_add(srt_rev, 60000, 0);
 
 		/* Send buffered packets */
-		p_queue_set_verdict(P_QUEUE_SEND, srt_rev->dst);
+		p_queue_set_verdict(P_QUEUE_SEND, srt_rev->dst.s_addr);
 
 		kfree(srt_rev);
 

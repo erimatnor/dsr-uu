@@ -93,7 +93,7 @@ struct dsr_node {
 	struct in_addr bcaddr;
 	spinlock_t lock;
 };
-extern struct net_device *dsr_dev;
+
 extern struct dsr_node *dsr_node;
 
 dsr_pkt_t *dsr_pkt_alloc(void);

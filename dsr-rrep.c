@@ -147,7 +147,7 @@ int dsr_rrep_recv(dsr_pkt_t *dp)
 		DEBUG("RREP for me!\n");
 				
 		/* Send buffered packets */
-		p_queue_set_verdict(P_QUEUE_SEND, dp->srt->dst);
+		p_queue_set_verdict(P_QUEUE_SEND, dp->srt->dst.s_addr);
 				
 	} else {
 		DEBUG("I am not RREP destination\n");
