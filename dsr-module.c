@@ -359,9 +359,8 @@ static int dsr_config_proc_write(struct file* file, const char* buffer,
 }
 
 
-/* We hook in before IP's routing so that IP doesn't get a chance to drop it
- * before we can look at it... Packet to this node can go through since it will
- * be routed to us anyway */
+/* This hook is used to do mac filtering or to receive promiscuously snooped
+ * packets */
 static unsigned int dsr_pre_routing_recv(unsigned int hooknum,
 					 struct sk_buff **skb,
 					 const struct net_device *in,
@@ -381,6 +380,10 @@ static unsigned int dsr_pre_routing_recv(unsigned int hooknum,
 	}
 	return NF_ACCEPT;	
 }
+
+/* This hook is the architecturally correct place to look at DSR packets that
+ * are to be forwarded. This enables you to, for example, disable forwarding by
+ * setting "/proc/sys/net/ipv4/conf/<eth*>/forwarding" to 0. */
 static unsigned int dsr_ip_forward_recv(unsigned int hooknum,
 					struct sk_buff **skb,
 					const struct net_device *in,

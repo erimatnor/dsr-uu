@@ -29,6 +29,7 @@ class DSRUU;
 #include "timer.h"
 
 #define NO_DECLS
+#include "debug.h"
 #include "dsr.h"
 #include "dsr-opt.h"
 #include "send-buf.h"
@@ -40,7 +41,6 @@ class DSRUU;
 #include "dsr-srt.h"
 #include "neigh.h"
 #include "link-cache.h"
-#include "debug.h"
 #undef NO_DECLS
 
 typedef dsr_opt_hdr hdr_dsr;

@@ -42,7 +42,7 @@ OBJS_NS_CPP=$(NS_SRC_CPP:%.cc=%-ns.o)
 NS_DEFS= # DON'T CHANGE (overridden by NS Makefile)
 
 # Set extra DEFINES here. Link layer feedback is now a runtime option.
-EXTRA_NS_DEFS=
+EXTRA_NS_DEFS=-DDEBUG
 
 # Note: OPTS is overridden by NS Makefile
 NS_CFLAGS=$(OPTS) $(CPP_OPTS) $(DEBUG) $(NS_DEFS) $(EXTRA_NS_DEFS)
