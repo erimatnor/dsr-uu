@@ -225,7 +225,10 @@ int p_queue_set_verdict(int verdict, unsigned long daddr)
 			
 		    /* Send packet */
 		    entry->okfn(&entry->dp);
-		    
+
+		    /* Free source route */
+		    kfree(entry->dp.srt);
+
 		    kfree_skb(entry->skb); 
 	    } else {
 

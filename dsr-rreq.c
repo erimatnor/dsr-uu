@@ -109,8 +109,8 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp)
 	if (dp->src.s_addr == my_addr.s_addr)
 		return DSR_PKT_DROP;
 	
-	dp->srt = dsr_srt_new(dp->src, my_addr, 
-			      DSR_RREQ_ADDRS_LEN(dp->rreq_opt), 
+	dp->srt = dsr_srt_new(dp->src, my_addr,
+			      DSR_RREQ_ADDRS_LEN(dp->rreq_opt),
 			      (char *)dp->rreq_opt->addrs);
 
 	DEBUG("RREQ target=%s\n", print_ip(dp->rreq_opt->target));
@@ -119,7 +119,7 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp)
 	if (dp->rreq_opt->target == my_addr.s_addr) {
 		struct dsr_srt *srt_rev;
 
-		DEBUG("RREQ_OPT for me\n");
+		DEBUG("RREQ OPT for me\n");
 		
 	
 		DEBUG("srt: %s\n", print_srt(dp->srt));
@@ -127,7 +127,7 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp)
 		/* Add reversed source route */
 		srt_rev = dsr_srt_new_rev(dp->srt);
 		
-		//DEBUG("srt_rev: %s\n", print_srt(srt_rev));
+		DEBUG("srt_rev: %s\n", print_srt(srt_rev));
 
 		dsr_rtc_add(srt_rev, 60000, 0);
 		

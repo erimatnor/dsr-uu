@@ -42,6 +42,7 @@ struct dsr_pkt {
 #define DSR_PKT_SEND_ICMP      0x10
 #define DSR_PKT_DROP           0x20
 #define DSR_PKT_SEND_RREP      0x40
+#define DSR_PKT_SEND_BUFFERED  0x80
 
 /* Local device info (shared data) */
 //extern struct netdev_info ldev_info;  /* defined in dsr-dev.c */

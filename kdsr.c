@@ -68,6 +68,8 @@ static int kdsr_ip_recv(struct sk_buff *skb)
 
 	DEBUG("Received DSR packet\n");
 		
+	memset(&dp, 0, sizeof(dp));
+	
 	dp.iph = skb->nh.iph;
 		
 	if ((skb->len + (dp.iph->ihl << 2)) < ntohs(dp.iph->tot_len)) {
@@ -89,11 +91,8 @@ static int kdsr_ip_recv(struct sk_buff *skb)
 	/* Process packet */
 	action = dsr_opt_recv(&dp);  /* Kernel panics here!!! */
 
-	kfree_skb(skb);
-	return 0;
-
 	/* Add mac address of previous hop to the arp table */
-	if (dp.srt && dp.srt_opt && skb->mac.raw) {
+	if (dp.srt && skb->mac.raw) {
 		struct sockaddr hw_addr;
 		struct in_addr prev_hop;
 		struct ethhdr *eth;
@@ -119,12 +118,13 @@ static int kdsr_ip_recv(struct sk_buff *skb)
 		int removed;
 		
 		DEBUG("DSR options remove!\n");
+		
 		removed = dsr_opts_remove(&dp);
 		
-		if (removed)
-			skb_trim(skb, skb->len - removed);
-		else
-			action = DSR_PKT_ERROR;
+/* 		if (removed) */
+/* 			skb_trim(skb, skb->len - removed); */
+/* 		else */
+/* 			action = DSR_PKT_ERROR; */
 	}
 	if (action & DSR_PKT_FORWARD) {
 		DEBUG("Forwarding %s", print_ip(dp.src.s_addr));
@@ -139,16 +139,37 @@ static int kdsr_ip_recv(struct sk_buff *skb)
 			/* dev_queue_xmit(dp.skb); */
 		}
 	}
-	if (action & DSR_PKT_SEND_RREP && dp.srt) {		
-		/* send rrep.... */
+	if (action & DSR_PKT_SEND_RREP) {
+		struct dsr_srt *srt_rev;
+
 		DEBUG("Send RREP\n");
-	/* 	dsr_rrep_send(dp.srt); */
+		
+		if (dp.srt) {
+			srt_rev = dsr_srt_new_rev(dp.srt);
+			
+			DEBUG("srt_rev: %s\n", print_srt(srt_rev));
+			/* send rrep.... */
+			dsr_rrep_send(srt_rev);
+			kfree(srt_rev);
+		}
 	}
 
 	if (action & DSR_PKT_SEND_ICMP) {
 		DEBUG("Send ICMP\n");
 	}
+	if (action & DSR_PKT_SEND_BUFFERED) {
+		/* Send buffered packets */
+		if (dp.srt) {
+			p_queue_set_verdict(P_QUEUE_SEND, dp.srt->src.s_addr);
+		}
+	}
 
+	/* Free source route. Should probably think of a better way to handle
+	 * source routes that are dynamically allocated. */
+	if (dp.srt) {
+		DEBUG("Freeing source route\n");
+		kfree(dp.srt);
+	}
 	if (action & DSR_PKT_DROP || action & DSR_PKT_ERROR) {
 		DEBUG("DSR_PKT_DROP or DSR_PKT_ERROR\n");
 		kfree_skb(skb);
@@ -156,8 +177,9 @@ static int kdsr_ip_recv(struct sk_buff *skb)
 	}
 	if (action & DSR_PKT_DELIVER) {
 		DEBUG("Deliver to DSR device\n");
-		
-	/* 	dsr_dev_deliver(skb); */
+	/* 	dsr_dev_deliver(&dp); */
+		kfree_skb(skb);
+		return 0;
 	}
 
 	return 0;
@@ -170,21 +192,6 @@ static void kdsr_ip_recv_err(struct sk_buff *skb, u32 info)
 	kfree_skb(skb);
 }
 
-/* This is kind of a mess */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7)
-static struct inet_protocol dsr_inet_prot = {
-#else
-static struct net_protocol dsr_inet_prot = {
-#endif
-	.handler = kdsr_ip_recv,
-	.err_handler = kdsr_ip_recv_err,
-#ifdef KERNEL26
-	.no_policy = 1,
-#else
-	.protocol    = IPPROTO_DSR,
-	.name        = "DSR"
-#endif
-};
 
 
 int kdsr_get_hwaddr(struct in_addr addr, struct sockaddr *hwaddr, 
@@ -206,19 +213,19 @@ int kdsr_get_hwaddr(struct in_addr addr, struct sockaddr *hwaddr,
 	}
 	return -1;
 }
-struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp)
+struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp, struct net_device *dev)
 {
 	struct sk_buff *skb;
 /* 	struct ethhdr *ethh; */
 	struct sockaddr dest = {AF_UNSPEC, {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
-	struct net_device *dev;
+	/* struct net_device *dev; */
 	char *buf;
 	int ip_len;
 	int len;
 	
-	dsr_node_lock(dsr_node);
-	dev = dsr_node->slave_dev;
-	dsr_node_unlock(dsr_node);
+/* 	dsr_node_lock(dsr_node); */
+/* 	dev = dsr_node->slave_dev; */
+/* 	dsr_node_unlock(dsr_node); */
 
 	ip_len = dp->iph->ihl << 2;
 	
@@ -229,15 +236,16 @@ struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp)
 	
 	skb = alloc_skb(dev->hard_header_len + 15 + len, GFP_ATOMIC);
 	
-	if (!skb) 
+	if (!skb) {
+		DEBUG("alloc_skb failed\n");
 		return NULL;
+	}
 	
 	/* We align to 16 bytes, for ethernet: 2 bytes + 14 bytes header */
        	skb_reserve(skb, (dev->hard_header_len+15)&~15); 
 	skb->nh.raw = skb->data;
 	skb->dev = dev;
 	skb->protocol = htons(ETH_P_IP);
-/* 	ethh = (struct ethhdr *)skb->data; */
 
 	/* Copy in all the headers in the right order */
 	buf = skb_put(skb, len);
@@ -258,13 +266,11 @@ struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp)
  	if (dp->nxt_hop.s_addr != DSR_BROADCAST) {
 		
 		if (kdsr_get_hwaddr(dp->nxt_hop, &dest, dev) < 0) {
+			DEBUG("Could not get hardware address for next hop %s\n", print_ip(dp->nxt_hop.s_addr));
 			kfree_skb(skb);
 			return NULL;
 		}
 	}
-/* 	dev->rebuild_header(skb); */
-
-	/* memcpy(ethh->h_source, dev->dev_addr, dev->addr_len);	 */
 
 	if (dev->hard_header) {
 		dev->hard_header(skb, dev, ETH_P_IP,
@@ -272,20 +278,36 @@ struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp)
 	} else {
 		DEBUG("Missing hard_header\n");
 		kfree_skb(skb);
+		return NULL;
 	}
 	
 	return skb;
 }
+/* This is kind of a mess */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7)
+static struct inet_protocol dsr_inet_prot = {
+#else
+static struct net_protocol dsr_inet_prot = {
+#endif
+	.handler = kdsr_ip_recv,
+	.err_handler = kdsr_ip_recv_err,
+#ifdef KERNEL26
+	.no_policy = 1,
+#else
+	.protocol    = IPPROTO_DSR,
+	.name        = "DSR"
+#endif
+};
 
 static int __init kdsr_init(void)
 {
-	int res = 0;
+	int res = -EAGAIN;;
 
 	res = dsr_dev_init(ifname);
 
 	if (res < 0) {
 		DEBUG("dsr-dev init failed\n");
-		return -1;
+		return -EAGAIN;
 	}
 	
 	DEBUG("Creating packet queue\n"),
@@ -301,13 +323,13 @@ static int __init kdsr_init(void)
 	DEBUG("Setup finished\n");
 	return 0;
 #else
-	res = inet_add_protocol(&dsr_inet_prot, IPPROTO_DSR);
 	
-	if (res < 0) {
+	if (inet_add_protocol(&dsr_inet_prot, IPPROTO_DSR) < 0) {
 		DEBUG("Could not register inet protocol\n");
 		goto cleanup_p_queue;
 	}
-	return res;
+	DEBUG("Setup finished res=%d\n", res);
+	return 0;
 	
  cleanup_p_queue:
 	p_queue_cleanup();

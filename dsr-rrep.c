@@ -49,20 +49,13 @@ static struct dsr_rrep_opt *dsr_rrep_opt_add(char *buf, int len, struct dsr_srt 
 
 int dsr_rrep_create(struct dsr_pkt *dp, char *buf, int len)
 {
-	struct dsr_srt *srt_rev;
-	struct in_addr my_addr;
+	struct dsr_srt *srt_to_me;
 	struct dsr_pad1_opt *pad1_opt;
 
 	if (!dp || !dp->srt)
 		return -1;
 	
-	dp->dst.s_addr = dp->srt->src.s_addr;
-
-	dsr_node_lock(dsr_node);
-	my_addr = dsr_node->ifaddr;
-	dsr_node_unlock(dsr_node);
-
-	dp->iph = dsr_build_ip(buf, len, my_addr, dp->dst, 1);
+	dp->iph = dsr_build_ip(buf, len, dp->src, dp->dst, 1);
 	
 	if (!dp->iph) {
 		DEBUG("Could not create IP header\n");
@@ -84,23 +77,16 @@ int dsr_rrep_create(struct dsr_pkt *dp, char *buf, int len)
 	buf += DSR_OPT_HDR_LEN;
 	len -= DSR_OPT_HDR_LEN;
 
-/* /\* 	srt_rev = dsr_srt_new_rev(dp->srt); *\/ */
+	srt_to_me = dsr_srt_new_rev(dp->srt);
 	
-	srt_rev = dsr_rtc_find(dp->dst);
-	
-	if (!srt_rev)
+	if (!srt_to_me)
 		return -1;
 	
-	if (srt_rev->laddrs == 0) {
-		DEBUG("source route is one hop\n");
-		dp->nxt_hop.s_addr = srt_rev->dst.s_addr;
-	} else
-		dp->nxt_hop.s_addr = srt_rev->addrs[0].s_addr;
 	
 	/* Add the source route option to the packet */
-	dp->srt_opt = dsr_srt_opt_add(buf, len, srt_rev);
+	dp->srt_opt = dsr_srt_opt_add(buf, len, srt_to_me);
 
-	kfree(srt_rev);
+	kfree(srt_to_me);
 
 	if (!dp->srt_opt) {
 		DEBUG("Could not create Source Route option header\n");
@@ -130,7 +116,7 @@ int dsr_rrep_create(struct dsr_pkt *dp, char *buf, int len)
 int dsr_rrep_send(struct dsr_srt *srt)
 {
 	struct dsr_pkt dp;
-/* 	struct sk_buff *skb; */
+	struct in_addr my_addr;
 	int len, res;
 	char *buf;
 
@@ -140,36 +126,38 @@ int dsr_rrep_send(struct dsr_srt *srt)
 	}	
 	
 	memset(&dp, 0, sizeof(dp));
+	
+	dsr_node_lock(dsr_node);
+	my_addr = dsr_node->ifaddr;
+	dsr_node_unlock(dsr_node);
 
-	len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) + DSR_RREP_OPT_LEN(srt);
+	dp.dst = srt->dst;
+	dp.src = my_addr;
+	dp.nxt_hop = dsr_srt_next_hop(srt);
+	dp.srt = srt;
+
+	len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) + DSR_RREP_OPT_LEN(srt) + DSR_OPT_PAD1_LEN;
 	
 	buf = kmalloc(len, GFP_ATOMIC);
 	
 	if (!buf)
 		return -1;
 	
-	DEBUG("IP_HDR_LEN=%d DSR_OPT_HDR_LEN=%d DSR_SRT_OPT_LEN=%d DSR_RREP_OPT_LEN=%d RREP len=%d\n", IP_HDR_LEN, DSR_OPT_HDR_LEN, DSR_SRT_OPT_LEN(srt), DSR_RREP_OPT_LEN(srt), len);
+	DEBUG("IP_HDR_LEN=%d DSR_OPT_HDR_LEN=%d DSR_SRT_OPT_LEN=%d DSR_RREP_OPT_LEN=%d DSR_OPT_PAD1_LEN=%d RREP len=%d\n", IP_HDR_LEN, DSR_OPT_HDR_LEN, DSR_SRT_OPT_LEN(srt), DSR_RREP_OPT_LEN(srt), DSR_OPT_PAD1_LEN, len);
 	
-	/* Make a copy of the source route */
-	dp.srt = srt;
 	
 	DEBUG("srt: %s\n", print_srt(srt));
 
 	dp.data = NULL;
 	dp.data_len = 0;
-	
-	res = dsr_rrep_create(&dp, buf, len);
 
+	res = dsr_rrep_create(&dp, buf, len);
 
 	if (res < 0) {
 		DEBUG("Could not create RREP\n");
-	} /* else  */
-		/* dsr_dev_xmit(&dp); */
-	/* skb = kdsr_skb_create(&dp); */
-
-/* 	if (skb) */
-/* 		dev_kfree_skb(skb); */
-
+	} else
+		dsr_dev_xmit(&dp);
+	
 	kfree(buf);
 	return 0;
 }
@@ -177,7 +165,8 @@ int dsr_rrep_send(struct dsr_srt *srt)
 int dsr_rrep_opt_recv(struct dsr_pkt *dp)
 {
 	struct in_addr my_addr;
-	
+	struct dsr_srt *rrep_opt_srt;
+
 	if (!dp || !dp->rrep_opt)
 		return DSR_PKT_DROP;
 
@@ -185,29 +174,27 @@ int dsr_rrep_opt_recv(struct dsr_pkt *dp)
 	my_addr = dsr_node->ifaddr;
 	dsr_node_unlock(dsr_node);
 	
-	dp->srt = dsr_srt_new(dp->dst, dp->src, 
+	rrep_opt_srt = dsr_srt_new(dp->dst, dp->src, 
 			      DSR_RREP_ADDRS_LEN(dp->rrep_opt), 
 			      (char *)dp->rrep_opt->addrs);
 	
-	if (!dp->srt)
+	if (!rrep_opt_srt)
 		return DSR_PKT_DROP;
 	
 	DEBUG("Adding srt to cache\n");
-	dsr_rtc_add(dp->srt, 60000, 0);
+	dsr_rtc_add(rrep_opt_srt, 60000, 0);
+	
+	kfree(rrep_opt_srt);
 	
 	if (dp->dst.s_addr == my_addr.s_addr) {
 		/*RREP for this node */
 		
 		DEBUG("RREP for me!\n");
 				
-		/* Send buffered packets */
-		p_queue_set_verdict(P_QUEUE_SEND, dp->srt->dst.s_addr);
-				
-	} else {
-		DEBUG("I am not RREP destination\n");
-		/* Forward */
-		return DSR_PKT_FORWARD;
+		return DSR_PKT_DROP | DSR_PKT_SEND_BUFFERED;				
 	}
 	
-	return DSR_PKT_DROP;
+	DEBUG("I am not RREP destination\n");
+	/* Forward */
+	return DSR_PKT_FORWARD;	
 }

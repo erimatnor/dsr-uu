@@ -197,6 +197,7 @@ struct dsr_srt *dsr_rtc_find(struct in_addr addr)
 		 * return a pointer into the shared data structure */
 		srt = kmalloc(e->srt.laddrs + sizeof(struct dsr_srt), GFP_ATOMIC);
 		memcpy(srt, &e->srt, e->srt.laddrs + sizeof(struct dsr_srt));
+		read_unlock_bh(&rtc_lock);
 		return srt;
 	}	
 	read_unlock_bh(&rtc_lock);

@@ -67,16 +67,11 @@ int dsr_opts_remove(struct dsr_pkt *dp)
 	if (!dp)
 		return -1;
 
-	if (dp->dsr_opts_len > dp->data_len) {
-		DEBUG("data to short according to DSR header len=%d opt_hdr->p_len=%d!\n", dp->data_len, dp->dsr_opts_len);
-		return -1;
-	}
-	
 	/* Update IP header */
 	ip_len = (dp->iph->ihl << 2);
 
 	dp->iph->protocol = dp->opt_hdr->nh;
-	dp->iph->tot_len = htons(dp->data_len);
+	dp->iph->tot_len = htons(ip_len + dp->data_len);
 
 	ip_send_check(dp->iph);
 
@@ -120,7 +115,7 @@ int dsr_opt_recv(struct dsr_pkt *dp)
 	dopt = DSR_GET_OPT(dp->opt_hdr);
 	
 	DEBUG("Parsing DSR packet l=%d dsr_len=%d\n", l, dsr_len);
-
+		
 	while (l < dsr_len && (dsr_len - l) > 2) {
 		DEBUG("dsr_len=%d l=%d\n", dsr_len, l);
 		switch (dopt->type) {
@@ -161,6 +156,7 @@ int dsr_opt_recv(struct dsr_pkt *dp)
 		case DSR_OPT_AREQ:
 			break;
 		case DSR_OPT_PAD1:
+			DEBUG("PAD1 opt\n");
 			l++;
 			dopt++;
 			continue;

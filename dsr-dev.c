@@ -21,53 +21,46 @@
 /* Our dsr device */
 struct net_device *dsr_dev;
 struct dsr_node *dsr_node;
-/* Slave device (WiFi interface) */
-//static struct net_device *basedev = NULL;
-//static char *basedevname = NULL;
 
-
-//struct netdev_info ldev_info;
-static int dsr_dev_netdev_event(struct notifier_block *this,
-				unsigned long event, void *ptr);
-
-static struct notifier_block dsr_dev_notifier = {
-	notifier_call: dsr_dev_netdev_event,
-};
-
-static int dsr_dev_set_node_info(struct net_device *dev) 
+static int dsr_dev_inetaddr_event(struct notifier_block *this, 
+				  unsigned long event,
+				  void *ptr)
 {
-	struct in_device *indev = NULL;
-	struct in_ifaddr **ifap = NULL;
-	struct in_ifaddr *ifa = NULL;
-	struct dsr_node *dnode = dev->priv;
-
-	indev = in_dev_get(dev);
+	struct in_ifaddr *ifa = (struct in_ifaddr *)ptr;
+	struct in_device *indev;
 	
-	if (indev) {
-		for (ifap = &indev->ifa_list; (ifa = *ifap) != NULL;
-		     ifap = &ifa->ifa_next)
-			if (!strcmp(dev->name, ifa->ifa_label))
-				break;
-		
-		if (ifa) {
+	struct dsr_node *dnode;
+
+	if (!ifa)
+		return NOTIFY_DONE;
+	
+	indev = ifa->ifa_dev;
+
+	switch (event) {
+        case NETDEV_UP:
+		DEBUG("Netdev UP\n");
+		if (indev && indev->dev == dsr_dev) {
+			
+			dnode = indev->dev->priv;
+
 			dsr_node_lock(dnode);
 			dnode->ifaddr.s_addr = ifa->ifa_address;
 			dnode->bcaddr.s_addr = ifa->ifa_broadcast;
 			dsr_node_unlock(dnode);
 			
-			DEBUG("dsr ip=%s, broadcast=%s\n", 
+			DEBUG("New ip=%s, broadcast=%s\n", 
 			      print_ip(ifa->ifa_address), 
 			      print_ip(ifa->ifa_broadcast));
 		}
-		in_dev_put(indev);
-	} else {
-		DEBUG("could not get ldev_info from indev\n");
-		return -1;
-	}
-	return 1;
+		break;
+        case NETDEV_DOWN:
+		DEBUG("notifier down\n");
+                break;
+        default:
+                break;
+        };
+	return NOTIFY_DONE;
 }
-
-/* From kernel lunar */
 static int dsr_dev_netdev_event(struct notifier_block *this,
                               unsigned long event, void *ptr)
 {
@@ -79,7 +72,7 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 
 	switch (event) {
         case NETDEV_REGISTER:
-		DEBUG("notifier register %s\n", dev->name);
+		DEBUG("Netdev register %s\n", dev->name);
 		if (dnode->slave_dev == NULL && dev->get_wireless_stats) {
 			dsr_node_lock(dnode);
 			dnode->slave_dev = dev;
@@ -92,19 +85,11 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 		DEBUG("Netdev change\n");
 		break;
         case NETDEV_UP:
-	case NETDEV_CHANGEADDR:
-		DEBUG("notifier up %s\n", dev->name);
-		if (dev == dsr_dev) {
-			int res;
-			
-			res = dsr_dev_set_node_info(dev);
-
-			if (res < 0)
-				return NOTIFY_DONE;
-		}
+		DEBUG("Netdev up %s\n", dev->name);
+		
 		break;
         case NETDEV_UNREGISTER:
-		DEBUG("notifier unregister %s\n", dev->name); 
+		DEBUG("Netdev unregister %s\n", dev->name); 
 		if (dev == dnode->slave_dev) {
                         DEBUG("dsr slave interface %s went away\n", dev->name);
 			dsr_node_lock(dnode);
@@ -114,7 +99,7 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
                 }
 		break;
         case NETDEV_DOWN:
-		DEBUG("notifier down %s\n", dev->name);
+		DEBUG("Netdev down %s\n", dev->name);
 		
                 break;
 
@@ -213,20 +198,20 @@ int dsr_dev_build_hw_hdr(struct sk_buff *skb, struct sockaddr *dest)
 	return -1;
 }
 
-int dsr_dev_deliver(struct sk_buff *skb)
+int dsr_dev_deliver(struct dsr_pkt *dp)
 {	
-	struct dsr_node *dnode = skb->dev->priv;
+	struct sk_buff *skb;
 	int res;
 
-	skb->protocol = htons(ETH_P_IP);
+	skb = kdsr_skb_create(dp, dsr_dev);
+
 	skb->pkt_type = PACKET_HOST;
 	
-	dsr_node_lock(dnode);
+	dsr_node_lock(dsr_node);
 	dsr_node->stats.rx_packets++;
 	dsr_node->stats.rx_bytes += skb->len;
-	dsr_node_unlock(dnode);
+	dsr_node_unlock(dsr_node);
 
-	skb->dev = dsr_dev;
 	dst_release(skb->dst);
 	skb->dst = NULL;
 #ifdef CONFIG_NETFILTER
@@ -247,8 +232,10 @@ int dsr_dev_deliver(struct sk_buff *skb)
 int dsr_dev_xmit(struct dsr_pkt *dp)
 {
 	struct sk_buff *skb;
-
-	skb = kdsr_skb_create(dp);
+	
+	dsr_node_lock(dsr_node);
+	skb = kdsr_skb_create(dp, dsr_node->slave_dev);
+	dsr_node_unlock(dsr_node);
 
 	if (!skb) {
 		DEBUG("Could not create skb!\n");
@@ -303,6 +290,8 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 			/* Send packet */
 			dsr_dev_xmit(&dp);
 
+			kfree(dp.srt);
+
 		} else {			
 			res = p_queue_enqueue_packet(&dp, skb, dsr_dev_xmit);
 			
@@ -329,6 +318,14 @@ static struct net_device_stats *dsr_dev_get_stats(struct net_device *dev)
 {
 	return &(((struct dsr_node*)dev->priv)->stats);
 }
+
+static struct notifier_block netdev_notifier = {
+	notifier_call: dsr_dev_netdev_event,
+};
+/* Notifier for inetaddr addition/deletion events.  */
+static struct notifier_block inetaddr_notifier = {
+	.notifier_call = dsr_dev_inetaddr_event,
+};
 
 int __init dsr_dev_init(char *ifname)
 { 
@@ -389,15 +386,20 @@ int __init dsr_dev_init(char *ifname)
 	if (res < 0)
 		goto cleanup_netdev;
 
-	res = register_netdevice_notifier(&dsr_dev_notifier);
-
+	res = register_netdevice_notifier(&netdev_notifier);
+	
 	if (res < 0)
 		goto cleanup_netdev_register;
 	
+	res = register_inetaddr_notifier(&inetaddr_notifier);
+		
+	if (res < 0)
+		goto cleanup_netdevice_notifier;
 	/* We must increment usage count since we hold a reference */
 	dev_hold(dsr_dev);
 	return res;
-	
+ cleanup_netdevice_notifier:
+	unregister_netdevice_notifier(&netdev_notifier);
  cleanup_netdev_register:
 	unregister_netdev(dsr_dev);
  cleanup_netdev:
@@ -407,7 +409,8 @@ int __init dsr_dev_init(char *ifname)
 
 void __exit dsr_dev_cleanup(void)
 {
-        unregister_netdevice_notifier(&dsr_dev_notifier);
+        unregister_netdevice_notifier(&netdev_notifier);
+	unregister_inetaddr_notifier(&inetaddr_notifier);
 	unregister_netdev(dsr_dev);
 	free_netdev(dsr_dev);
 }

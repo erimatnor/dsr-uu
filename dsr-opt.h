@@ -30,8 +30,10 @@ struct dsr_pad1_opt {
 
 /* Header lengths */
 #define DSR_OPT_HDR_LEN sizeof(struct dsr_opt_hdr)
+#define DSR_OPT_PAD1_LEN 1
 #define DSR_PKT_MIN_LEN 24 /* IP header + DSR header =  20 + 4 */
 
+/* Header types */
 #define DSR_OPT_PADN       0
 #define DSR_OPT_RREP       1
 #define DSR_OPT_RREQ       2
