@@ -1,6 +1,8 @@
 #include "dsr.h"
 #include "debug.h"
 #include "tbl.h"
+#include "neigh.h"
+#include "dsr-ack.h"
 
 #define MAINT_BUF_MAX_LEN 100
 
@@ -76,6 +78,9 @@ int maint_buf_add(struct dsr_pkt *dp)
 		kfree(me);
 		return -1;
 	}
+	
+	dsr_ack_req_send(dp->nxt_hop, neigh_tbl_get_id(dp->nxt_hop));
+
 	return 1;
 }
 
@@ -87,5 +92,9 @@ int maint_buf_del(struct in_addr nxt_hop)
 void maint_buf_rexmt(struct in_addr nxt_hop)
 {
 	tbl_do_for_each(&maint_buf, &nxt_hop, crit_nxt_hop_rexmt);
+}
 
+void maint_buf_cleanup(void)
+{
+	tbl_flush(&maint_buf, crit_none);
 }

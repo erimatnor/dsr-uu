@@ -20,5 +20,6 @@ struct neighbor {
 
 int neigh_tbl_add(struct in_addr neigh_addr, struct sockaddr *hw_addr);
 int neigh_tbl_get_hwaddr(struct in_addr neigh_addr, struct sockaddr *hw_addr);
+unsigned int neigh_tbl_get_id(struct in_addr neigh_addr);
 
 #endif /* _NEIGH_H */

@@ -15,8 +15,6 @@ unsigned short ID = 0;
 #define MAX_AREQ_TX 2
 
 int dsr_send_ack_req(struct in_addr, unsigned short id);
-static int dsr_ack_req_send(struct neighbor *neigh);
-static int dsr_ack_send(struct neighbor *neigh);
 
 struct dsr_ack_opt *dsr_ack_opt_add(char *buf, int len, struct in_addr addr, unsigned short id)
 {
@@ -36,29 +34,26 @@ struct dsr_ack_opt *dsr_ack_opt_add(char *buf, int len, struct in_addr addr, uns
 }
 
 
-static int dsr_ack_send(struct neighbor *neigh)
+static int dsr_ack_send(struct in_addr neigh_addr, unsigned int id)
 {
 	struct dsr_pkt *dp;
 	struct dsr_ack_opt *ack_opt;
 	int len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_ACK_HDR_LEN;
 	char *buf;
 
-	if (!neigh)
-		return -1;
-
 	dp = dsr_pkt_alloc(NULL, len);
 	
 	dp->data = NULL; /* No data in this packet */
 	dp->data_len = 0;
-	dp->dst = neigh->addr;
-	dp->nxt_hop = neigh->addr;
+	dp->dst = neigh_addr;
+	dp->nxt_hop = neigh_addr;
 	dp->dsr_opts_len = len;
 	dp->src = my_addr();
 
 	buf = dp->dsr_data;	
 
 	dp->nh.iph = dsr_build_ip(buf, IP_HDR_LEN, IP_HDR_LEN + len, 
-				 dp->src, dp->dst, 1);
+				  dp->src, dp->dst, 1);
 	
 	if (!dp->nh.iph) {
 		DEBUG("Could not create IP header\n");
@@ -78,7 +73,7 @@ static int dsr_ack_send(struct neighbor *neigh)
 	buf += DSR_OPT_HDR_LEN;
 	len -= DSR_OPT_HDR_LEN;
 	
-	ack_opt = dsr_ack_opt_add(buf, len, neigh->addr, neigh->id_ack);
+	ack_opt = dsr_ack_opt_add(buf, len, neigh_addr, id);
 
 	if (!ack_opt) {
 		DEBUG("Could not create DSR ACK opt header\n");
@@ -87,9 +82,9 @@ static int dsr_ack_send(struct neighbor *neigh)
 	
 	dp->nh.iph->ttl = 1;
 
-	DEBUG("Sending ACK for %s\n", print_ip(neigh->addr.s_addr));
+	DEBUG("Sending ACK for %s\n", print_ip(neigh_addr.s_addr));
 	
-	neigh->last_ack_tx_time = jiffies;
+/* 	neigh->last_ack_tx_time = jiffies; */
 
 	dsr_dev_xmit(dp);
 	
@@ -104,7 +99,6 @@ struct dsr_ack_req_opt *dsr_ack_req_opt_add(char *buf, int len,
 					    struct in_addr addr)
 {
 	struct dsr_ack_req_opt *ack_req = (struct dsr_ack_req_opt *)buf;
-	struct neighbor *neigh;
 	
 	if (len < DSR_ACK_REQ_HDR_LEN)
 		return NULL;
@@ -140,22 +134,19 @@ struct dsr_ack_req_opt *dsr_ack_req_opt_add(char *buf, int len,
 	return ack_req;
 }
 
-static int dsr_ack_req_send(struct neighbor *neigh)
+int dsr_ack_req_send(struct in_addr neigh_addr, unsigned int id)
 {
 	struct dsr_pkt *dp;
 	struct dsr_ack_req_opt *ack_req;
 	int len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_ACK_REQ_HDR_LEN;
 	char *buf;
 	
-	if (!neigh)
-		return -1;
-	
 	dp = dsr_pkt_alloc(NULL, len);
 
 	dp->data = NULL; /* No data in this packet */
 	dp->data_len = 0;
-	dp->dst = neigh->addr;
-	dp->nxt_hop = neigh->addr;
+	dp->dst = neigh_addr;
+	dp->nxt_hop = neigh_addr;
 	dp->dsr_opts_len = len;
 	dp->src = my_addr();
 
@@ -182,14 +173,14 @@ static int dsr_ack_req_send(struct neighbor *neigh)
 	buf += DSR_OPT_HDR_LEN;
 	len -= DSR_OPT_HDR_LEN;
 	
-	ack_req = dsr_ack_req_opt_add(buf, len, neigh->addr);
+	ack_req = dsr_ack_req_opt_add(buf, len, neigh_addr);
 
 	if (!ack_req) {
 		DEBUG("Could not create ACK REQ opt\n");
 		goto out_err;
 	}
 	
-	DEBUG("Sending ACK REQ for %s id=%u\n", print_ip(neigh->addr.s_addr), neigh->id_req);
+	DEBUG("Sending ACK REQ for %s id=%u\n", print_ip(neigh_addr.s_addr), id);
 
 	dsr_dev_xmit(dp);
 	

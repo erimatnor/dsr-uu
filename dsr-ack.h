@@ -26,6 +26,7 @@ struct dsr_ack_req_opt *dsr_ack_req_opt_add(char *buf, int len, struct in_addr n
 int dsr_ack_add_ack_req(struct in_addr neigh);
 int dsr_ack_opt_recv(struct dsr_ack_opt *ack);
 int dsr_ack_req_opt_recv(struct dsr_pkt *dp, struct dsr_ack_req_opt *areq);
+int dsr_ack_req_send(struct in_addr neigh_addr, unsigned int id);
 
 int neigh_tbl_init(void);
 void neigh_tbl_cleanup(void);

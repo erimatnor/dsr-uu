@@ -44,6 +44,22 @@ static inline int crit_addr_get_hwaddr(void *pos, void *data)
 	}
 	return 0;
 }
+static inline int crit_addr_get_id(void *pos, void *data)
+{
+	struct {
+		struct in_addr *a;
+		unsigned int *id;
+	} *d;
+	
+	struct neighbor *e = pos;
+	d = data;
+
+	if (e->addr.s_addr == d->a->s_addr) {
+		d->id = e->id_req++;
+		return 1;
+	}
+	return 0;
+}
 
 static inline int timer_remove(void *entry, void *data)
 {
@@ -211,6 +227,22 @@ int neigh_tbl_get_hwaddr(struct in_addr neigh_addr, struct sockaddr *hw_addr)
 	return in_tbl(&neigh_tbl, &data, crit_addr_get_hwaddr);
 }
 
+unsigned int neigh_tbl_get_id(struct in_addr neigh_addr)
+{
+	unsigned int id;
+
+	struct {
+		struct in_addr *a;
+		unsigned int *id;
+	} data;
+	
+	data.a = &neigh_addr;
+	data.id = &id;
+	
+	in_tbl(&neigh_tbl, &data, crit_addr_get_id);
+	
+	return id;
+}
 
 static int neigh_tbl_print(char *buf)
 {

@@ -290,25 +290,25 @@ static void dsr_ip_recv_err(struct sk_buff *skb, u32 info)
 
 
 
-static int dsr_get_hwaddr(struct in_addr addr, struct sockaddr *hwaddr, 
-			  struct net_device *dev)
-{	
-	struct neighbour *neigh;
+/* static int dsr_get_hwaddr(struct in_addr addr, struct sockaddr *hwaddr,  */
+/* 			  struct net_device *dev) */
+/* {	 */
+/* 	struct neighbour *neigh; */
 
-	neigh = neigh_lookup(&arp_tbl, &addr.s_addr, dev);
+/* 	neigh = neigh_lookup(&arp_tbl, &addr.s_addr, dev); */
 	
-	if (neigh) {
+/* 	if (neigh) { */
 		
-		hwaddr->sa_family = AF_UNSPEC;
+/* 		hwaddr->sa_family = AF_UNSPEC; */
 	      
-		read_lock_bh(&neigh->lock);
-		memcpy(hwaddr->sa_data, neigh->ha, ETH_ALEN);
-		read_unlock_bh(&neigh->lock);
+/* 		read_lock_bh(&neigh->lock); */
+/* 		memcpy(hwaddr->sa_data, neigh->ha, ETH_ALEN); */
+/* 		read_unlock_bh(&neigh->lock); */
 
-		return 0;
-	}
-	return -1;
-}
+/* 		return 0; */
+/* 	} */
+/* 	return -1; */
+/* } */
 
 struct sk_buff *dsr_skb_create(struct dsr_pkt *dp,
 			       struct net_device *dev)
@@ -596,6 +596,7 @@ static void __exit dsr_module_cleanup(void)
 	dsr_dev_cleanup();
 	rreq_tbl_cleanup();
 	neigh_tbl_cleanup();
+	maint_buf_cleanup();
 #ifdef DEBUG
 	dbg_cleanup();
 #endif
