@@ -161,22 +161,30 @@ static int dsr_ip_recv(struct sk_buff *skb)
 	/* Add mac address of previous hop to the arp table */
 	if (dp->srt && skb->mac.raw) {
 		struct sockaddr hw_addr;
-		struct in_addr prev_hop;
 		struct ethhdr *eth;
 		
 		eth = (struct ethhdr *)skb->mac.raw;
 			
 		memcpy(hw_addr.sa_data, eth->h_source, ETH_ALEN);
 		
-		prev_hop = dsr_srt_prev_hop(dp->srt);
+		dp->prv_hop = dsr_srt_prev_hop(dp->srt);
 		
-		neigh_tbl_add(prev_hop, &hw_addr);
+		neigh_tbl_add(dp->prv_hop, &hw_addr);
 	}
 
 	if (action & DSR_PKT_DROP || action & DSR_PKT_ERROR) {
 		DEBUG("DSR_PKT_DROP or DSR_PKT_ERROR\n");
 		dsr_pkt_free(dp);
 		return 0;
+	}
+	if (action & DSR_PKT_SEND_ACK && dp->ack_req_opt && dp->srt) {
+		unsigned short id = ntohs(dp->ack_req_opt->id);
+				
+		DEBUG("send ACK: src=%s prv=%s id=%u\n", 
+		      print_ip(dp->src.s_addr), 
+		      print_ip(dp->prv_hop.s_addr), id);
+		
+		dsr_ack_send(dp->prv_hop, id);
 	}
 
 	if (action & DSR_PKT_FORWARD) {
@@ -197,7 +205,6 @@ static int dsr_ip_recv(struct sk_buff *skb)
 	if (action & DSR_PKT_FORWARD_RREQ) {
 		dsr_dev_xmit(dp);
 		return 0;
-
 	}
 
 	if (action & DSR_PKT_SEND_RREP) {
@@ -208,14 +215,6 @@ static int dsr_ip_recv(struct sk_buff *skb)
 			/* send rrep.... */
 			dsr_rrep_send(dp->srt);
 		}
-	}
-	if (action & DSR_PKT_SEND_ACK &&
-	    dp->ack_req_opt) {
-		unsigned short id = ntohs(dp->ack_req_opt->id);
-
-		DEBUG("ACK REQ: src=%s id=%u\n", print_ip(dp->src.s_addr), id);
-		
-		dsr_ack_send(dp->src, id);
 	}
 
 	if (action & DSR_PKT_SEND_ICMP) {

@@ -12,6 +12,7 @@ struct dsr_pkt {
 	struct in_addr src;   /* IP level data */
 	struct in_addr dst;
        	struct in_addr nxt_hop;
+       	struct in_addr prv_hop;
 	char ip_data[60];
 	union {
 		struct iphdr *iph;

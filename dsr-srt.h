@@ -48,6 +48,7 @@ struct dsr_srt {
 	struct in_addr src;
 	struct in_addr dst;
 	unsigned short flags;
+	unsigned short index;
 	unsigned int laddrs;  /* length in bytes if addrs */
 	struct in_addr addrs[0];  /* Intermediate nodes */
 };

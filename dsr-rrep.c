@@ -295,7 +295,7 @@ int dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 	myaddr = my_addr();
 	
 	rrep_opt_srt = dsr_srt_new(dp->dst, dp->src, 
-				   DSR_RREP_ADDRS_LEN(rrep_opt), 
+				   DSR_RREP_ADDRS_LEN(rrep_opt),
 				   (char *)rrep_opt->addrs);
 	
 	if (!rrep_opt_srt)

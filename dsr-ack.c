@@ -137,6 +137,13 @@ struct dsr_ack_req_opt *dsr_ack_req_opt_add(struct dsr_pkt *dp, unsigned short i
 	if (!dp)
 		return NULL;
 
+	/* If we are forwarding a packet and there is already an ACK REQ option,
+	 * we just overwrite the old one. */
+	if (dp->ack_req_opt) {
+		DEBUG("Found existing header, using...\n");
+		buf = (char *)dp->ack_req_opt;
+		goto end;
+	}
 	if (dp->nh.raw) {
 			tot_len = ntohs(dp->nh.iph->tot_len);
 			prot = dp->nh.iph->protocol;
@@ -177,7 +184,7 @@ struct dsr_ack_req_opt *dsr_ack_req_opt_add(struct dsr_pkt *dp, unsigned short i
 
 		dp->dh.opth->p_len = htons(ntohs(dp->dh.opth->p_len) + DSR_ACK_REQ_HDR_LEN);
 	}
-	
+ end:		
 	return dsr_ack_req_opt_create(buf, DSR_ACK_REQ_HDR_LEN, id);
 }
 
@@ -250,9 +257,9 @@ int dsr_ack_req_opt_recv(struct dsr_pkt *dp, struct dsr_ack_req_opt *ack_req_opt
 	DEBUG("ACK REQ: src=%s id=%u\n", 
 	      print_ip(dp->src.s_addr), id);
 		
-	dsr_ack_send(dp->src, id);
+/* 	dsr_ack_send(dp->src, id); */
 
-	return DSR_PKT_NONE;
+	return DSR_PKT_SEND_ACK;
 }
 
 

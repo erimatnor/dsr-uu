@@ -102,6 +102,7 @@ struct dsr_srt *dsr_srt_new(struct in_addr src, struct in_addr dst,
 	sr->src.s_addr = src.s_addr;
 	sr->dst.s_addr = dst.s_addr;
 	sr->laddrs = length;
+/* 	sr->index = index; */
 	
 	if (length != 0 && addrs)
 		memcpy(sr->addrs, addrs, length);
@@ -222,6 +223,9 @@ int dsr_srt_opt_recv(struct dsr_pkt *dp)
 	if (!dp || !dp->srt_opt)
 		return DSR_PKT_ERROR;
 	
+	/* We should add this source route info to the cache... */
+	n = (dp->srt_opt->length - 2) / sizeof(struct in_addr);
+	
 	dp->srt = dsr_srt_new(dp->src, dp->dst, dp->srt_opt->length, 
 			      (char *)dp->srt_opt->addrs);
 	
@@ -232,8 +236,6 @@ int dsr_srt_opt_recv(struct dsr_pkt *dp)
 	
 	DEBUG("Source route: %s\n", print_srt(dp->srt));
 
-	/* We should add this source route info to the cache... */
-	n = (dp->srt_opt->length - 2) / sizeof(struct in_addr);
 
 	dsr_rtc_add(dp->srt, 60000, 0);
 	

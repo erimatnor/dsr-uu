@@ -100,15 +100,12 @@ int maint_buf_add(struct dsr_pkt *dp)
 
 	dsr_ack_req_opt_add(dp, id);
 		
-/* 	neigh_tbl_set_ack_req_timer(dp->nxt_hop); */
-	
 	rto = neigh_tbl_get_rto(dp->nxt_hop);
 	
 	if (!timer_pending(&ack_timer)) {
 		ack_timer.expires = tx_time + rto;
 		DEBUG("jiff=%lu exp=%lu\n", jiffies, ack_timer.expires);
 		add_timer(&ack_timer);
-	
 	}
 	
 	return 1;
@@ -131,7 +128,7 @@ static void maint_buf_timeout(unsigned long data)
 
 	me->rexmt++;
 	
-	if (me->rexmt >= MAX_REXMT) {
+	if (me->rexmt >= PARAM(MaxMaintRexmt)) {
 		DEBUG("Rexmt max reached, send RERR\n");
 		lc_link_del(my_addr(), me->nxt_hop);
 		neigh_tbl_del(me->nxt_hop);
@@ -147,7 +144,7 @@ static void maint_buf_timeout(unsigned long data)
 	
 	read_lock_bh(&maint_buf.lock);
 	
-	dsr_ack_req_send(neigh_addr, id);
+	dsr_ack_req_send(me->nxt_hop, id);
 
 	me = __tbl_find(&maint_buf, NULL, crit_none);
 
@@ -166,11 +163,9 @@ static void maint_buf_timeout(unsigned long data)
 		maint_buf_timeout(0);
 		return;
 	}
-
 	ack_timer.expires = tx_time + rto;
 
 	DEBUG("jiff=%lu exp=%lu\n", jiffies, ack_timer.expires);
-
 
 	add_timer(&ack_timer);
 
