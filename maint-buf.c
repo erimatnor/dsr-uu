@@ -107,7 +107,7 @@ static inline int crit_nxt_hop_rexmt(void *pos, void *nh)
 	
 	if (m->nxt_hop.s_addr == nxt_hop->s_addr) {
 		m->rexmt++;
-		do_gettimeofday(&m->tx_time);
+		gettime(&m->tx_time);
 		return 1;
 	}
 	return 0;
@@ -131,7 +131,7 @@ static struct maint_entry *maint_entry_create(struct dsr_pkt *dp,
 		return NULL;
 	
 	m->nxt_hop = dp->nxt_hop;
-	do_gettimeofday(&m->tx_time);
+	gettime(&m->tx_time);
 	m->rexmt = 0;
 	m->id = id;
 	m->rto = rto;
@@ -176,7 +176,7 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 		return -1;
 	}
 	
-	if (CONFVAL(UseNetworkLayerAck)) {
+	if (ConfVal(UseNetworkLayerAck)) {
 		dsr_ack_req_opt_add(dp, m->id);
 		
 		if (empty)
@@ -188,14 +188,14 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 void NSCLASS maint_buf_set_timeout(void)
 {
 	struct maint_entry *m;
-	unsigned long rto;
-	struct timeval tx_time, now;
+	usecs_t rto;
+	struct timeval tx_time, now, expires;
 	
-	do_gettimeofday(&now);
+	gettime(&now);
 
 	DSR_WRITE_LOCK(&maint_buf.lock);
 	/* Get first packet in maintenance buffer */
-	m = (struct maint_entry *)__tbl_find(&maint_buf, NULL, crit_none);
+	m = (struct maint_entry *)TBL_FIRST(&maint_buf);
 	
 	if (!m) {
 		DEBUG("No packet to set timeout for\n");
@@ -208,14 +208,19 @@ void NSCLASS maint_buf_set_timeout(void)
 	m->timer_set = 1;
 
 	DSR_WRITE_UNLOCK(&maint_buf.lock);
-	
-/* 	DEBUG("now=%lu exp=%lu\n", now, tx_time + rto); */
 
 	/* Check if this packet has already expired */
 	if (timeval_diff(&now, &tx_time) > rto) 
 		maint_buf_timeout(0);
-	else 
-		timer_set(&ack_timer, rto);
+	else {
+		expires = now;
+		timeval_add_usecs(&expires, rto);
+		DEBUG("ACK Timer: exp=%ld.%06ld now=%ld.%06ld\n", 
+		      expires.tv_sec, expires.tv_usec, 
+		      now.tv_sec, now.tv_usec);
+		
+		set_timer(&ack_timer, &expires);
+	}
 }
 
 
@@ -239,7 +244,7 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 	m->timer_set = 0;
 
 	/* Increase the number of retransmits */	
-	if (++m->rexmt >= CONFVAL(MaxMaintRexmt)) {
+	if (++m->rexmt >= ConfVal(MaxMaintRexmt)) {
 		DEBUG("MaxMaintRexmt reached, send RERR\n");
 		lc_link_del(my_addr(), m->nxt_hop);
 
@@ -254,7 +259,7 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 	} 
 	
 	/* Set new Transmit time */
-	do_gettimeofday(&m->tx_time);
+	gettime(&m->tx_time);
 		
 	/* Send new ACK REQ */
 	dsr_ack_req_send(m->nxt_hop, m->id);
@@ -313,8 +318,12 @@ static int maint_buf_get_info(char *buffer, char **start, off_t offset, int leng
 {
 	list_t *p;
 	int len;
+	struct timeval now;
 
-	len = sprintf(buffer, "# %-15s %-6s %-6s %-8s\n", "IPAddr", "Rexmt", "Id", "TxTime");
+	gettime(&now);
+
+	len = sprintf(buffer, "# %-15s %-6s %-6s %-8s\n", 
+		      "IPAddr", "Rexmt", "Id", "TxTime");
 
 	DSR_READ_LOCK(&maint_buf.lock);
 
@@ -324,7 +333,7 @@ static int maint_buf_get_info(char *buffer, char **start, off_t offset, int leng
 		if (e && e->dp)
 			len += sprintf(buffer+len, "  %-15s %-6d %-6u %-8lu\n",
 				       print_ip(e->dp->dst), e->rexmt, e->id, 
-				       (TimeNow - e->tx_time) / HZ);
+				       timeval_diff(&now, &e->tx_time));
 	}
 
 	len += sprintf(buffer+len,

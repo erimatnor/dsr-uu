@@ -32,7 +32,7 @@ static DSRUUTimer send_buf_timer;
 struct send_buf_entry {
 	list_t l;
 	struct dsr_pkt *dp;
-	Time qtime;
+	struct timeval qtime;
 	xmit_fct_t okfn;
 };
 
@@ -48,10 +48,11 @@ static inline int crit_addr(void *pos, void *addr)
 
 static inline int crit_garbage(void *pos, void *n)
 {
-	Time *now = (Time *)n; 
+	struct timeval *now = (struct timeval *)n; 
 	struct send_buf_entry *e = (struct send_buf_entry *)pos;
 	
-	if (e->qtime + SECONDS(CONFVAL(SendBufferTimeout)) < *now) {
+	if (timeval_diff(now, &e->qtime) >= 
+	    ConfValToUsecs(SendBufferTimeout)) {
 		if (e->dp)
 			dsr_pkt_free(e->dp);
 		return 1;
@@ -68,7 +69,9 @@ void NSCLASS send_buf_timeout(unsigned long data)
 {
 	struct send_buf_entry *e;
 	int pkts;
-	Time qtime, now = TimeNow;	
+	struct timeval expires, now;	
+	
+	gettime(&now);
 	
 	pkts = tbl_for_each_del(&send_buf, &now, crit_garbage);
 
@@ -83,12 +86,13 @@ void NSCLASS send_buf_timeout(unsigned long data)
 		DSR_READ_UNLOCK(&send_buf.lock);
 		return;
 	}
-	qtime = e->qtime;
-
+	expires = e->qtime;
+	
+	timeval_add_usecs(&expires, ConfValToUsecs(SendBufferTimeout));
+	
 	DSR_READ_UNLOCK(&send_buf.lock);
 	
-	send_buf_timer.expires = qtime + SECONDS(CONFVAL(SendBufferTimeout));
-	add_timer(&send_buf_timer);
+	set_timer(&send_buf_timer, &expires);
 }
 
 
@@ -104,7 +108,7 @@ static struct send_buf_entry *send_buf_entry_create(struct dsr_pkt *dp,
 
 	e->dp = dp;
 	e->okfn = okfn;
-	e->qtime = TimeNow;
+	gettime(&e->qtime);
 
 	return e;
 }
@@ -112,6 +116,7 @@ static struct send_buf_entry *send_buf_entry_create(struct dsr_pkt *dp,
 int NSCLASS send_buf_enqueue_packet(struct dsr_pkt *dp, xmit_fct_t okfn)
 {
 	struct send_buf_entry *e;
+	struct timeval expires;
 	int res, empty = 0;
 	
 	if (TBL_EMPTY(&send_buf))
@@ -147,8 +152,9 @@ int NSCLASS send_buf_enqueue_packet(struct dsr_pkt *dp, xmit_fct_t okfn)
 	}
 		
 	if (empty) {
-		send_buf_timer.expires = TimeNow + SECONDS(CONFVAL(SendBufferTimeout));
-		add_timer(&send_buf_timer);
+		gettime(&expires);
+		timeval_add_usecs(&expires, ConfValToUsecs(SendBufferTimeout));
+		set_timer(&send_buf_timer, &expires);
 	}
 
 	return res;
@@ -229,6 +235,9 @@ static int send_buf_get_info(char *buffer, char **start, off_t offset, int lengt
 {
 	list_t *p;
 	int len;
+	struct timeval now;
+	
+	gettime(&now);
 
 	len = sprintf(buffer, "# %-15s %-8s\n", "IPAddr", "Age (s)");
 
@@ -238,7 +247,7 @@ static int send_buf_get_info(char *buffer, char **start, off_t offset, int lengt
 		struct send_buf_entry *e = (struct send_buf_entry *)p;
 		
 		if (e && e->dp)
-			len += sprintf(buffer+len, "  %-15s %-8lu\n", print_ip(e->dp->dst), (TimeNow - e->qtime) / HZ);
+			len += sprintf(buffer+len, "  %-15s %-8lu\n", print_ip(e->dp->dst), timeval_diff(&now, &e->qtime) / 1000000);
 	}
 
 	len += sprintf(buffer+len,

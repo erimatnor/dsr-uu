@@ -72,8 +72,6 @@ DSRUU::~DSRUU()
 	exit(-1);
 }
 
-
-
 int
 DSRUU::trace(const char *func, const char *fmt, ...)
 {
@@ -264,7 +262,7 @@ DSRUU::xmit(struct dsr_pkt *dp)
 	double jitter = 0.0;
 	
 	if ((DATA_PACKET(dp->dh.opth->nh) || dp->dh.opth->nh == PT_PING) && 
-	    CONFVAL(UseNetworkLayerAck))
+	    ConfVal(UseNetworkLayerAck))
 		maint_buf_add(dp);
 	
 	p = ns_packet_create(dp);
@@ -292,7 +290,8 @@ DSRUU::xmit(struct dsr_pkt *dp)
 	/* Set packet fields depending on packet type */
 	if (iph->daddr() == DSR_BROADCAST) {
 		/* Broadcast packet */
-		jitter = (CONFVAL(BroadCastJitter) / 1000) * Random::uniform();
+		jitter = (ConfValToUsecs(BroadCastJitter) / 1000000) * 
+			Random::uniform();
 	}
 		
 	Scheduler::instance().schedule(ll_, p, jitter);
@@ -437,6 +436,8 @@ DSRUU::command(int argc, const char* const* argv)
 void
 DSRUUTimer::expire (Event *e)
 {
-	a_->trace(__FUNCTION__, "%s Interrupt\n", name_);
-	(a_->*function)(data);
+	if (a_) {
+		a_->trace(__FUNCTION__, "%s Interrupt\n", name_);
+		(a_->*function)(data);
+	}
 }

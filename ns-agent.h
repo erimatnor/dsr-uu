@@ -21,11 +21,13 @@ class DSRUU;
 #include <linux/if_ether.h>
 
 #define NSCLASS DSRUU::
-#define CONFVAL(name) DSRUU::get_confval(name)
+#define ConfVal(name) DSRUU::get_confval(name)
+#define ConfValToUsecs(cv) DSRUU::confval_to_usecs(cv)
 
 #include "tbl.h"
 #include "endian.h"
 #include "timer.h"
+
 #define NO_DECLS
 #include "dsr.h"
 #include "dsr-opt.h"
@@ -44,13 +46,11 @@ class DSRUU;
 typedef dsr_opt_hdr hdr_dsr;
 #define HDR_DSRUU(p) ((hdr_dsr *)hdr_dsr::access(p))
 
-#define TimeNow Scheduler::instance().clock()
-
 #define init_timer(timer)
 #define timer_pending(timer) ((timer)->status() == TIMER_PENDING)
 #define del_timer_sync(timer) del_timer(timer)
-#define MALLOC(s, p)        malloc(s)
-#define FREE(p)             free(p)
+#define MALLOC(s, p) malloc(s)
+#define FREE(p) free(p)
 #define XMIT(pkt) xmit(pkt)
 #define DELIVER(pkt) deliver(pkt)
 #define __init
@@ -92,19 +92,29 @@ class DSRUU : public Agent {
 /* 	void tap(const Packet *p); */
 	// tap out all data packets received at this host and promiscously snoop
 	// them for interesting tidbits
-	struct hdr_ip *	dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, struct in_addr dst, int ip_len, int tot_len, int protocol, int ttl);
-	void add_timer (DSRUUTimer *t) { t->resched(t->expires); }
+	struct hdr_ip *	dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, 
+				     struct in_addr dst, int ip_len, 
+				     int tot_len, int protocol, int ttl);
+	void add_timer (DSRUUTimer *t) { 
+		//printf("Setting timer %s to %f\n", t->get_name(), t->expires - Scheduler::instance().clock());
+		t->resched(t->expires - Scheduler::instance().clock()); }
 /* 	void mod_timer (DSRUUTimer *t, unsinged long expires_)  */
 /* 		{ t->expires = expires_ ; t->resched(t->expires); } */
-	void del_timer (DSRUUTimer *t) { t->cancel(); }
-	void timer_set(DSRUUTimer *t, struct timeval *expires) {
-		t->expires = expires->tv_sec + expires->tv_usec / 1000000l;
+	void del_timer (DSRUUTimer *t) { 
+		//printf("Cancelling timer %s\n", t->get_name());
+		t->cancel(); }
+	void set_timer(DSRUUTimer *t, struct timeval *expires) {
+		//printf("In set_timer\n");
+		t->expires = expires->tv_usec;
+		t->expires /= 1000000l;
+		t->expires += expires->tv_sec;
 		add_timer(t);
 	}
 	static const unsigned int get_confval(enum confval cv) 
 		{ return confvals[cv]; }
 	static const unsigned int set_confval(enum confval cv, unsigned int val)
 		{ confvals[cv] = val; return val; }
+	
 #define NO_GLOBALS
 #undef NO_DECLS
 

@@ -33,7 +33,7 @@ static struct lc_graph LC;
 #define LC_HOPS_INF UINT_MAX
 
 #ifdef LC_TIMER
-#define LC_GARBAGE_COLLECT_INTERVAL 5 /* Seconds */
+#define LC_GARBAGE_COLLECT_INTERVAL 5 * 1000000/* 5 Seconds */
 #endif /* LC_TIMER */
 
 struct lc_node {
@@ -52,7 +52,7 @@ struct lc_link {
 	struct lc_node *src, *dst;
 	int status;
 	unsigned int cost;
-	Time expire;
+	struct timeval expires;
 };
 
 struct link_query {
@@ -99,8 +99,11 @@ static inline int crit_expire(void *pos, void *data)
 {
 	struct lc_link *link = (struct lc_link *)pos;
 	struct lc_graph *lc = (struct lc_graph *)data;
+	struct timeval now;
 	
-	if (link->expire < TimeNow) {
+	gettime(&now);
+	
+	if (timeval_diff(&link->expires, &now) <= 0) {
 		__lc_link_del(lc, link);
 		return 1;
 	}
@@ -176,7 +179,8 @@ void NSCLASS lc_garbage_collect(unsigned long data)
 void NSCLASS lc_garbage_collect_set(void)
 {
 	DSRUUTimer *lctimer;
-
+	struct timeval expires;
+	
 #ifdef NS2
 	lctimer = &lc_timer;
 #else
@@ -185,8 +189,11 @@ void NSCLASS lc_garbage_collect_set(void)
 
 	lctimer->function = &NSCLASS lc_garbage_collect;
 	lctimer->data = 0;
-	lctimer->expires = TimeNow + SECONDS(LC_GARBAGE_COLLECT_INTERVAL);
-	add_timer(lctimer);
+	
+	gettime(&expires);
+	timeval_add_usecs(&expires, LC_GARBAGE_COLLECT_INTERVAL);
+		
+	set_timer(lctimer, &expires);
 }
 
 #endif /* LC_TIMER */
@@ -221,7 +228,7 @@ static inline struct lc_link *__lc_link_find(struct tbl *t,
 }
 
 static int __lc_link_tbl_add(struct tbl *t, struct lc_node *src, 
-			     struct lc_node *dst, unsigned long timeout, 
+			     struct lc_node *dst, usecs_t timeout, 
 			     int status, int cost)
 {	
 	struct lc_link *link;
@@ -253,13 +260,14 @@ static int __lc_link_tbl_add(struct tbl *t, struct lc_node *src,
 	
       	link->status = status;
 	link->cost = cost;
-	link->expire = TimeNow + SECONDS(timeout / 1000);
+	gettime(&link->expires);
+	timeval_add_usecs(&link->expires, timeout);
 	
 	return res;
 }
 
 int NSCLASS lc_link_add(struct in_addr src, struct in_addr dst, 
-			unsigned long timeout, int status, int cost)
+			usecs_t timeout, int status, int cost)
 {
 	struct lc_node *sn, *dn;
 	int res;
@@ -472,12 +480,14 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 	return srt;
 }
 
-int NSCLASS lc_srt_add(struct dsr_srt *srt, unsigned long timeout, unsigned short flags)
+int NSCLASS lc_srt_add(struct dsr_srt *srt, usecs_t timeout, 
+		       unsigned short flags)
 {
 	int i, n, links = 0;
 	struct in_addr addr1, addr2;
 	
-        timeout = 300000;
+	/* Override for now... */
+        timeout = 300000000;
 	
 	if (!srt)
 		return -1;
@@ -564,7 +574,10 @@ static int lc_print(char *buf)
 {
 	list_t *pos;
 	int len = 0;
-	
+	struct timeval now;
+
+	gettime(&now);
+
 	DSR_READ_LOCK(&LC.lock);
     
 	len += sprintf(buf, "# %-15s %-15s %-4s Timeout\n", "Src Addr", "Dst Addr", "Cost");
@@ -576,7 +589,7 @@ static int lc_print(char *buf)
 			       print_ip(link->src->addr),
 			       print_ip(link->dst->addr),
 			       link->cost,
-			       (link->expire - TimeNow) / HZ);
+			       timeval_diff(&link->expires, &now) / 1000000);
 	}
     
 	len += sprintf(buf+len, "\n# %-15s %-4s %-4s %-5s %12s %12s\n", "Addr", "Hops", "Cost", "Links", "This", "Pred");

@@ -21,7 +21,7 @@
 
 #define NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT 3000 
 #define NEIGH_TBL_TIMEOUT 2000
-#define RTT_DEF SECONDS(1) /* sec */
+#define RTT_DEF  1000000 /* usecs */
 
 
 #ifdef __KERNEL__
@@ -37,7 +37,7 @@ struct neighbor {
 	struct in_addr addr;
 	struct sockaddr hw_addr;
 	unsigned short id;
-	int rtt, srtt, rttvar, jitter; /* RTT in usec */
+	usecs_t rtt, srtt, rttvar, jitter; /* RTT in usec */
 };
 
 struct hw_query {
@@ -50,7 +50,7 @@ struct id_query {
 };
 struct rtt_query {
 	struct in_addr *a;
-	int *srtt;
+	usecs_t *srtt;
 };
 		
 static inline int crit_addr(void *pos, void *addr)
@@ -243,7 +243,7 @@ unsigned short NSCLASS neigh_tbl_get_id(struct in_addr neigh_addr)
 
 int NSCLASS neigh_tbl_get_rtt(struct in_addr neigh_addr)
 {
-	int srtt;
+	usecs_t srtt;
 	struct rtt_query q;
 	
 	q.a = &neigh_addr;
@@ -267,7 +267,7 @@ static int neigh_tbl_print(char *buf)
 	list_for_each(pos, &neigh_tbl.head) {
 		struct neighbor *neigh =(struct neighbor *)pos;
 		
-		len += sprintf(buf+len, "  %-15s %-17s %-3d %-6u\n", 
+		len += sprintf(buf+len, "  %-15s %-17s %-3lu %-6u\n", 
 			       print_ip(neigh->addr), 
 			       print_eth(neigh->hw_addr.sa_data),
 			       neigh->rtt, neigh->id);

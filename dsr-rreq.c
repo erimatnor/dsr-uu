@@ -38,9 +38,9 @@ struct rreq_tbl_entry {
 	struct in_addr node_addr;
 	int ttl;
 	DSRUUTimer *timer;
-	Time tx_time;
-	Time last_used;
-	Time timeout;
+	struct timeval tx_time;
+	struct timeval last_used;
+	usecs_t timeout;
 	int num_rexmts;
 	struct tbl rreq_id_tbl;
 };
@@ -94,6 +94,7 @@ void NSCLASS rreq_tbl_timeout(unsigned long data)
 {
 	struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)data;
 	struct in_addr target;
+	struct timeval expires;
 	int ttl;
 	
 	if (!e)
@@ -107,7 +108,7 @@ void NSCLASS rreq_tbl_timeout(unsigned long data)
 	__tbl_detach(&rreq_tbl, &e->l);
 	__tbl_add_tail(&rreq_tbl, &e->l);
 	
-	if (e->num_rexmts >= CONFVAL(MaxRequestRexmt)) {
+	if (e->num_rexmts >= ConfVal(MaxRequestRexmt)) {
 		DEBUG("MAX RREQs reached for %s\n", 
 		      print_ip(e->node_addr));
 
@@ -120,14 +121,15 @@ void NSCLASS rreq_tbl_timeout(unsigned long data)
 	e->ttl *= 2; /* Double TTL */
 	e->num_rexmts++; 
 	e->timeout *= 2; /* Double timeout */	
-	e->last_used = TimeNow;
+	gettime(&e->last_used);
 
 	target = e->node_addr;
 	ttl = e->ttl;
 	
-	e->timer->expires = TimeNow + e->timeout;
-	
-	add_timer(e->timer);
+	expires = e->last_used;
+	timeval_add_usecs(&expires, e->timeout);
+
+	set_timer(e->timer, &expires);
 	
 	DSR_WRITE_UNLOCK(&rreq_tbl);
 	
@@ -146,10 +148,10 @@ struct rreq_tbl_entry *NSCLASS __rreq_tbl_entry_create(struct in_addr node_addr)
 	e->state = STATE_LATENT;
 	e->node_addr = node_addr;
 	e->ttl = 0;
-	e->tx_time = 0;
+	memset(&e->tx_time, 0, sizeof(struct timeval));;
 	e->num_rexmts = 0;
 #ifdef NS2
-	e->timer = new DSRUUTimer(this);
+	e->timer = new DSRUUTimer(this, "RREQTblTimer");
 #else
 	e->timer = MALLOC(sizeof(DSRUUTimer), GFP_ATOMIC);
 #endif
@@ -164,7 +166,7 @@ struct rreq_tbl_entry *NSCLASS __rreq_tbl_entry_create(struct in_addr node_addr)
 	e->timer->function = &NSCLASS rreq_tbl_timeout;
 	e->timer->data = (unsigned long)e;
 
-	INIT_TBL(&e->rreq_id_tbl, CONFVAL(RequestTableIds));
+	INIT_TBL(&e->rreq_id_tbl, ConfVal(RequestTableIds));
 	
 	return e;
 }
@@ -224,7 +226,7 @@ int NSCLASS rreq_tbl_add_id(struct in_addr initiator, struct in_addr target,
 		goto out;
 	}
 
-	e->last_used = TimeNow;
+	gettime(&e->last_used);
 	
 	if (TBL_FULL(&e->rreq_id_tbl))
 		tbl_del_first(&e->rreq_id_tbl);
@@ -263,7 +265,8 @@ int NSCLASS rreq_tbl_route_discovery_cancel(struct in_addr dst)
 	del_timer_sync(e->timer);
 
 	e->state = STATE_LATENT;
-	e->last_used = TimeNow;
+	gettime(&e->last_used);
+
 	__tbl_detach(&rreq_tbl, &e->l);
 	__tbl_add_tail(&rreq_tbl, &e->l);
 	       
@@ -274,6 +277,7 @@ int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
 {
 	struct rreq_tbl_entry *e;
 	int ttl, res = 0;
+	struct timeval expires;
 
 #define	TTL_START 1
 	
@@ -300,15 +304,16 @@ int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
 		goto out;
 	} 
 	
-	e->last_used = TimeNow;
+	gettime(&e->last_used);
 	e->ttl = ttl = TTL_START;
-	e->timeout = SECONDS(1);
+	e->timeout = 1000000;
 	e->state = STATE_IN_ROUTE_DISC;
 	e->num_rexmts = 0;
+	
+	expires = e->last_used;
+	timeval_add_usecs(&expires, e->timeout);
 
-	e->timer->expires = e->last_used + e->timeout;
-
-	add_timer(e->timer);
+	set_timer(e->timer, &expires);
 	
 	DSR_WRITE_UNLOCK(&rreq_tbl);
 
@@ -525,7 +530,10 @@ static int rreq_tbl_print(char *buf)
 	list_t *pos1, *pos2;
 	int len = 0;
 	int first = 1;
-    
+	struct timeval now;
+	
+	gettime(&now);
+
 	DSR_READ_LOCK(&rreq_tbl.lock);
     
 	len += sprintf(buf, "# %-15s %-6s %-8s %15s:%s\n", "IPAddr", "TTL", "Used", "TargetIPAddr", "ID");
@@ -537,12 +545,15 @@ static int rreq_tbl_print(char *buf)
 		if (TBL_EMPTY(&e->rreq_id_tbl))
 			len += sprintf(buf+len, "  %-15s %-6u %-8lu %15s:%s\n",
 				       print_ip(e->node_addr), e->ttl,
-				       e->tx_time ? ((TimeNow - e->last_used) * HZ) : 0, "-", "-");
+				       timeval_diff(&now, &e->last_used) / 
+				       1000000, "-", "-");
 		else {
 			id_e = (struct id_entry *)TBL_FIRST(&e->rreq_id_tbl);
 			len += sprintf(buf+len, "  %-15s %-6u %-8lu %15s:%u\n",
 				       print_ip(e->node_addr), e->ttl,
-				       e->tx_time ? ((TimeNow - e->last_used) * HZ) : 0, print_ip(id_e->trg_addr), id_e->id);
+				       timeval_diff(&now, &e->last_used) / 
+				       1000000, print_ip(id_e->trg_addr), 
+				       id_e->id);
 		}
 		list_for_each(pos2, &e->rreq_id_tbl.head) {
 			id_e = (struct id_entry *)pos2;

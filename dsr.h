@@ -21,6 +21,7 @@
 #endif /* __KERNEL__ */
 
 #include "dsr-pkt.h"
+#include "timer.h"
 
 #ifndef NO_GLOBALS
 
@@ -122,8 +123,8 @@ struct dsr_node {
 
 #ifdef __KERNEL__
 
-#define CONFVAL(name) (get_confval(name))
-#define CONFVAL_USECS(name) (confval_to_usecs(name))
+#define ConfVal(cv) (get_confval(cv))
+#define ConfValToUsecs(cv) (confval_to_usecs(cv))
 
 extern struct dsr_node *dsr_node;
 
@@ -215,12 +216,12 @@ static inline void dsr_node_unlock(struct dsr_node *dnode)
 
 #ifndef NO_DECLS
 
-static inline unsigned long confval_to_usecs(enum confval cv)
+static inline usecs_t confval_to_usecs(enum confval cv)
 {
-	unsigned long usecs = 0;
+	usecs_t usecs = 0;
 	unsigned int val;
 	
-	val = CONFVAL(cv);
+	val = ConfVal(cv);
 	
 	switch (confvals_def[cv].type) {
 	case SECONDS:

@@ -11,6 +11,7 @@
 #include <asm/io.h>
 
 #include "debug.h"
+#include "timer.h"
 
 atomic_t num_pkts = ATOMIC_INIT(0);
 
@@ -171,7 +172,7 @@ int dsr_vprintk(const char *func, const char *fmt, va_list args)
 	/* This stops the holder of console_sem just where we want him */
 	spin_lock_irqsave(&dbg_logbuf_lock, flags);
 	
-	do_gettimeofday(&now);
+	gettime(&now);
 	
 	prefix_len = sprintf(printk_buf, "%ld.%03ld:%s: ", now.tv_sec, now.tv_usec / 1000, func);
 	

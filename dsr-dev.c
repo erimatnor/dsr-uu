@@ -247,7 +247,7 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 		return -1;
 
 	/* Only buffer packets with data */
-	if (dp->payload_len && CONFVAL(UseNetworkLayerAck))
+	if (dp->payload_len && ConfVal(UseNetworkLayerAck))
 		maint_buf_add(dp);
 
 	dsr_node_lock(dsr_node);

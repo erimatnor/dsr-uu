@@ -75,8 +75,8 @@ void NSCLASS grat_rrep_tbl_timeout(unsigned long data)
 
 		grat_rrep_tbl_timer.function = &NSCLASS grat_rrep_tbl_timeout;
 
-		grat_rrep_tbl_timer.expires = e->expires;
-		add_timer(&grat_rrep_tbl_timer);
+		set_timer(&grat_rrep_tbl_timer, &e->expires);
+
 		DSR_READ_UNLOCK(&grat_rrep_tbl.lock);
 	}	
 	DSR_READ_UNLOCK(&grat_rrep_tbl.lock);
@@ -86,7 +86,6 @@ int NSCLASS grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop)
 {
 	struct in_addr q[2] = { src, prev_hop };
 	struct grat_rrep_entry *e;
-	Time time = TimeNow;
 	
 	if (in_tbl(&grat_rrep_tbl, q, crit_query))
 		return 0;
@@ -98,20 +97,21 @@ int NSCLASS grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop)
 
 	e->src = src;
 	e->prev_hop = prev_hop;
-	e->expires = time + SECONDS(GRAT_REPLY_HOLDOFF);
+	gettime(&e->expires);
 	
+	timeval_add_usecs(&e->expires, ConfValToUsecs(GratReplyHoldOff));
+	
+	/* Remove timer before we modify the table */
 	if (timer_pending(&grat_rrep_tbl_timer))
-		del_timer(&grat_rrep_tbl_timer);
-			
+		del_timer_sync(&grat_rrep_tbl_timer);
+
 	if (tbl_add(&grat_rrep_tbl, &e->l, crit_time)) {
 		
 		DSR_READ_LOCK(&grat_rrep_tbl.lock);
 		e = (struct grat_rrep_entry *)TBL_FIRST(&grat_rrep_tbl);
-#ifdef __KERNEL__
-		grat_rrep_tbl_timer.function = grat_rrep_tbl_timeout;
-#endif
-		grat_rrep_tbl_timer.expiress = e->expires;
-		add_timer(&grat_rrep_tbl_timer);
+
+		grat_rrep_tbl_timer.function = &NSCLASS grat_rrep_tbl_timeout;
+		set_timer(&grat_rrep_tbl_timer,& e->expires);
 		DSR_READ_UNLOCK(&grat_rrep_tbl.lock);		
 	}
 	return 1;
@@ -122,7 +122,10 @@ static int grat_rrep_tbl_print(char *buf)
 {
 	list_t *pos;
 	int len = 0;
-    
+	struct timeval now;
+
+	gettime(&now);
+
 	DSR_READ_LOCK(&grat_rrep_tbl.lock);
     
 	len += sprintf(buf, "# %-15s %-15s Time\n", "Source", "Prev hop");
@@ -133,7 +136,7 @@ static int grat_rrep_tbl_print(char *buf)
 		len += sprintf(buf+len, "  %-15s %-15s %lu\n", 
 			       print_ip(e->src), 
 			       print_ip(e->prev_hop),
-			       e->expires ? ((e->expires - TimeNow) / HZ) : 0);
+			       timeval_diff(&e->expires, &now) / 1000000);
 	}
     
 	DSR_READ_UNLOCK(&grat_rrep_tbl.lock);
