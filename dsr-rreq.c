@@ -1,5 +1,6 @@
-#include <net/ip.h>
 #include <linux/proc_fs.h>
+#include <linux/timer.h>
+#include <net/ip.h>
 
 #include "debug.h"
 #include "dsr.h"
@@ -14,8 +15,11 @@
 
 #define RREQ_TBL_MAX_LEN 512 /* Should be enough */
 #define RREQ_TBL_PROC_NAME "dsr_rreq_tbl"
+#define RREQ_TBL_GARBAGE_COLLECT_INTERVAL 5 /* 5 secs */
 
 static TBL(rreq_tbl, RREQ_TBL_MAX_LEN);
+
+static struct timer_list rreq_tbl_timer;
 
 struct rreq_tbl_entry {
 	struct list_head l;
@@ -37,10 +41,23 @@ static inline int crit_address(void *rreq_entry, void *addr)
 
 	return 0;
 }
+static void rreq_tbl_garbage_collect(unsigned long data)
+{
+	DEBUG("Garbage collect\n");
+	rreq_tbl_timer.expires = jiffies + (RREQ_TBL_GARBAGE_COLLECT_INTERVAL * HZ);  
+	
+	read_lock_bh(&rreq_tbl.lock);
+
+	if (rreq_tbl.len != 0)
+		add_timer(&rreq_tbl_timer);
+	
+	read_unlock_bh(&rreq_tbl.lock);
+}
 
 struct rreq_tbl_entry *rreq_tbl_add(struct in_addr addr, int ttl, unsigned long time)
 {
 	struct rreq_tbl_entry *e;
+	int len;
 	
 	e = kmalloc(sizeof(struct rreq_tbl_entry), GFP_ATOMIC);
 	
@@ -50,11 +67,25 @@ struct rreq_tbl_entry *rreq_tbl_add(struct in_addr addr, int ttl, unsigned long 
 	e->addr = addr;
 	e->ttl = ttl;
 	e->sent_time = time;
+	
+	len = tbl_add(&rreq_tbl, &e->l, crit_none);
 
-	if (tbl_add(&rreq_tbl, e, crit_none)) {
+	if (!len) {
 		kfree(e);
 		return NULL;
 	}
+	
+	read_lock_bh(&rreq_tbl.lock);
+	
+	if (rreq_tbl.len == 1) {
+		/* Start garbage collection */
+		rreq_tbl_timer.function = rreq_tbl_garbage_collect;
+		rreq_tbl_timer.expires = jiffies + (RREQ_TBL_GARBAGE_COLLECT_INTERVAL * HZ);
+		rreq_tbl_timer.data = 0;
+		add_timer(&rreq_tbl_timer);
+	}
+
+	read_unlock_bh(&rreq_tbl.lock);
 	return e;
 }
 
@@ -96,6 +127,7 @@ static int rreq_tbl_proc_info(char *buffer, char **start, off_t offset, int leng
 int __init rreq_tbl_init(void)
 {
 	proc_net_create(RREQ_TBL_PROC_NAME, 0, rreq_tbl_proc_info);
+	init_timer(&rreq_tbl_timer);
 	return 0;
 }
 void __exit rreq_tbl_cleanup(void)
@@ -185,7 +217,7 @@ int dsr_rreq_send(struct in_addr target)
 	
 	dsr_dev_xmit(&dp);
 	
-/* 	rreq_tbl_add(target, 5, jiffies); */
+	rreq_tbl_add(target, 5, jiffies);
 
 	return 0;
 }

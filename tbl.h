@@ -44,10 +44,11 @@ static inline void tbl_flush(struct tbl *t)
 	write_unlock_bh(&t->lock);
 }
 
-static inline int tbl_add(struct tbl *t, void *e, criteria_t crit)
+static inline int tbl_add(struct tbl *t, struct list_head *l, criteria_t crit)
 {
-	struct list_head *l = (struct list_head *)e;
-
+/* 	struct list_head *l = (struct list_head *)e; */
+	int len;
+	
 	write_lock(&t->lock);
 	
 	if (t->len >= t->max_len) {
@@ -56,22 +57,24 @@ static inline int tbl_add(struct tbl *t, void *e, criteria_t crit)
 		return -ENOSPC;
 	}
     
-/* 	if (list_empty(&t->head)) { */
-/* 		list_add(l, &t->head); */
-/* 	} else { */
-/* 		struct list_head *pos; */
+	if (list_empty(&t->head)) {
+		list_add(l, &t->head);
+	} else {
+		struct list_head *pos;
 	
-/* 		list_for_each(pos, &t->head) { */
-/* 			if (crit(pos, l)) */
-/* 				break; */
-/* 		} */
-/* 		list_add(l, pos->prev); */
-/* 	} */
-/* 	t->len++; */
-
+		list_for_each(pos, &t->head) {
+			if (crit(pos, l))
+				break;
+		}
+		list_add(l, pos->prev);
+	}
+	t->len++;
+	
+	len = t->len;
+	
 	write_unlock_bh(&t->lock);
 
-	return 1;
+	return len;
 }
 
 static inline void *__tbl_find(struct tbl *t, void *id, criteria_t crit)

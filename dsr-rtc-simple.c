@@ -327,12 +327,6 @@ static int dsr_rtc_print(char *buf)
 				0x0ff & (e->srt.addrs[0].s_addr >> 16),
 				0x0ff & (e->srt.addrs[0].s_addr >> 24));
 
-/* 	if (e->flags & KAODV_RT_GW_ENCAP) */
-/* 		flags[num_flags++] = 'E'; */
-	
-/* 	if (e->flags & KAODV_RT_REPAIR) */
-/* 	    flags[num_flags++] = 'R'; */
-	    
 		flags[num_flags] = '\0';
 	
 		len += sprintf(buf+len, "  %-15s %-15s %-5s %lu\n", addr, nhop, flags, 
