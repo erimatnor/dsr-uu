@@ -170,6 +170,10 @@ static void __init dsr_dev_setup(struct net_device *dev)
 	dev->uninit = dsr_dev_uninit;
 	dev->open = dsr_dev_open;
 	dev->stop = dsr_dev_stop;
+
+	/* Reduce the MTU to allow DSR options of 100 bytes. If larger, drop or
+	 * implement fragmentation... ;-)  */
+	dev->mtu -= 100;
 	dev->hard_start_xmit = dsr_dev_start_xmit;
 	dev->set_multicast_list = set_multicast_list;
 	dev->set_mac_address = dsr_dev_set_address;

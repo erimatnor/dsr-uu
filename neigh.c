@@ -26,7 +26,7 @@ struct neighbor {
 	struct sockaddr hw_addr;
         unsigned short id_req, id_ack;
 	struct timer_list ack_req_timer;
-	struct timer_list ack_timer;
+/* 	struct timer_list ack_timer; */
 	unsigned long last_ack_tx_time;
 	unsigned long last_ack_rx_time;
 	unsigned long last_ack_req_tx_time;
@@ -154,14 +154,13 @@ static void neigh_tbl_garbage_timeout(unsigned long data)
 
 static inline void __neigh_tbl_set_ack_req_timer(struct neighbor *neigh)
 {
-	neigh->ack_req_timer.data = (unsigned long)neigh;
+	neigh->ack_req_timer.data = (unsigned long)neigh->addr.s_addr;
 
 	if (timer_pending(&neigh->ack_req_timer))
 		return;
 	else {
 		neigh->ack_req_timer.expires = jiffies + MSEC_TO_JIFFIES(neigh->rtt + 5);
 		add_timer(&neigh->ack_req_timer);
-
 	}
 }
 
@@ -181,19 +180,21 @@ void neigh_tbl_set_ack_req_timer(struct in_addr neigh_addr)
 
 static void neigh_tbl_ack_req_timeout(unsigned long data)
 {
+	struct in_addr addr;
 	struct neighbor *neigh;
 	
 	write_lock_bh(&neigh_tbl.lock);
 	
-	neigh = (struct neighbor *)data;
+	addr.s_addr = data;
+
+	neigh = __tbl_find(&neigh_tbl, &addr, crit_addr);
 	
 	if (!neigh)
 		goto out;
 	
 	DEBUG("ACK REQ Timeout %s\n", print_ip(neigh->addr.s_addr));
 	
-	neigh->reqs++;
-	
+	neigh->reqs++;	
 
 	if (neigh->reqs >= MAX_AREQ_TX) {
 		lc_link_del(my_addr(), neigh->addr);
@@ -258,7 +259,7 @@ static struct neighbor *neigh_tbl_create(struct in_addr addr,
 	memcpy(&neigh->hw_addr, hw_addr, sizeof(struct sockaddr));
 
 	init_timer(&neigh->ack_req_timer);
-	init_timer(&neigh->ack_timer);
+/* 	init_timer(&neigh->ack_timer); */
 	
 	neigh->ack_req_timer.function = neigh_tbl_ack_req_timeout;
 	neigh->ack_req_timer.data = (unsigned long)neigh;
