@@ -23,6 +23,8 @@ struct maint_entry {
 	int acked;
 	struct dsr_pkt *dp;
 };
+
+static void maint_buf_set_timeout(void);
 static void maint_buf_timeout(unsigned long data);
 
 static inline int crit_mark_acked(void *pos, void *data)
@@ -68,32 +70,6 @@ static inline int crit_nxt_hop_rexmt(void *pos, void *nh)
 	return 0;
 }
 
-static void maint_buf_set_timeout(void)
-{
-	struct maint_entry *m;
-	unsigned long tx_time, rto;
-	
-	read_lock_bh(&maint_buf.lock);
-	/* Get first packet in maintenance buffer */
-	m = __tbl_find(&maint_buf, NULL, crit_none);
-	
-	if (!m) {
-		DEBUG("No packet to set timeout for\n");
-		read_unlock_bh(&maint_buf.lock);
-		return;
-	}
-
-	tx_time = m->tx_time;
-	rto = m->rto;
-	
-	read_unlock_bh(&maint_buf.lock);
-	
-	DEBUG("jiff=%lu exp=%lu\n", jiffies, tx_time + rto);
-
-	ack_timer.expires = tx_time + rto;
-	add_timer(&ack_timer);
-}
-
 static struct maint_entry *maint_entry_create(struct dsr_pkt *dp)
 {
 	struct maint_entry *m;
@@ -131,7 +107,11 @@ static struct maint_entry *maint_entry_create(struct dsr_pkt *dp)
 int maint_buf_add(struct dsr_pkt *dp)
 {
 	struct maint_entry *m;
+	int empty = 0;
 	
+	if (TBL_EMPTY(&maint_buf))
+		empty = 1;
+
 	m = maint_entry_create(dp);
 	
 	if (!m)
@@ -146,22 +126,56 @@ int maint_buf_add(struct dsr_pkt *dp)
 	
 	dsr_ack_req_opt_add(dp, m->id);
 
-	if (!timer_pending(&ack_timer))
+	if (empty)
 		maint_buf_set_timeout();
 
 	return 1;
 }
+static void maint_buf_set_timeout(void)
+{
+	struct maint_entry *m;
+	unsigned long tx_time, rto;
+	unsigned long now = jiffies;
+	
+	read_lock_bh(&maint_buf.lock);
+	/* Get first packet in maintenance buffer */
+	m = __tbl_find(&maint_buf, NULL, crit_none);
+	
+	if (!m) {
+		DEBUG("No packet to set timeout for\n");
+		read_unlock_bh(&maint_buf.lock);
+		return;
+	}
+
+	tx_time = m->tx_time;
+	rto = m->rto;
+	
+	read_unlock_bh(&maint_buf.lock);
+	
+	DEBUG("now=%lu exp=%lu\n", now, tx_time + rto);
+
+	/* Check if this packet has already expired */
+	if (now > tx_time + rto) 
+		maint_buf_timeout(0);
+	else {		
+		ack_timer.expires = tx_time + rto;
+		add_timer(&ack_timer);
+	}
+}
+
 
 static void maint_buf_timeout(unsigned long data)
 {
 	struct maint_entry *m;
 	
-	
+	if (timer_pending(&ack_timer))
+	    return;
+
 	m = tbl_find_detach(&maint_buf, NULL, crit_none);
 
 	if (!m) {
 		DEBUG("Nothing in maint buf\n");
-		goto out;
+		return;
 	}
 
 	DEBUG("nxt_hop=%s id=%u rexmt=%d\n", 

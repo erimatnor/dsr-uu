@@ -50,7 +50,7 @@ static struct {
 } params_def[PARAMS_MAX] = {
 	{ "BroadCastJitter", 10 },
 	{ "RouteCacheTimeout", 300000 },
-	{ "SendBufferTimeout", 30000 },
+	{ "SendBufferTimeout", 30 },
 	{ "RequestTableSize", 64 },
 	{ "RequestTableIds", 16 },
 	{ "MaxRequestRexmt", 5 },
