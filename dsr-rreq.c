@@ -103,7 +103,7 @@ int dsr_rreq_send(struct in_addr target)
 		goto out_err;
 	}
 
-	DEBUG("Sending RREQ for %s\n", print_ip(dp->dst.s_addr));
+	DEBUG("Sending RREQ for %s headroom=%d len=%d tailroom=%d\n", print_ip(dp->dst.s_addr), skb_headroom(dp->skb), dp->skb->len, skb_tailroom(dp->skb));
 	dev_queue_xmit(dp->skb);
 	
  out_err:	
