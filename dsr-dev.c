@@ -365,7 +365,7 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 			/* We must free the DSR packet */
 			dsr_pkt_free(dp);
 		} else {			
-			res = p_queue_enqueue_packet(skb, dsr_dev_xmit);
+			res = p_queue_enqueue_packet(skb, dev_queue_xmit);
 			
 			if (res < 0) {
 				DEBUG("Queueing failed!\n");
