@@ -89,6 +89,7 @@ int dsr_opts_remove(dsr_pkt_t *dp)
 		DEBUG("data to short according to DSR header len=%d dh->length=%d!\n", dp->len, dsr_len);
 		return -1;
 	}
+	
 	/* Update IP header */
 	iph = dp->skb->nh.iph;
 
@@ -99,10 +100,9 @@ int dsr_opts_remove(dsr_pkt_t *dp)
 
 	ip_send_check(iph);
 
-	/* Move IP header forward */
-	memmove((char *)iph + dsr_len, (char *)iph, ip_len);
+	/* Move data */
+	memmove(dp->data, dp->data + dsr_len, dp->len - dsr_len);
 		
-	dp->data = dp->data + dsr_len;
 	dp->len -= dsr_len;
 	dp->dh = NULL;
 	dp->sopt = NULL;

@@ -123,8 +123,8 @@ int dsr_srt_add(dsr_pkt_t *dp)
 		DEBUG("No IP header!\n");
 		return -1;
 	}
-
-	memmove(dp->skb->h.raw + dsr_len, dp->skb->h.raw, dsr_len);
+	/* Move data towards tail */
+	memmove(dp->skb->h.raw + dsr_len, dp->skb->h.raw, dp->skb->tail - dp->skb->h.raw);
 	
 	dsr_hdr_add(dp->skb->h.raw, dsr_len, iph->protocol);
 	

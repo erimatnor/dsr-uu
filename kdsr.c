@@ -86,18 +86,23 @@ static int kdsr_recv(struct sk_buff *skb)
 		len = dsr_opts_remove(dp);
 		
 		if (len) {
+			int res;
 			
 			DEBUG("Deliver to DSR device\n");
 			
-			/* Trim skb and deliver to IP layer again. */
-			if (!pskb_may_pull(skb, len))
-				return -1;
+			/* Update skb length and deliver to DSR interface. */
+			/* if (!pskb_may_pull(skb, len)) */
+/* 				return -1; */
 
-			memmove(skb->mac.raw + len, skb->mac.raw, skb->dev->hard_header_len);
 			
-			skb->mac.raw = skb->mac.raw + len;
-			memcpy(skb->mac.ethernet->h_dest, dsr_dev->dev_addr, dsr_dev->addr_len);
-			skb->nh.raw = skb->data;
+			/* memmove(skb->mac.raw + len, skb->mac.raw, skb->dev->hard_header_len); */
+/* 			skb->nh.raw = skb->data = dp->data; */
+/* 			skb->mac.raw = skb->mac.raw + len; */
+
+/* 			memcpy(skb->mac.ethernet->h_dest, dsr_dev->dev_addr, dsr_dev->addr_len); */
+
+			skb_trim(skb, skb->len - len);
+			
 			skb->protocol = htons(ETH_P_IP);
 			skb->pkt_type = PACKET_HOST;
 			
@@ -114,7 +119,11 @@ static int kdsr_recv(struct sk_buff *skb)
 			skb->nf_debug = 0;
 #endif
 #endif
-			netif_rx(skb);		
+			res = netif_rx(skb);	
+			
+			if (res == NET_RX_DROP) {
+				DEBUG("Netif_rx DROP\n");
+			}
 			
 		} else
 			kfree_skb(skb);
@@ -140,7 +149,12 @@ static void kdsr_recv_err(struct sk_buff *skb, u32 info)
 	kfree_skb(skb);
 }
 
+/* This is kind of a mess */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7)
 static struct inet_protocol dsr_inet_prot = {
+#else
+static struct net_protocol dsr_inet_prot = {
+#endif
 	.handler = kdsr_recv,
 	.err_handler = kdsr_recv_err,
 #ifdef KERNEL26

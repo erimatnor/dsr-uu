@@ -207,9 +207,9 @@ int dsr_dev_queue_xmit(dsr_pkt_t *dp)
 		return -1;
 	}	
 
+	dp->skb->dev = dnode->slave_dev;
+
 	ethh = (struct ethhdr *)dp->skb->data;
-	
-	//dp->skb->dev = dnode->slave_dev;
 
 	if (kdsr_get_hwaddr(dp->nh, &hw_addr, dp->skb->dev) < 0)
 		goto out_err;
