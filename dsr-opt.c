@@ -171,7 +171,7 @@ int dsr_opt_recv(struct dsr_pkt *dp)
 	myaddr = my_addr();
 	
 	/* Packet for us */
-	if (dp->dst.s_addr == myaddr.s_addr)
+	if (dp->dst.s_addr == myaddr.s_addr && dp->data_len != 0)
 		action |= DSR_PKT_DELIVER;
 	
 	dsr_len = dp->dsr_opts_len;

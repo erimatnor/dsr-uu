@@ -48,6 +48,10 @@ struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt)
 		int i;
 		struct in_addr myaddr = my_addr();
 		
+		if (srt->dst.s_addr == myaddr.s_addr) {
+			prev_hop = srt->addrs[n-1];
+			goto out;
+		}
 		for (i = 0; i < n; i++) {
 			if (srt->addrs[i].s_addr == myaddr.s_addr) {
 				if (i == 0)
