@@ -1,0 +1,77 @@
+DSR-UU is a DSR implementation that runs in Linux (kernel 2.4/2.6) and
+in the ns-2 network simulator.
+
+* To compile for Linux (against currently running kernel), simply do:
+
+> make
+
+* To compile against another kernel:
+
+> make KERNEL_DIR=/path/to/configured/kernel/sources
+
+* To compile against MIPS (e.g., LinkSys WRT54G routers):
+
+> make mips KERNEL_DIR=/path/to/mips/kernel/sources
+
+You must have the Mips compiler in your PATH.
+
+* Compile for ns-2 version 2.28:
+
+1. Symlink the dsr-uu directory into the ns-2 source tree:
+
+> cd /path/to/ns-2/ns-2.28 && ln -s /path/to/dsr-uu dsr-uu;
+
+2. Replace the files in the ns-2 source tree with the corresponding
+files in in the dsr-uu/ns-2.28 directory.
+
+> cp Makefile.in /path/to/ns-2/ns-2.28/ && cp ns-*.tcl /path/to/ns-2/ns-2.28/tcl/lib;
+
+3. Compile ns-2
+
+4. Use "DSR-UU" to select the protocol in the ns-2 scenario file you
+use for the simulation.
+
+
+* Running DSR-UU in Linux:
+
+Insert the kernel modules "dsr.{o,ko}" and "linkcache.{o,ko}" by doing:
+
+> insmod linkcache.{o,ko} && insmod dsr.{o,ko} ifname=<interface to attach to>
+
+Bring the "dsr0" interface up:
+
+> ifconfig dsr0 192.168.2.2 up, for example:
+
+DSR is now running.
+
+Configuration of DSR parameters can be done during runtime in
+/proc/net/dsr_config.
+
+Do:
+
+> cat /proc/net/dsr_config
+
+to list configuration values (not all of them might do anything at
+this point in time).
+
+Do for example:
+
+> echo "PrintDebug=0" > /proc/net/dsr_config
+
+to set a configuration value.
+
+See /proc/net/ for other output and debugging options.
+
+Available /proc/net files:
+
+/proc/net/dsr_config     - List or set configuration values.
+/proc/net/dsr_dbg        - DSR debug output.
+/proc/net/dsr_lc         - Link cache
+/proc/net/dsr_neigh_tbl  - Neighbor table
+/proc/net/dsr_rreq_tbl   - Route request table
+/proc/net/maint_buf      - Packets in maintenance buffer
+/proc/net/send_buf       - Packets in send buffer
+
+
+# eof
+
