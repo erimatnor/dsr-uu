@@ -484,17 +484,17 @@ static int __init dsr_module_init(void)
 	int res = -EAGAIN;
 	struct proc_dir_entry *proc;
 
+#ifdef DEBUG
+	dbg_init();
+#endif
+	parse_mackill();
+
 	res = dsr_dev_init(ifname);
 
 	if (res < 0) {
 		DEBUG("dsr-dev init failed\n");
 		return -EAGAIN;
 	}
-#ifdef DEBUG
-	dbg_init();
-#endif
-	parse_mackill();
-
 	res = send_buf_init();
 
 	if (res < 0) 
@@ -514,7 +514,6 @@ static int __init dsr_module_init(void)
 	
 	if (res < 0)
 		goto cleanup_neigh_tbl;
-
 
 	res = nf_register_hook(&dsr_ip_forward_hook);
 	
@@ -538,7 +537,7 @@ static int __init dsr_module_init(void)
 #ifndef KERNEL26
 	inet_add_protocol(&dsr_inet_prot);
 	DEBUG("Setup finished\n");
-	return res;
+	return 0;
 #else
 	res = inet_add_protocol(&dsr_inet_prot, IPPROTO_DSR);
 	
@@ -549,7 +548,7 @@ static int __init dsr_module_init(void)
 	
 	DEBUG("Setup finished res=%d\n", res);
 	
-	return res;
+	return 0;
  cleanup_proc:
 	proc_net_remove(CONFIG_PROC_NAME);
 #endif

@@ -16,7 +16,7 @@ static TBL(neigh_tbl, NEIGH_TBL_MAX_LEN);
 
 #define NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT 3000 
 #define NEIGH_TBL_TIMEOUT 2000
-#define RTT_DEF 10000 /* usec */
+#define RTT_DEF 1*HZ /* sec */
 
 #define NEIGH_TBL_PROC_NAME "dsr_neigh_tbl"
 
@@ -192,7 +192,6 @@ unsigned long neigh_tbl_get_rto(struct in_addr nxt_hop)
 {
 	struct neighbor *neigh;
 	int rtt, srtt, rttvar;
-	struct timeval t; 
 
 	read_lock_bh(&neigh_tbl.lock);
 
@@ -207,11 +206,8 @@ unsigned long neigh_tbl_get_rto(struct in_addr nxt_hop)
 	rtt = neigh->rtt;
 	
 	read_unlock_bh(&neigh_tbl.lock);
-	
-	t.tv_sec = rtt / 1000000; 
-	t.tv_usec = rtt % 1000000; 
-	
-	return timeval_to_jiffies(&t);
+
+	return rtt;
 }
 
 int neigh_tbl_get_hwaddr(struct in_addr neigh_addr, struct sockaddr *hw_addr)

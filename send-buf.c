@@ -1,5 +1,8 @@
+#include <linux/config.h>
 #include <linux/skbuff.h>
 #include <linux/init.h>
+#include <linux/version.h>
+#include <linux/module.h>
 #include <linux/proc_fs.h>
 #include <net/sock.h>
 #include <linux/icmp.h>

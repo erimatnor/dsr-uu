@@ -7,7 +7,10 @@
 #include <linux/in.h>
 #include <linux/skbuff.h>
 #include <linux/ip.h>
-
+#include <linux/time.h>
+#ifdef KERNEL26
+#include <linux/jiffies.h>
+#endif
 #include "dsr-pkt.h"
 
 #define DSR_BROADCAST ((unsigned long int) 0xffffffff)
@@ -152,20 +155,20 @@ static inline struct in_addr my_addr(void)
 }
 
 
-#define SECS_TO_JIFFIES(sec) secs_to_jiffies(sec)
+//#define SECS_TO_JIFFIES(sec) secs_to_jiffies(sec)
 /* #define MSECS_TO_JIFFIES(msec) dmsecs_to_jiffies(msec) */
 /* #define JIFFIES_TO_MSECS(j) jiffies_to_msecs(j) */
-#define JIFFIES_TO_USECS(j) jiffies_to_usecs(j)
-#define JIFFIES_TO_SECS(j) jiffies_to_secs(j)
+//#define JIFFIES_TO_USECS(j) jiffies_to_usecs(j)
+//#define JIFFIES_TO_SECS(j) jiffies_to_secs(j)
 
 static inline unsigned long time_add_msec(unsigned long msecs)
 {
-	struct timeval t;
+	struct timespec t;
 
 	t.tv_sec = msecs / 1000;
-	t.tv_usec = msecs % 1000;
+	t.tv_nsec = (msecs * 1000000) % 1000000000;
 	
-	return timeval_to_jiffies(&t);
+	return timespec_to_jiffies(&t);
 }
 
 /* struct dsr_pkt *dsr_pkt_alloc(int size); */

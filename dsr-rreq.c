@@ -28,9 +28,11 @@ struct rreq_tbl_entry {
 	int state;
 	struct in_addr node_addr;
 	int ttl;
+	struct timer_list timer;
 	unsigned long tx_time;
+	unsigned long last_used;
 	unsigned long timeout;
-	int num_rreqs;
+	int num_rexmts;
 	struct tbl rreq_id_tbl;
 };
 
@@ -77,24 +79,61 @@ static int crit_duplicate(void *pos, void *data)
 	return 0;
 }
 
+static int crit_flush(void *pos, void *data)
+{
+	struct rreq_tbl_entry *e = pos;
+
+	del_timer_sync(&e->timer);
+	tbl_flush(&e->rreq_id_tbl, crit_none);
+
+	return 1;
+}
+
 void rreq_tbl_set_max_len(unsigned int max_len)
 {
         rreq_tbl.max_len = max_len;
 }
 
-static int dsr_rreq_duplicate(struct in_addr initiator, struct in_addr target, unsigned int id)
+static void rreq_tbl_timeout(unsigned long data)
 {
-	struct {
-		struct in_addr *initiator;
-		struct in_addr *target;
-		unsigned int *id;
-	} d;
+	struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)data;
+	struct in_addr target;
+	int ttl;
+	
+	if (!e)
+		return;
+       
+	write_lock_bh(&rreq_tbl);
+	
+	/* Put at end of list */
+	__tbl_detach(&rreq_tbl, &e->l);
+	__tbl_add_tail(&rreq_tbl, &e->l);
+	
+	if (e->num_rexmts >= PARAM(MaxRequestRexmt)) {
+		DEBUG("MAX RREQs reached for %s\n", 
+		      print_ip(e->node_addr.s_addr));
 
-	d.initiator = &initiator;
-	d.target = &target;
-	d.id = &id;
+		e->state = STATE_LATENT;
 
-	return in_tbl(&rreq_tbl, &d, crit_duplicate);
+		write_unlock_bh(&rreq_tbl);
+		return;
+	}
+	
+	e->ttl *= 2; /* Double TTL */
+	e->num_rexmts++; 
+	e->timeout *= 2; /* Double timeout */	
+	e->last_used = jiffies;
+
+	target = e->node_addr;
+	ttl = e->ttl;
+	
+	e->timer.expires = jiffies + e->timeout;
+	
+	add_timer(&e->timer);
+	
+	write_unlock_bh(&rreq_tbl);
+	
+	dsr_rreq_send(target, ttl);
 }
 
 static struct rreq_tbl_entry *__rreq_tbl_entry_create(struct in_addr node_addr)
@@ -110,7 +149,10 @@ static struct rreq_tbl_entry *__rreq_tbl_entry_create(struct in_addr node_addr)
 	e->node_addr = node_addr;
 	e->ttl = 0;
 	e->tx_time = 0;
-	e->num_rreqs = 0;
+	e->num_rexmts = 0;
+	init_timer(&e->timer);
+	e->timer.function = &rreq_tbl_timeout;
+	e->timer.data = (unsigned long)e;
 	INIT_TBL(&e->rreq_id_tbl, PARAM(RequestTableIds));
 	
 	return e;
@@ -131,6 +173,8 @@ static struct rreq_tbl_entry *__rreq_tbl_add(struct in_addr node_addr)
 		f = (struct rreq_tbl_entry *)TBL_FIRST(&rreq_tbl);
 
 		__tbl_detach(&rreq_tbl, &f->l);
+		
+		del_timer_sync(&f->timer);
 
 		tbl_flush(&f->rreq_id_tbl, NULL);
 		
@@ -154,11 +198,18 @@ static int rreq_tbl_add_id(struct in_addr initiator, struct in_addr target,
 	
 	if (!e)
 		e = __rreq_tbl_add(initiator);
+	else {
+		/* Put it last in the table */
+		__tbl_detach(&rreq_tbl, &e->l);
+		__tbl_add_tail(&rreq_tbl, &e->l);
+	}
 
 	if (!e) {
 		res = -ENOMEM;
 		goto out;
 	}
+
+	e->last_used = jiffies;
 	
 	if (TBL_FULL(&e->rreq_id_tbl))
 		tbl_del_first(&e->rreq_id_tbl);
@@ -174,18 +225,42 @@ static int rreq_tbl_add_id(struct in_addr initiator, struct in_addr target,
 	id_e->id = id;
 	
 	tbl_add_tail(&e->rreq_id_tbl, &id_e->l);
-
  out:
 	write_unlock_bh(&rreq_tbl);
 
 	return 1;
 }
 
+int rreq_tbl_disable_route_discovery(struct in_addr dst)
+{
+	struct rreq_tbl_entry *e;
 
+	write_lock_bh(&rreq_tbl);
+	
+	e = __tbl_find(&rreq_tbl, &dst, crit_addr);
+
+	if (!e) {
+		DEBUG("%s not in RREQ table\n", print_ip(dst.s_addr));
+		write_unlock_bh(&rreq_tbl);
+		return -1;
+	}
+
+	del_timer_sync(&e->timer);
+
+	e->state = STATE_LATENT;
+	e->last_used = jiffies;
+	__tbl_detach(&rreq_tbl, &e->l);
+	__tbl_add_tail(&rreq_tbl, &e->l);
+	       
+	write_unlock_bh(&rreq_tbl);
+	return 1;	
+}
 int dsr_rreq_route_discovery(struct in_addr target)
 {
 	struct rreq_tbl_entry *e;
-	int res = 0;
+	int ttl, res = 0;
+
+#define	TTL_START 1
 	
 	write_lock_bh(&rreq_tbl);
 	
@@ -193,7 +268,13 @@ int dsr_rreq_route_discovery(struct in_addr target)
 	
 	if (!e)
 		e = __rreq_tbl_add(target);
+	else {
+		/* Put it last in the table */
+		__tbl_detach(&rreq_tbl, &e->l);
+		__tbl_add_tail(&rreq_tbl, &e->l);
+	}	
 	
+
 	if (!e) {
 		res = -ENOMEM;
 		goto out;
@@ -205,18 +286,39 @@ int dsr_rreq_route_discovery(struct in_addr target)
 		goto out;
 	} 
 	
+	e->last_used = jiffies;
+	e->ttl = ttl = TTL_START;
+	e->timeout = 1 * HZ;
+	e->state = STATE_IN_ROUTE_DISC;
+	e->num_rexmts = 0;
+	
+	e->timer.expires = jiffies + e->timeout;
+	add_timer(&e->timer);
+	
 	write_unlock_bh(&rreq_tbl);
 
-#define	TTL_START 2
-	e->state = STATE_IN_ROUTE_DISC;
-
-	dsr_rreq_send(target, TTL_START);
-	
+	dsr_rreq_send(target, ttl);
+		
 	return 1;
  out:
 	write_unlock_bh(&rreq_tbl);
 
 	return res;
+}
+
+static int dsr_rreq_duplicate(struct in_addr initiator, struct in_addr target, unsigned int id)
+{
+	struct {
+		struct in_addr *initiator;
+		struct in_addr *target;
+		unsigned int *id;
+	} d;
+
+	d.initiator = &initiator;
+	d.target = &target;
+	d.id = &id;
+
+	return in_tbl(&rreq_tbl, &d, crit_duplicate);
 }
 
 
@@ -400,7 +502,7 @@ static int rreq_tbl_print(char *buf)
     
 	read_lock_bh(&rreq_tbl.lock);
     
-	len += sprintf(buf, "# %-15s %-6s %-8s %15s:%s\n", "IPAddr", "TTL", "Time", "TargetIPAddr", "ID");
+	len += sprintf(buf, "# %-15s %-6s %-8s %15s:%s\n", "IPAddr", "TTL", "Used", "TargetIPAddr", "ID");
 
 	list_for_each(pos1, &rreq_tbl.head) {
 		struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)pos1;
@@ -409,12 +511,12 @@ static int rreq_tbl_print(char *buf)
 		if (TBL_EMPTY(&e->rreq_id_tbl))
 			len += sprintf(buf+len, "  %-15s %-6u %-8lu %15s:%s\n",
 				       print_ip(e->node_addr.s_addr), e->ttl,
-				       e->tx_time ? ((jiffies - e->tx_time) * HZ) : 0, "-", "-");
+				       e->tx_time ? ((jiffies - e->last_used) * HZ) : 0, "-", "-");
 		else {
 			id_e = (struct id_entry *)TBL_FIRST(&e->rreq_id_tbl);
 			len += sprintf(buf+len, "  %-15s %-6u %-8lu %15s:%u\n",
 				       print_ip(e->node_addr.s_addr), e->ttl,
-				       e->tx_time ? ((jiffies - e->tx_time) * HZ) : 0, print_ip(id_e->trg_addr.s_addr), id_e->id);
+				       e->tx_time ? ((jiffies - e->last_used) * HZ) : 0, print_ip(id_e->trg_addr.s_addr), id_e->id);
 		}
 		list_for_each(pos2, &e->rreq_id_tbl.head) {
 			id_e = (struct id_entry *)pos2;
@@ -453,7 +555,7 @@ int __init rreq_tbl_init(void)
 
 void __exit rreq_tbl_cleanup(void)
 {
-/* 	tbl_flush(&rreq_tbl, timer_remove); */
+	tbl_flush(&rreq_tbl, crit_flush);
 	proc_net_remove(RREQ_TBL_PROC_NAME);
 }
 

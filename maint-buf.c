@@ -1,3 +1,6 @@
+#include <linux/proc_fs.h>
+#include <linux/module.h>
+
 #include "dsr.h"
 #include "debug.h"
 #include "tbl.h"
@@ -5,6 +8,8 @@
 #include "dsr-ack.h"
 #include "dsr-rtc.h"
 #include "dsr-rerr.h"
+
+#define MAINT_BUF_PROC_FS_NAME "maint_buf"
 
 TBL(maint_buf, MAINT_BUF_MAX_LEN);
 
@@ -120,8 +125,7 @@ int maint_buf_add(struct dsr_pkt *dp)
 		return -1;
 		
 	if (tbl_add_tail(&maint_buf, &m->l) < 0) {
-		DEBUG("Buffer full, dropping packet!\n");
-		dsr_pkt_free(dp);
+		DEBUG("Buffer full, not buffering!\n");
 		kfree(m);
 		return -1;
 	}
@@ -232,14 +236,57 @@ int maint_buf_mark_acked(struct in_addr nxt_hop, unsigned short id)
 	/* Find the buffered packet to mark as acked */
 	return tbl_find_do(&maint_buf, &d, crit_mark_acked);
 }
+static int maint_buf_get_info(char *buffer, char **start, off_t offset, int length)
+{
+	struct list_head *p;
+	int len;
+
+	len = sprintf(buffer, "# %-15s %-6s %-6s %-8s %-3s\n", "IPAddr", "Rexmt", "Id", "TxTime", "Ack");
+
+	read_lock_bh(&maint_buf.lock);
+
+	list_for_each_prev(p, &maint_buf.head) {
+		struct maint_entry *e = (struct maint_entry *)p;
+		
+		if (e && e->dp)
+			len += sprintf(buffer+len, "  %-15s %-6d %-6u %-8lu %-3s\n", print_ip(e->dp->dst.s_addr), e->rexmt, e->id, (jiffies - e->tx_time) / HZ, e->acked ? "Yes" : "No");
+	}
+
+	len += sprintf(buffer+len,
+		       "\nQueue length      : %u\n"
+		       "Queue max. length : %u\n",
+		       maint_buf.len,
+		       maint_buf.max_len);
+	
+	read_unlock_bh(&maint_buf.lock);
+	
+	*start = buffer + offset;
+	len -= offset;
+
+	if (len > length)
+		len = length;
+	else if (len < 0)
+		len = 0;
+	return len;
+}
 
 int maint_buf_init(void)
 {
+	struct proc_dir_entry *proc;
+		
 	init_timer(&ack_timer);
 	
 	ack_timer.function = &maint_buf_timeout;
 	ack_timer.expires = 0;
-	
+
+	proc = proc_net_create(MAINT_BUF_PROC_FS_NAME, 0, maint_buf_get_info);
+	if (proc)
+		proc->owner = THIS_MODULE;
+	else {
+		printk(KERN_ERR "maint_buf: failed to create proc entry\n");
+		return -1;
+	}
+
 	return 1;
 }
 
@@ -248,4 +295,5 @@ void maint_buf_cleanup(void)
 {
 	del_timer_sync(&ack_timer);
 	tbl_flush(&maint_buf, crit_free_pkt);
+	proc_net_remove(MAINT_BUF_PROC_FS_NAME);
 }
