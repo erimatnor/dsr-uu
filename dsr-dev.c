@@ -246,8 +246,7 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 	if (!dp)
 		return -1;
 
-	if (dp->flags & PKT_REQUEST_ACK)
-		maint_buf_add(dp);
+	maint_buf_add(dp);
 
 	dsr_node_lock(dsr_node);
 	skb = dsr_skb_create(dp, dsr_node->slave_dev);
