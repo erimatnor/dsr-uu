@@ -18,7 +18,6 @@
 
 static TBL(rreq_tbl, RREQ_TBL_MAX_LEN);
 
-
 #define STATE_LATENT        0
 #define STATE_IN_ROUTE_DISC 1
 
@@ -112,7 +111,7 @@ static struct rreq_tbl_entry *__rreq_tbl_entry_create(struct in_addr node_addr)
 	e->ttl = 0;
 	e->tx_time = 0;
 	e->num_rreqs = 0;
-	INIT_TBL(&e->rreq_id_tbl, RREQ_TLB_MAX_ID);
+	INIT_TBL(&e->rreq_id_tbl, PARAM(RequestTableIds));
 	
 	return e;
 }
@@ -245,11 +244,6 @@ int dsr_rreq_send(struct in_addr target, int ttl)
 	char *buf;
 	int len = DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN;
 	
-	/* if (dsr_rreq_pending(target)) { */
-/* 		DEBUG("RREQ recently sent for %s\n", print_ip(target.s_addr)); */
-/* 		return 0; */
-/* 	} */
-
        	dp = dsr_pkt_alloc(NULL);
 
 	if (!dp) {
@@ -300,12 +294,6 @@ int dsr_rreq_send(struct in_addr target, int ttl)
 
 	return -1;
 }
-/* int dsr_rreq_route_discovery(struct in_addr target) */
-/* { */
-/*         int ttl = 1; */
-
-/*         return dsr_rreq_send(target, ttl, 80 * (ttl + 2)); */
-/* } */
 
 int dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 {
@@ -327,7 +315,7 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		DEBUG("Duplicate RREQ from %s\n", print_ip(dp->src.s_addr));
 		return DSR_PKT_DROP;
 	}
-/* 	rreq_tbl_add(dp->src, dp->src, trg, dp->nh.iph->ttl, rreq_opt->id, 0); */
+
 	rreq_tbl_add_id(dp->src, trg, ntohs(rreq_opt->id));
 	
 	dp->srt = dsr_srt_new(dp->src, myaddr,
