@@ -22,6 +22,6 @@ int rreq_tbl_init(void);
 void rreq_tbl_cleanup(void);
 
 int dsr_rreq_opt_recv(struct dsr_pkt *dp);
-int dsr_rreq_send(struct in_addr target);
+int dsr_rreq_send(struct in_addr target, int ttl);
 
 #endif  /* _DSR_RREQ */

@@ -299,7 +299,7 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 				DEBUG("Queueing failed!\n");
 				break;
 			}
-			res = dsr_rreq_send(dp.dst);
+			res = dsr_rreq_send(dp.dst, 1);
 			
 			if (res < 0)
 				DEBUG("RREQ Transmission failed...");

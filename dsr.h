@@ -68,6 +68,17 @@ static inline void dsr_node_unlock(struct dsr_node *dnode)
 	spin_unlock(&dnode->lock);
 }
 
+static inline struct in_addr my_addr(void)
+{
+	static struct in_addr my_addr;
+	if (dsr_node) {
+		spin_lock(&dsr_node->lock);
+		my_addr = dsr_node->ifaddr;
+		spin_unlock(&dsr_node->lock);
+	}
+	return my_addr;
+}
+
 /* struct dsr_pkt *dsr_pkt_alloc(int size); */
 /* void dsr_pkt_free(struct dsr_pkt *dp); */
 

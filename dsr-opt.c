@@ -161,17 +161,15 @@ int dsr_opt_recv(struct dsr_pkt *dp)
 	int action = 0;
 	int num_rreq_opts = 0;
 	struct dsr_opt *dopt;
-	struct in_addr my_addr;
+	struct in_addr myaddr;
 
 	if (!dp)
 		return DSR_PKT_ERROR;
 	
-	dsr_node_lock(dsr_node);
-	my_addr = dsr_node->ifaddr;
-	dsr_node_unlock(dsr_node);
+	myaddr = my_addr();
 	
 	/* Packet for us */
-	if (dp->dst.s_addr == my_addr.s_addr)
+	if (dp->dst.s_addr == myaddr.s_addr)
 		action |= DSR_PKT_DELIVER;
 	
 	dsr_len = dp->dsr_opts_len;

@@ -63,7 +63,7 @@ $(RTCNAME).o: dsr-rtc-simple.c
 
 depend:
 	@echo "Updating Makefile dependencies..."
-	@makedepend -Y./ -- $(DEFS) -- $(SRC) &>/dev/null
+	@makedepend -Y./ -- $(DEFS) -- *.c *.h &>/dev/null
 
 TODO:
 	grep -n "TODO:" *.c *.h > TODO
@@ -77,14 +77,20 @@ clean:
 endif
 # DO NOT DELETE
 
-kdsr.o: dsr.h dsr-opt.h dsr-dev.h dsr-rreq.h dsr-rrep.h dsr-srt.h p-queue.h
-kdsr.o: debug.h
 dsr-dev.o: debug.h dsr.h kdsr.h dsr-opt.h dsr-rreq.h dsr-rtc.h dsr-srt.h
 dsr-dev.o: p-queue.h
 dsr-opt.o: debug.h dsr.h dsr-opt.h dsr-rreq.h dsr-rrep.h dsr-srt.h kdsr.h
-dsr-rreq.o: debug.h dsr.h tbl.h kdsr.h dsr-rrep.h dsr-srt.h dsr-rreq.h
-dsr-rreq.o: dsr-opt.h dsr-rtc.h dsr-dev.h p-queue.h
 dsr-rrep.o: dsr.h debug.h dsr-rrep.h dsr-srt.h dsr-opt.h dsr-rtc.h dsr-dev.h
 dsr-rrep.o: p-queue.h kdsr.h
+dsr-rreq.o: debug.h dsr.h tbl.h kdsr.h dsr-rrep.h dsr-srt.h dsr-rreq.h
+dsr-rreq.o: dsr-opt.h dsr-rtc.h dsr-dev.h p-queue.h
+dsr-rtc-simple.o: tbl.h dsr-rtc.h dsr-srt.h dsr.h debug.h
 dsr-srt.o: dsr.h dsr-srt.h dsr-opt.h debug.h
+kdsr.o: dsr.h dsr-opt.h dsr-dev.h dsr-rreq.h dsr-rrep.h dsr-srt.h p-queue.h
+kdsr.o: debug.h
 p-queue.o: p-queue.h dsr.h debug.h dsr-rtc.h dsr-srt.h kdsr.h
+dsr-rrep.o: dsr.h dsr-srt.h
+dsr-rreq.o: dsr.h
+dsr-rtc.o: dsr-srt.h dsr.h
+dsr-srt.o: dsr.h
+p-queue.o: dsr.h
