@@ -625,8 +625,10 @@ int __init NSCLASS rreq_tbl_init(void)
 	
 #ifdef __KERNEL__
 	proc_net_create(RREQ_TBL_PROC_NAME, 0, rreq_tbl_proc_info);
-#endif
 	get_random_bytes(&rreq_seqno, sizeof(unsigned int));
+#else
+	rreq_seqno = 0;
+#endif
 	return 0;
 }
 
