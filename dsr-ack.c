@@ -263,7 +263,7 @@ int dsr_ack_req_opt_recv(struct dsr_pkt *dp, struct dsr_ack_req_opt *ack_req_opt
 }
 
 
-int dsr_ack_opt_recv(struct dsr_ack_opt *ack)
+int NSCLASS dsr_ack_opt_recv(struct dsr_ack_opt *ack)
 {
 	unsigned short id;
 	struct in_addr dst, src, myaddr;

@@ -107,8 +107,7 @@ static struct send_buf_entry *send_buf_entry_create(struct dsr_pkt *dp, int (*ok
 	return e;
 }
 
-int NSCLASS send_buf_enqueue_packet(struct dsr_pkt *dp, 
-				    int (*okfn)(struct dsr_pkt *))
+int NSCLASS send_buf_enqueue_packet(struct dsr_pkt *dp, int (*okfn)(struct dsr_pkt *))
 {
 	struct send_buf_entry *e;
 	int res, empty = 0;

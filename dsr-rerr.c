@@ -186,7 +186,7 @@ int NSCLASS dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 
 }
 
-int dsr_rerr_opt_recv(struct dsr_rerr_opt *rerr_opt)
+int NSCLASS dsr_rerr_opt_recv(struct dsr_rerr_opt *rerr_opt)
 {
 	struct in_addr err_src, err_dst, unr_addr;
 
