@@ -11,11 +11,10 @@
 
 /* DSR route cache API */
 
-int dsr_rtc_get(__u32 daddr);
+dsr_srt_t *dsr_rtc_find(__u32 daddr);
 int dsr_rtc_add(dsr_srt_t *srt, unsigned long time, unsigned short flags);
 void dsr_rtc_update(dsr_srt_t *srt, unsigned long time, 
 		    unsigned short flags);
-
 int dsr_rtc_del(__u32 daddr);
 void dsr_rtc_fini(void);
 

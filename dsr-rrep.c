@@ -6,6 +6,7 @@
 #include "dsr-rrep.h"
 #include "dsr-srt.h"
 #include "dsr-rtc.h"
+#include "p-queue.h"
 
 static inline int dsr_rrep_add_srt(dsr_rrep_opt_t *rrep, dsr_srt_t *srt)
 {
@@ -45,7 +46,6 @@ static dsr_rrep_opt_t *dsr_rrep_opt_add(char *buf, int len, dsr_srt_t *srt)
 int dsr_rrep_create(char *buf, int len, dsr_srt_t *srt)
 {
 	struct in_addr dst;
-	dsr_srt_t *srt_rev;
 	dsr_rrep_opt_t *rrep;
 	char *off;
 	int l;
@@ -69,17 +69,11 @@ int dsr_rrep_create(char *buf, int len, dsr_srt_t *srt)
 	off += DSR_OPT_HDR_LEN;
 	l -= DSR_OPT_HDR_LEN;
 
-	/* Reverse the source route */
-	srt_rev = dsr_srt_new_rev(srt);
-
 	/* Add the source route option to the packet */
-	dsr_srt_opt_add(off, l, srt_rev);
+	dsr_srt_opt_add(off, l, srt);
 	
-	off += DSR_SRT_OPT_LEN(srt_rev);
-	l -= DSR_SRT_OPT_LEN(srt_rev);
-
-	/* Free new reversed source route */
-	kfree(srt_rev);
+	off += DSR_SRT_OPT_LEN(srt);
+	l -= DSR_SRT_OPT_LEN(srt);
 
 	rrep = dsr_rrep_opt_add(off, l, srt);
 
@@ -106,10 +100,14 @@ void dsr_rrep_recv(dsr_rrep_opt_t *rrep, struct in_addr src,
 		srt = dsr_srt_new(dst, src, DSR_RREP_ADDRS_LEN(rrep), 
 				  rrep->addrs);
 
-		dsr_rtc_add(srt, 5000, 0);
+		if (srt) {
+			DEBUG("Adding srt to cache\n");
+			dsr_rtc_add(srt, 60000, 0);
+		}
+		
+		/* Send buffered packets */
+		p_queue_set_verdict(P_QUEUE_SEND, dst.s_addr);
 
 		kfree(srt);
 	}
-
-
 }

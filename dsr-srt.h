@@ -43,11 +43,19 @@ typedef struct dsr_srt {
 	struct in_addr addrs[0];  /* Intermediate nodes */
 } dsr_srt_t;
 
+/* Actions to take after processing source route option: */
+#define DSR_SRT_ERROR      -1
+#define DSR_SRT_REMOVE      1
+#define DSR_SRT_FORWARD     2
+#define DSR_SRT_DELIVER     3
+#define DSR_SRT_SEND_ICMP   4
 
+char *print_srt(dsr_srt_t *srt);
 dsr_srt_t *dsr_srt_new(struct in_addr src, struct in_addr dst, 
 		       unsigned int length, u_int32_t *addrs);
 dsr_srt_t *dsr_srt_new_rev(dsr_srt_t *srt);
 dsr_srt_opt_t *dsr_srt_opt_add(char *buf, int len, dsr_srt_t *srt);
 void dsr_parse_srt(struct in_addr initiator, dsr_srt_t *srt);
+int dsr_srt_recv(dsr_srt_opt_t *sopt, struct in_addr src, struct in_addr dst);
 
 #endif /* _DSR_SRT_H */

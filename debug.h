@@ -6,6 +6,7 @@
 #include <linux/string.h>
 #include <linux/ctype.h>
 #include <linux/kernel.h>
+#include <linux/if_ether.h>
 
 #ifdef DEBUG
 #undef DEBUG
@@ -27,6 +28,18 @@ static inline char *print_ip(__u32 addr)
 	   0x0ff & (addr >> 24));
 
    return buf;
+}
+
+static inline char *print_eth(char *addr)
+{
+	static char buf[30];
+
+	sprintf(buf, "%02x:%02x:%02x:%02x:%02x:%02x",
+		 (unsigned char) addr[0], (unsigned char) addr[1],
+		 (unsigned char) addr[2], (unsigned char) addr[3],
+		 (unsigned char) addr[4], (unsigned char) addr[5]);
+
+	return buf;
 }
 
 static inline void dsr_print(const char *func, char *fmt, ...)

@@ -10,6 +10,7 @@
 #include <linux/socket.h>
 #include <net/arp.h>
 #include <net/ip.h>
+#include <net/dst.h>
 #include <net/neighbour.h>
 #ifdef KERNEL26
 #include <linux/moduleparam.h>
@@ -40,18 +41,13 @@ static int kdsr_arpset(struct in_addr addr, struct sockaddr *hw_addr,
 		       struct net_device *dev)
 {
 	struct neighbour *neigh;
-	int i;
 
-	DEBUG("%08x ", ntohl(addr.s_addr));
-	for (i = 0; i < ETH_ALEN; i++) {
-		DEBUG("%02x", (unsigned char) hw_addr->sa_data[i]);
-	}
-	DEBUG("\n");
+	DEBUG("Setting arp for %s %s\n", print_ip(addr.s_addr), 
+	      print_eth(hw_addr->sa_data));
 
 	neigh = __neigh_lookup_errno(&arp_tbl, &(addr.s_addr), dev);
 	//        err = PTR_ERR(neigh);
         if (!IS_ERR(neigh)) {
-		DEBUG("neighb update\n");
 		neigh->parms->delay_probe_time = 0;
                 neigh_update(neigh, hw_addr->sa_data, NUD_REACHABLE, 1, 0);
                 neigh_release(neigh);
@@ -64,6 +60,7 @@ static int kdsr_recv(struct sk_buff *skb)
 	struct iphdr *iph;
 	struct in_addr src, dst;
 	struct sockaddr hw_addr;
+	int ret, newlen;
 
 	DEBUG("received dsr packet\n");
 	
@@ -74,20 +71,43 @@ static int kdsr_recv(struct sk_buff *skb)
 		return -1;
 	}
 	
+	/* Get IP stuff that we need */
 	src.s_addr = iph->saddr;
 	dst.s_addr = iph->daddr;
 
+	/* FIXME: This should probably be put in a function. But how do we call
+	 * it from dsr-rreq without access to the skb? */
 	if (skb->mac.ethernet) {
-		struct net_device *dev = skb->dev;
+		/* struct net_device *dev = skb->dev; */
 		
 		memcpy(hw_addr.sa_data, skb->mac.ethernet->h_source, ETH_ALEN);
-		kdsr_arpset(src, &hw_addr, dev);
-		dev_put(dev);
+		kdsr_arpset(src, &hw_addr, skb->dev);
+	/* 	dev_put(dev); */
 	}
 
 	/* Process packet */
-	dsr_recv(skb->data, skb->len, src, dst);
+	ret = dsr_recv(skb->data, skb->len, src, dst);
 
+	switch (ret) {
+	case DSR_SRT_FORWARD:
+		break;
+	case DSR_SRT_DELIVER:
+		newlen = dsr_opts_remove(skb->nh.iph, skb->len);
+		
+		if (newlen) {
+			DEBUG("Deliver to IP\n");
+			/* Trim skb and deliver to IP layer again. */
+			skb_trim(skb, newlen);
+			ip_rcv(skb, skb->dev, NULL);
+			return 0;
+		}
+		break;
+	case DSR_SRT_REMOVE:
+		break;
+	case DSR_SRT_ERROR:
+		break;
+	}
+	
 	kfree_skb(skb);
 
 	return 0;
@@ -111,8 +131,8 @@ static struct inet_protocol dsr_inet_prot = {
 #endif
 };
 
-static int get_hwaddr(struct in_addr addr, struct sockaddr *hwaddr, 
-		      struct net_device *dev)
+int kdsr_get_hwaddr(struct in_addr addr, struct sockaddr *hwaddr, 
+		    struct net_device *dev)
 {	
 	struct neighbour *neigh;
 
@@ -166,7 +186,6 @@ int dsr_rreq_send(u_int32_t target)
 	struct sk_buff *skb;
 	struct in_addr t;
 	struct sockaddr broadcast = {AF_UNSPEC, {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
-
 	dev = dev_get_by_index(ldev_info.ifindex);
 	
 	if (!dev) {
@@ -184,6 +203,8 @@ int dsr_rreq_send(u_int32_t target)
 		goto out_err;
 	}
 	
+	skb->dev = dev;
+
 	t.s_addr = target;
 	
 	res = dsr_rreq_create(skb->data, skb->len, t);
@@ -193,12 +214,16 @@ int dsr_rreq_send(u_int32_t target)
 		goto out_err;
 	}
 	
-	res = dsr_pkt_send(skb, &broadcast, dev);
+	res = dsr_dev_build_hw_hdr(skb, &broadcast);
 	
 	if (res < 0) {
 		DEBUG("RREQ transmission failed...\n");
 		dev_kfree_skb(skb);
+		goto out_err;
 	}
+
+	dev_queue_xmit(skb);
+
  out_err:	
 	dev_put(dev);
 	return res;
@@ -225,6 +250,9 @@ int dsr_rrep_send(dsr_srt_t *srt)
 		res = -1;
 		goto out_err;
 	}
+
+	DEBUG("Sending RREP\n");
+
 	len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) + DSR_RREP_OPT_LEN(srt);
 	
 	skb = kdsr_pkt_alloc(len, dev);
@@ -233,6 +261,8 @@ int dsr_rrep_send(dsr_srt_t *srt)
 		res = -1;
 		goto out_err;
 	}
+
+	skb->dev = dev;
 
 	res = dsr_rrep_create(skb->data, skb->len, srt);
 
@@ -247,14 +277,22 @@ int dsr_rrep_send(dsr_srt_t *srt)
 	} else		
 		addr.s_addr = srt->addrs->s_addr;
 	
-	if (get_hwaddr(addr, &dest, dev) < 0) {
+	if (kdsr_get_hwaddr(addr, &dest, dev) < 0) {
 		DEBUG("Could not get hardware address for %s\n", 
 		      print_ip(addr.s_addr));
 		goto out_err;
 	}
 	
-	res = dsr_pkt_send(skb, &dest, dev);
-
+	res = dsr_dev_build_hw_hdr(skb, &dest);
+	
+	if (res < 0) {
+		DEBUG("RREP transmission failed...\n");
+		dev_kfree_skb(skb);
+		goto out_err;
+	}
+	
+	
+	dev_queue_xmit(skb);
  out_err:	
 	dev_put(dev);
 	return res;

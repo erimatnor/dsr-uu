@@ -6,6 +6,7 @@
 #include "dsr-rrep.h"
 #include "dsr-rreq.h"
 #include "dsr-rtc.h"
+#include "p-queue.h"
 
 static unsigned int rreq_seqno = 1;
 
@@ -63,27 +64,52 @@ int dsr_rreq_create(char *buf, int len, struct in_addr target)
 
 void dsr_rreq_recv(dsr_rreq_opt_t *rreq, struct in_addr initiator)
 {
+	dsr_srt_t *srt;
+	
 	if (!rreq)
 		return;
+	
+	if (initiator.s_addr == ldev_info.ifaddr.s_addr)
+		return;
 
-	if (rreq->target == ldev_info.ifaddr.s_addr) {
-		dsr_srt_t *srt;
-		DEBUG("I am RREQ target\n");
-		srt = dsr_srt_new(initiator, ldev_info.ifaddr, 
-				  DSR_RREQ_ADDRS_LEN(rreq), rreq->addrs);
+	srt = dsr_srt_new(initiator, ldev_info.ifaddr, 
+			  DSR_RREQ_ADDRS_LEN(rreq), rreq->addrs);
 		
-		dsr_rtc_add(srt, 5000, 0);
+	/* Examine source route if this node already exists in it */
+
+	    
+	if (rreq->target == ldev_info.ifaddr.s_addr) {
+		dsr_srt_t *srt_rev;
+		
+		DEBUG("I am RREQ target\n");
+		
+		DEBUG("srt: %s\n", print_srt(srt));
+
+		srt_rev = dsr_srt_new_rev(srt);
+		
+		dsr_rtc_add(srt_rev, 60000, 0);
+
+		/* Send buffered packets */
+		p_queue_set_verdict(P_QUEUE_SEND, srt_rev->dst.s_addr);
 
 		/* send rrep.... */
-		dsr_rrep_send(srt);
+		dsr_rrep_send(srt_rev);
 
-		kfree(srt);
+		kfree(srt_rev);
 
 	} else {
+		int i, n;
+		
+		n = DSR_RREQ_ADDRS_LEN(rreq) / sizeof(struct in_addr);
+		
+		for (i = 0; i < n; i++)
+			if (srt->addrs[i].s_addr == ldev_info.ifaddr.s_addr)
+				goto out;
+		
 		/* Forward RREQ */
 		//	dsr_send_rrep(initiator);
-
 	}
-	
+ out:
+	kfree(srt);
 	return;
 }
