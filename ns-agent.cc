@@ -95,7 +95,7 @@ DSRUU::trace(const char *func, const char *fmt, ...)
 	
 	buf[len-1] = '\0';
 
-#define DBG_TO_STDOUT
+//#define DBG_TO_STDOUT
 
 #ifdef DBG_TO_STDOUT
 	printf("%s\n", buf);
