@@ -274,7 +274,7 @@ int NSCLASS dsr_rrep_send(struct dsr_srt *srt_to_me)
 	len -= DSR_OPT_HDR_LEN;
 
 	/* Add the source route option to the packet */
-	dp->srt_opt = dsr_srt_opt_add(buf, len, srt_to_me);
+	dp->srt_opt = dsr_srt_opt_add(buf, len, dp->srt);
 
 	if (!dp->srt_opt) {
 		DEBUG("Could not create Source Route option header\n");
@@ -284,7 +284,7 @@ int NSCLASS dsr_rrep_send(struct dsr_srt *srt_to_me)
 	buf += DSR_SRT_OPT_LEN(dp->srt);
 	len -= DSR_SRT_OPT_LEN(dp->srt);
 
-	dp->rrep_opt[dp->num_rrep_opts++] = dsr_rrep_opt_add(buf, len, dp->srt);
+	dp->rrep_opt[dp->num_rrep_opts++] = dsr_rrep_opt_add(buf, len, srt_to_me);
 	
 	if (!dp->rrep_opt[dp->num_rrep_opts-1]) {
 		DEBUG("Could not create RREP option header\n");

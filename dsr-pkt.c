@@ -113,9 +113,8 @@ struct dsr_pkt *dsr_pkt_alloc(Packet *p)
 			
 		
 		} 
-	
+		/* A trick to calculate payload length... */
 		dp->payload_len = cmh->size() - dsr_opts_len - IP_HDR_LEN;
-		printf("Payload=%d\n", dp->payload_len);
 		
 	}
 	return dp;
