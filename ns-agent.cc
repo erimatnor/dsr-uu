@@ -1,7 +1,17 @@
 #include <trace.h>
+#include <tools/random.h>
 
 #include "ns-agent.h"
 
+int hdr_dsr::offset_;
+
+static class DSRUUHeaderClass:public PacketHeaderClass {
+
+  public:
+    DSRUUHeaderClass():PacketHeaderClass("PacketHeader/DSRUU",
+					 sizeof(hdr_dsr)) {
+	    bind_offset(&hdr_dsr::offset_);
+}} class_rtProtoDSRUU_hdr;
 
 /* Link to OTcl name space */
 static class DSRUUClass : public TclClass {
@@ -93,21 +103,120 @@ DSRUU::trace(const char *func, const char *fmt, ...)
 	return len;
 }
 
+struct hdr_ip *	DSRUU::dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, 
+				    struct in_addr dst, int ip_len, 
+				    int tot_len, int protocol, int ttl)
+{
+	dp->nh.iph = &dp->ip_data;
+	
+	// Set IP header fields
+	dp->nh.iph->saddr() = (nsaddr_t)dp->src.s_addr;
+	dp->nh.iph->daddr() = (nsaddr_t)dp->dst.s_addr;
+	dp->nh.iph->ttl() = ttl;
+	
+	// Note: Port number for routing agents, not AODV port number!
+	dp->nh.iph->sport() = RT_PORT;
+	dp->nh.iph->dport() = RT_PORT;
+
+	return dp->nh.iph;
+}
+
 Packet *
 DSRUU::ns_packet_create(struct dsr_pkt *dp)
 {
+	struct hdr_cmn *cmh;
+	struct hdr_ip *iph;	
+	struct dsr_opt_hdr *dh;
+	int tot_len;
+	int dsr_opts_len = dsr_pkt_opts_len(dp);
+
+	if (!dp)
+		return NULL;
+
+	if (!dp->p)
+		dp->p = allocpkt();
+
+	tot_len = IP_HDR_LEN + dsr_opts_len + dp->payload_len;
+		
+	cmh = HDR_CMN(dp->p);
+	iph = HDR_IP(dp->p);
+	dh = HDR_DSRUU(dp->p);
+	
+	// Clear DSR part of packet
+	memset(dh, 0, dh->size());
+	
+	// Copy message contents into packet
+	if (dsr_opts_len)
+		memcpy(dh, dp->dh.raw, dsr_opts_len);
+	
+
+	/* Add payload */
+// 	if (dp->payload_len && dp->payload)
+// 		memcpy(dp->p->userdata(), dp->payload, dp->payload_len);
+	
+	// Set common header fields
+	cmh->ptype() = PT_DSR;
+	cmh->direction() = hdr_cmn::DOWN;
+	cmh->size() = tot_len;
+	cmh->iface() = -2;
+	cmh->error() = 0;
+	cmh->prev_hop_ = (nsaddr_t)dp->src.s_addr;
+	cmh->next_hop_ = (nsaddr_t)dp->nxt_hop.s_addr;
+	
+	iph = dp->nh.iph;
+	
+	return dp->p;
+}
+
+void DSRUU::xmit(struct dsr_pkt *dp)
+{
 	Packet *p;
-	struct hdr_cmn *ch;
-	struct hdr_ip *iph;
 	
-	p = allocpkt();
+	struct hdr_cmn *cmh;
+	struct hdr_ip *iph; 
+	double jitter = 0.0;
+	
+	p = ns_packet_create(dp);
 
-	ch = HDR_CMN(p);
+	if (!p) {
+		DEBUG("Could not create packet\n");
+		if (dp->p)
+			drop(dp->p, DROP_RTR_TTL); /* Should change reason */	
+		goto out;
+	}
+
 	iph = HDR_IP(p);
-
-	
-
-	return p;
+	cmh = HDR_CMN(p);
+    
+	/* If TTL = 0, drop packet */
+	if (iph->ttl() == 0) {
+		DEBUG("Dropping packet with TTL = 0.");
+		drop(p, DROP_RTR_TTL);
+		goto out;
+	}
+    
+	/* Set packet fields depending on packet type */
+	if (iph->daddr() == DSR_BROADCAST) {
+		/* Broadcast packet */
+		cmh->addr_type() = NS_AF_NONE;
+		cmh->direction() = hdr_cmn::DOWN;
+		jitter = 0.02 * Random::uniform();
+		
+		Scheduler::instance().schedule(ll_, p, jitter);
+	} else {
+		/* Unicast packet */
+		cmh->addr_type() = NS_AF_INET;
+		cmh->direction() = hdr_cmn::DOWN;
+		
+		// if (llfeedback) {
+// 	    cmh->xmit_failure_ = link_layer_callback;
+// 	    cmh->xmit_failure_data_ = (void *) this;
+// 	}
+		
+		Scheduler::instance().schedule(ll_, p, jitter);
+	}
+ out:
+	dsr_pkt_free(dp);
 }
 
 

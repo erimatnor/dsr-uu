@@ -3,6 +3,7 @@
 
 #ifdef NS2
 #include <packet.h>
+#include <ip.h>
 #endif
 
 #define MAX_RREP_OPTS 10
@@ -17,7 +18,11 @@ struct dsr_pkt {
 	struct in_addr dst;
        	struct in_addr nxt_hop;
        	struct in_addr prv_hop;
+#ifdef NS2
+	struct hdr_ip ip_data;
+#else
 	char ip_data[60];
+#endif
 	union {
 #ifdef NS2
 		struct hdr_ip *iph;
@@ -41,14 +46,16 @@ struct dsr_pkt {
 	struct dsr_srt *srt; /* Source route */
 	
 	char *dsr_opts, *tail, *end;   /* Data we can allocate for DSR opts */
-
-	char *payload;           /* Packet payload (IP not included)*/
+	
 	int payload_len;
 #ifdef NS2
+	AppData *payload;
 	Packet *p;
 #else
+	char *payload;
 	struct sk_buff *skb;
 #endif
+	
 };
 
 /* Packet actions: */

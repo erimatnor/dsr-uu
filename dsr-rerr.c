@@ -116,9 +116,7 @@ int NSCLASS dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 	buf = dsr_pkt_alloc_opts(dp, len);
 
 	if (!buf)
-		goto out_err;
-
-#ifdef __KERNEL__	
+		goto out_err;	
 
 	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN, 
 				  IP_HDR_LEN + len, IPPROTO_DSR, IPDEFTTL);
@@ -127,7 +125,7 @@ int NSCLASS dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 		DEBUG("Could not create IP header\n");
 		goto out_err;
 	}
-#endif
+
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, 0);
 	
 	if (!dp->dh.opth) {

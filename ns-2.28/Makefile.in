@@ -376,7 +376,7 @@ Makefile: Makefile.in
 	@echo "You need to re-run configure."
 	false
 
-$(DSRUU): $(DSRUU_DIR)/*.c $(DSRUU_DIR)/*.h $(DSRUU_DIR)/Makefile
+$(DSRUU): $(DSRUU_DIR)/*.c $(DSRUU_DIR)/*.h $(DSRUU_DIR)/*.cc $(DSRUU_DIR)/Makefile
 	$(MAKE) -C dsr-uu ns NS_DEFS='$(DEFINE) -DNS2' OPTS='$(CCOPT)' NS_INC='$(subst -I.,-I$(shell pwd),$(INCLUDES))'
 
 $(NSE): $(OBJ) common/tclAppInit.o $(OBJ_EMULATE_CC) $(OBJ_EMULATE_C)

@@ -25,6 +25,7 @@ class DSRUU;
 
 #define NSCLASS DSRUU::
 
+
 #define NO_DECLS
 #include "dsr-opt.h"
 #include "dsr-rreq.h"
@@ -39,6 +40,9 @@ class DSRUU;
 #include "debug.h"
 #undef NO_DECLS
 
+typedef dsr_opt_hdr hdr_dsr;
+#define HDR_DSRUU(p) ((hdr_dsr *)hdr_dsr::access(p))
+
 #define TimeNow Scheduler::instance().clock()
 
 #define init_timer(timer)
@@ -46,7 +50,7 @@ class DSRUU;
 #define del_timer_sync(timer) del_timer(timer)
 #define MALLOC(s, p)        malloc(s)
 #define FREE(p)             free(p)
-#define XMIT(pkt) /* What here ??? */
+#define XMIT(pkt) xmit(pkt)
 #define DELIVER(pkt) /* What here ??? */
 #define __init
 #define __exit
@@ -57,6 +61,19 @@ class DSRUU;
 #define ntohs(x) x
 
 #define IPDEFTTL 64
+
+
+struct hdr_test {
+	int data;
+	/* Packet header access functions */
+	static int offset_;
+	inline static int& offset() { return offset_; }
+	inline static hdr_test* access(const Packet* p) {
+		return (hdr_test*) p->access(offset_);
+	}
+	int size() { return data; }
+
+};
 
 class DSRUU : public Agent {
  public:
@@ -70,11 +87,12 @@ class DSRUU : public Agent {
 	int command(int argc, const char*const* argv);
 	void recv(Packet*, Handler* callback = 0);
 	Packet *ns_packet_create(struct dsr_pkt *dp);
+	void xmit(struct dsr_pkt *dp);
 
 /* 	void tap(const Packet *p); */
 	// tap out all data packets received at this host and promiscously snoop
 	// them for interesting tidbits
-
+	struct hdr_ip *	dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, struct in_addr dst, int ip_len, int tot_len, int protocol, int ttl);
 	void add_timer (DSRUUTimer *t) { t->resched(t->expires); }
 	void mod_timer (DSRUUTimer *t, Time expires_) 
 		{ t->expires = expires_; t->resched(t->expires); }

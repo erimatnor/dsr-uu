@@ -62,8 +62,6 @@ int NSCLASS dsr_ack_send(struct in_addr dst, unsigned short id)
 	if (!buf)
 		goto out_err;
 
-#ifdef __KERNEL__
-
 	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN, 
 				  IP_HDR_LEN + len, IPPROTO_DSR, IPDEFTTL);
 	
@@ -71,7 +69,7 @@ int NSCLASS dsr_ack_send(struct in_addr dst, unsigned short id)
 		DEBUG("Could not create IP header\n");
 		goto out_err;
 	}
-#endif
+
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, 0);
 	
 	if (!dp->dh.opth) {
@@ -126,7 +124,7 @@ static struct dsr_ack_req_opt *dsr_ack_req_opt_create(char *buf, int len,
 	return ack_req;
 }
 
-struct dsr_ack_req_opt *dsr_ack_req_opt_add(struct dsr_pkt *dp, unsigned short id)
+struct dsr_ack_req_opt *NSCLASS dsr_ack_req_opt_add(struct dsr_pkt *dp, unsigned short id)
 {
 	char *buf = NULL;
 	int prot = 0, tot_len = 0, ttl = IPDEFTTL;
@@ -154,11 +152,9 @@ struct dsr_ack_req_opt *dsr_ack_req_opt_add(struct dsr_pkt *dp, unsigned short i
 		if (!buf)
 			return NULL;
 
-#ifdef __KERNEL__	
-	
-	dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN,
+		dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN,
 			      tot_len + DSR_OPT_HDR_LEN + DSR_ACK_REQ_HDR_LEN, IPPROTO_DSR, ttl);
-#endif
+
 		dp->dh.opth = dsr_opt_hdr_add(buf, DSR_OPT_HDR_LEN + DSR_ACK_REQ_HDR_LEN, prot);
 		
 		if (!dp->dh.opth) {
@@ -173,11 +169,10 @@ struct dsr_ack_req_opt *dsr_ack_req_opt_add(struct dsr_pkt *dp, unsigned short i
 	
 		if (!buf)
 			return NULL;
-#ifdef __KERNEL__	
 	
 		dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN,
 			     tot_len + DSR_ACK_REQ_HDR_LEN, IPPROTO_DSR, ttl);
-#endif
+
 		dp->dh.raw = dp->dsr_opts;
 
 		dp->dh.opth->p_len = htons(ntohs(dp->dh.opth->p_len) + DSR_ACK_REQ_HDR_LEN);
@@ -203,7 +198,7 @@ int NSCLASS dsr_ack_req_send(struct in_addr neigh_addr, unsigned short id)
 
 	if (!buf)
 		goto out_err;
-#ifdef __KERNEL__
+
 	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN, 
 				  IP_HDR_LEN + len, IPPROTO_DSR, 1);
 	
@@ -211,7 +206,7 @@ int NSCLASS dsr_ack_req_send(struct in_addr neigh_addr, unsigned short id)
 		DEBUG("Could not create IP header\n");
 		goto out_err;
 	}
-#endif
+
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, 0);
 	
 	if (!dp->dh.opth) {

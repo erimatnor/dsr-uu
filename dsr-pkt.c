@@ -7,8 +7,8 @@
 #include "ns-agent.h"
 #endif
 
-#include "dsr.h"
 #include "dsr-opt.h"
+#include "dsr.h"
 
 char *dsr_pkt_alloc_opts(struct dsr_pkt *dp, int len)
 {	
@@ -97,6 +97,22 @@ struct dsr_pkt *dsr_pkt_alloc(Packet *p)
 		
 		dp->src.s_addr = Address::instance().get_nodeaddr(dp->nh.iph->saddr());
 		dp->dst.s_addr = Address::instance().get_nodeaddr(dp->nh.iph->daddr());
+
+		if (cmh->ptype() == PT_DSR) {
+			dp->dh.opth = hdr_dsr::access(p);	
+			dsr_opts_len = ntohs(dp->dh.opth->p_len) + DSR_OPT_HDR_LEN;
+			
+			if (!dsr_pkt_alloc_opts(dp, dsr_opts_len)) {
+				FREE(dp);
+				return NULL;
+			}
+			
+			memcpy(dp->dsr_opts, dp->dh.raw, dsr_opts_len);
+			dp->dh.raw = dp->dsr_opts;
+
+		}
+		dp->payload = p->userdata();
+		dp->payload_len = p->datalen();
 		
 	}
 	return dp;
@@ -152,7 +168,10 @@ void dsr_pkt_free(struct dsr_pkt *dp)
 	
 	if (!dp)
 		return;
-#ifdef __KERNEL__	
+#ifdef NS2
+/* 	if (dp->p) */
+		
+#else
 	if (dp->skb)
 		kfree_skb(dp->skb);
 #endif
@@ -161,6 +180,7 @@ void dsr_pkt_free(struct dsr_pkt *dp)
 	if (dp->srt)
 		FREE(dp->srt);
 
+	
 	FREE(dp);
 	
 	return;

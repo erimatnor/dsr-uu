@@ -374,12 +374,12 @@ int NSCLASS dsr_rreq_send(struct in_addr target, int ttl)
 	
 	if (!buf)
 		goto out_err;
-#ifdef __KERNEL__
+
 	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN, IP_HDR_LEN + len, IPPROTO_DSR, ttl);
 	
 	if (!dp->nh.iph) 
 		goto out_err;
-#endif	
+
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, 0);
 	
 	if (!dp->dh.opth) {

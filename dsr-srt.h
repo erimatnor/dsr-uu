@@ -77,7 +77,6 @@ static inline char *print_srt(struct dsr_srt *srt)
 }
 struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, struct in_addr myaddr, int index);
 struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt, struct in_addr myaddr);
-int dsr_srt_add(struct dsr_pkt *dp);
 struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt);
 struct dsr_srt *dsr_srt_new(struct in_addr src, struct in_addr dst, 
 			    unsigned int length, char *addrs);
@@ -87,6 +86,7 @@ void dsr_srt_del(struct dsr_srt *srt);
 
 #ifndef NO_DECLS
 
+int dsr_srt_add(struct dsr_pkt *dp);
 int dsr_srt_opt_recv(struct dsr_pkt *dp);
 
 #endif /* NO_DECLS */

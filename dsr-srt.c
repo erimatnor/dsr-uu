@@ -147,12 +147,12 @@ struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt)
 }
 
 
-int dsr_srt_add(struct dsr_pkt *dp)
+int NSCLASS dsr_srt_add(struct dsr_pkt *dp)
 {
 	char *buf;
-	int len;
-	int prot;
-	
+	int len, ttl, tot_len, ip_len;
+	int prot = 0;
+		
 	if (!dp || !dp->srt)
 		return -1;
 
@@ -171,16 +171,22 @@ int dsr_srt_add(struct dsr_pkt *dp)
 		return -1;
 	}
 
-#ifdef __KERNEL__
+#ifdef NS2
+	prot = 0;
+	ip_len = IP_HDR_LEN;
+	tot_len = dp->payload_len + ip_len + len;
+	ttl = dp->nh.iph->ttl();
+#else
 	prot = dp->nh.iph->protocol;
-	
-	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, (dp->nh.iph->ihl << 2), 
-				  ntohs(dp->nh.iph->tot_len) + len, IPPROTO_DSR, 
-				  dp->nh.iph->ttl);
+	ip_len = (dp->nh.iph->ihl << 2);
+	tot_len =  ntohs(dp->nh.iph->tot_len) + len;
+	ttl = dp->nh.iph->ttl;
+#endif	
+	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, ip_len, tot_len, 
+				  IPPROTO_DSR, ttl);
 	
 	if (!dp->nh.iph) 
 		return -1;
-#endif
 
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, prot);
 
@@ -191,7 +197,7 @@ int dsr_srt_add(struct dsr_pkt *dp)
 
 	buf += DSR_OPT_HDR_LEN;
 	len -= DSR_OPT_HDR_LEN;
-	
+
 	dp->srt_opt = dsr_srt_opt_add(buf, len, dp->srt);
 
 	if (!dp->srt_opt) {

@@ -2,8 +2,13 @@
 #define _DSR_OPT_H
 
 #ifdef NS2
+#include <packet.h>
 #include "endian.h"
+
+#define DSR_MAX_OPT_LEN 100
 #endif
+
+#include "dsr.h"
 
 #ifndef NO_GLOBALS
 
@@ -15,7 +20,7 @@ struct dsr_opt {
 
 /* The DSR options header (always comes first) */
 struct dsr_opt_hdr {
-	u_int8_t nh;
+        u_int8_t nh;
 #if defined(__LITTLE_ENDIAN_BITFIELD)
 
 	u_int8_t res:7;
@@ -27,7 +32,21 @@ struct dsr_opt_hdr {
 #error  "Please fix <asm/byteorder.h>"
 #endif
 	u_int16_t p_len; /* payload length */
+#ifdef NS2
+	static int offset_;
+	
+	inline static int& offset() {
+		return offset_;
+	} 
+	inline static dsr_opt_hdr *access(const Packet *p) {
+		return (dsr_opt_hdr *)p->access(offset_);
+	}
+	
+	int size() { return p_len + sizeof(struct dsr_opt_hdr); }
+	struct dsr_opt option[DSR_MAX_OPT_LEN];
+#else
 	struct dsr_opt option[0];
+#endif /* NS2 */
 };
 
 struct dsr_pad1_opt {
