@@ -295,17 +295,28 @@ static int dsr_config_proc_write(struct file* file, const char* buffer,
 
 	  if (strncmp(cmd, confvals_def[i].name, n) == 0) {
 		  char *from, *to;
-		  unsigned int val = 0;
+		  unsigned int val, val_prev;
 		  
 		  from = strstr(cmd, "="); 
 		  from++; /* Exclude '=' */
+		  val_prev = ConfVal(i);
 		  val = simple_strtol(from, &to, 10); 
 
 		  if (confvals_def[i].type == BIN)
-			  set_confval(i, val ? 1 : 0);
-		  else
-			  set_confval(i, val);
+			  val = (val ? 1 : 0);
 		  
+		  set_confval(i, val);
+		  
+		  if (i == PromiscOperation && val_prev != val && dsr_node) {
+			  if (val)
+				  DEBUG("Setting promiscuous operation\n");
+			  else
+				  DEBUG("Disabling promiscuous operation\n");
+			  
+			  dsr_node_lock(dsr_node);
+			  dev_set_promiscuity(dsr_node->slave_dev, val ? 1 : -1);
+			  dsr_node_unlock(dsr_node);
+		  }
 		  if (i == RequestTableSize)
 			  rreq_tbl_set_max_len(val);
 		  

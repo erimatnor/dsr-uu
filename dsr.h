@@ -41,6 +41,7 @@ enum confval {
 #ifdef DEBUG
 	PrintDebug,
 #endif
+	PromiscOperation,
 	BroadCastJitter,
 	RouteCacheTimeout,
 	SendBufferTimeout,
@@ -83,8 +84,9 @@ static struct {
 	enum confval_type type;
 } confvals_def[CONFVAL_MAX] = {
 #ifdef DEBUG
-	{ "PrintDebug", 0, BIN },
+	{ "PrintDebug", 1, BIN },
 #endif
+	{ "PromiscOperation", 1, BIN },
 	{ "BroadCastJitter", 10, MILLISECONDS },
 	{ "RouteCacheTimeout", 300, SECONDS },
 	{ "SendBufferTimeout", 30, SECONDS },

@@ -84,8 +84,8 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 		if (dnode->slave_dev == NULL && dev->get_wireless_stats) {
 			dsr_node_lock(dnode);
 			dnode->slave_dev = dev;
-			dsr_node_unlock(dnode);
 			dev_hold(dnode->slave_dev);
+			dsr_node_unlock(dnode);
 			DEBUG("new dsr slave interface %s\n", dev->name);
 		} 
 		break;
@@ -94,6 +94,12 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 		break;
         case NETDEV_UP:
 		DEBUG("Netdev up %s\n", dev->name);
+		if (dev == dsr_dev && ConfVal(PromiscOperation)) {
+			dev_set_promiscuity(dnode->slave_dev, +1);
+			/* printk("setting promiscuous mode %d\n",  */
+/* 			       dnode->slave_dev->promiscuity); */
+		
+		}
 		break;
         case NETDEV_UNREGISTER:
 		DEBUG("Netdev unregister %s\n", dev->name); 
@@ -102,11 +108,17 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 			dsr_node_lock(dnode);
 			dev_put(dnode->slave_dev);
 			dnode->slave_dev = NULL;
+
 			dsr_node_unlock(dnode);
                 }
 		break;
         case NETDEV_DOWN:
 		DEBUG("Netdev down %s\n", dev->name);
+		if (dev == dsr_dev && ConfVal(PromiscOperation)) {
+			dev_set_promiscuity(dnode->slave_dev, -1);
+		/* 	printk("Disabling promiscuous mode %d\n",  */
+/* 			       dnode->slave_dev->promiscuity); */
+		}
                 break;
         default:
                 break;
@@ -160,8 +172,10 @@ static void dsr_dev_uninit(struct net_device *dev)
 	      (unsigned int)dnode->slave_dev, (unsigned int)dsr_dev);
 
 	dsr_node_lock(dnode);
+
 	if (dnode->slave_dev)
 		dev_put(dnode->slave_dev);
+       
 	dsr_node_unlock(dnode);
 	dev_put(dsr_dev);
 	dsr_node = NULL;
