@@ -701,7 +701,7 @@ int __init NSCLASS lc_init(void)
 void __exit NSCLASS lc_cleanup(void)
 {
 	lc_flush();
-#ifdef __KERNEL
+#ifdef __KERNEL__
 	proc_net_remove(LC_PROC_NAME);
 #endif
 }
