@@ -1,5 +1,7 @@
 #include <linux/config.h>
+#include <linux/version.h>
 #include <linux/module.h>
+#include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/skbuff.h>
 #include <net/protocol.h>
@@ -76,8 +78,11 @@ static int kdsr_recv(struct sk_buff *skb)
 	dst.s_addr = iph->daddr;
 
 	if (skb->mac.ethernet) {
+		struct net_device *dev = skb->dev;
+		
 		memcpy(hw_addr.sa_data, skb->mac.ethernet->h_source, ETH_ALEN);
-		kdsr_arpset(src, &hw_addr, skb->dev);
+		kdsr_arpset(src, &hw_addr, dev);
+		dev_put(dev);
 	}
 
 	/* Process packet */

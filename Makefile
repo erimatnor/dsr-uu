@@ -36,27 +36,33 @@ KCFLAGS=-Wall -O2 $(KDEFS) $(KINC)
 
 # Check for kernel version
 ifeq ($(PATCHLEVEL),6)
-default: k-dsr.ko
+default: kdsr-m.ko kdsr-rtc-simple.ko
 else 
 # Assume kernel 2.4
-default: k-dsr.o
+default: kdsr-m.o kdsr-rtc-simple.o
 endif
 
-k-dsr.ko: $(SRC) Makefile
+kdsr-m.ko: $(SRC) Makefile
+	$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) MODVERDIR=$(PWD) modules
+
+kdsr-rtc-simple.ko: dsr-rtc-simple.c
 	$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) MODVERDIR=$(PWD) modules
 
 $(KOBJS): %.o: %.c Makefile
 	$(KCC) $(KCFLAGS) -c -o $@ $<
 
-k-dsr.o: $(KOBJS)
+kdsr-m.o: $(KOBJS)
 	$(LD) -r $^ -o $@
+
+kdsr-rtc-simple.o: dsr-rtc-simple.c
+	$(KCC) $(KCFLAGS) -c -o $@ $<
 
 depend:
 	@echo "Updating Makefile dependencies..."
 	@makedepend -Y./ -- $(DEFS) -- $(SRC) &>/dev/null
 
 clean:
-	rm -rf .*ko* .*mod* .*cmd *mod* .tmp_versions *~ *.ko *.o Makefile.bak
+	rm -rf .*ko* .*mod* .*cmd *mod* .tmp_versions *~ *.ko *.o *.ver Makefile.bak
 endif
 # DO NOT DELETE
 

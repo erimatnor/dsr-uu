@@ -36,6 +36,8 @@ struct rtc_entry {
     dsr_srt_t srt;
 };
 
+#define RTC_TIMER
+
 #ifdef RTC_TIMER
 static struct timer_list rtc_timer;
 
@@ -75,6 +77,7 @@ static void dsr_rtc_timeout(unsigned long data)
 	    break;
 	
 	list_del(&e->l);
+	kfree(e);
 	rtc_len--;
     }
     __dsr_rtc_set_next_timeout();
@@ -232,7 +235,7 @@ int dsr_rtc_add(dsr_srt_t *srt, unsigned long time,
 	if (timer_pending(&rtc_timer))
 	    mod_timer(&rtc_timer, e->expires);
 	else {
-	    rtc_timer.function = rtc_timeout;
+	    rtc_timer.function = dsr_rtc_timeout;
 	    rtc_timer.expires = e->expires;
 	    rtc_timer.data = 0;
 	    add_timer(&rtc_timer);
@@ -372,8 +375,8 @@ void __exit dsr_rtc_cleanup(void)
     proc_net_remove(DSR_RTC_PROC_NAME);
 }
 
-EXPORT_SYMBOL_NOVERS(dsr_rtc_add);
 EXPORT_SYMBOL(dsr_rtc_update);
+EXPORT_SYMBOL(dsr_rtc_add);
 EXPORT_SYMBOL(dsr_rtc_del);
 EXPORT_SYMBOL(dsr_rtc_get);
 EXPORT_SYMBOL(dsr_rtc_flush);

@@ -1,6 +1,6 @@
 #include <linux/string.h>
 #include <net/ip.h>
-
+#
 #include "dsr.h"
 #include "debug.h"
 #include "dsr-rrep.h"
@@ -106,7 +106,7 @@ void dsr_rrep_recv(dsr_rrep_opt_t *rrep, struct in_addr src,
 		srt = dsr_srt_new(dst, src, DSR_RREP_ADDRS_LEN(rrep), 
 				  rrep->addrs);
 
-	/* 	dsr_rtc_add(srt, 5000, 0); */
+		dsr_rtc_add(srt, 5000, 0);
 
 		kfree(srt);
 	}
