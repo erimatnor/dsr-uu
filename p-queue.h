@@ -31,6 +31,6 @@ int p_queue_enqueue_packet(struct sk_buff *skb,
 int p_queue_set_verdict(int verdict, __u32 daddr);
 void p_queue_flush(void);
 int p_queue_init(void);
-void p_queue_fini(void);
+void p_queue_cleanup(void);
 
 #endif /* _P_QUEUE_H */

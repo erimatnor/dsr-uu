@@ -8,7 +8,7 @@
 
 #ifdef DEBUG
 #undef DEBUG
-#define DEBUG(f, args...) dsr_print(f, ## args) 
+#define DEBUG(f, args...) dsr_print(__FUNCTION__, f, ## args) 
 #else 
 #define DEBUG(f, args...)
 #endif
@@ -28,7 +28,7 @@ static inline char *print_ip(__u32 addr)
    return buf;
 }
 
-static inline void dsr_print(char *fmt, ...)
+static inline void dsr_print(const char *func, char *fmt, ...)
 {
     char buf[DEBUG_BUFLEN];
     
@@ -40,6 +40,6 @@ static inline void dsr_print(char *fmt, ...)
 
     va_end(ap);
 
-    printk("kdsr::%s: %s", __FUNCTION__, buf);
+    printk("k-dsr::%s: %s", func, buf);
 }
 #endif

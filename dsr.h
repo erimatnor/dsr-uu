@@ -2,7 +2,6 @@
 #define _DSR_H
 
 #include <asm/byteorder.h>
-#include <linux/skbuff.h>
 #include <linux/types.h>
 #include <linux/in.h>
 
@@ -55,6 +54,5 @@ struct netdev_info {
 extern struct netdev_info ldev_info;  /* defined in dsr-dev.c */
 
 dsr_hdr_t *dsr_hdr_add(char *buf, int len, unsigned int protocol);
-struct sk_buff *dsr_pkt_alloc(int size);
 
 #endif

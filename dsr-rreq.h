@@ -14,6 +14,6 @@ typedef struct dsr_rreq_opt {
 
 #define DSR_RREQ_HDR_LEN 6
 
-struct sk_buff *dsr_rreq_create(__u32 taddr);
+struct sk_buff *dsr_rreq_create(__u32 taddr, struct net_device *dev);
 
 #endif

@@ -34,7 +34,7 @@
 #include <net/icmp.h>
 
 #include "p-queue.h"
-
+#include "debug.h"
 /*
  * This is basically a shameless rippoff of the linux kernel's ip_queue module.
  */
@@ -121,11 +121,14 @@ static inline void
 __p_queue_flush(void)
 {
 	struct p_queue_entry *entry;
+	int n = 0;
 	
 	while ((entry = __p_queue_find_dequeue_entry(NULL, 0))) {
 	    kfree_skb(entry->skb);
 	    kfree(entry);
+	    n++;
 	}
+	DEBUG("%d pkts flushed\n", n);
 }
 
 static inline void
@@ -324,7 +327,7 @@ int p_queue_init(void)
 	return init_or_cleanup(1);
 }
 
-void p_queue_fini(void)
+void p_queue_cleanup(void)
 {
 	init_or_cleanup(0);
 }
