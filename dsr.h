@@ -115,6 +115,7 @@ struct dsr_node {
 #ifdef __KERNEL__
 	struct net_device *dev;
 	struct net_device *slave_dev;
+	struct in_device *slave_indev;
 	struct net_device_stats	stats;
 	spinlock_t lock;
 #endif

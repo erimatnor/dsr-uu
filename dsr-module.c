@@ -142,8 +142,8 @@ static int is_promisc_recv(struct sk_buff *skb)
 	dsr_node_lock(dsr_node);
 	if (dsr_node->slave_dev) {
 
-	/* 	DEBUG("dst=%s\n",print_eth(ethh->h_dest)); */
-/* 		DEBUG("bc=%s\n",print_eth(bc)); */
+		DEBUG("dst=%s\n",print_eth(ethh->h_dest));
+		DEBUG("bc=%s\n",print_eth(bc));
 		
 		if (memcmp(ethh->h_dest, dsr_node->slave_dev->dev_addr,
 			   ETH_ALEN) == 0 ||

@@ -26,6 +26,8 @@
 /* Our dsr device */
 struct net_device *dsr_dev;
 struct dsr_node *dsr_node;
+static int rp_filter = 0;
+static int forwarding = 0;
 
 static int dsr_dev_inetaddr_event(struct notifier_block *this, 
 				  unsigned long event,
@@ -51,11 +53,21 @@ static int dsr_dev_inetaddr_event(struct notifier_block *this,
 			dsr_node_lock(dnode);
 			dnode->ifaddr.s_addr = ifa->ifa_address;
 			dnode->bcaddr.s_addr = ifa->ifa_broadcast;
-			dsr_node_unlock(dnode);
 			
 			addr.s_addr = ifa->ifa_address;
 			bc.s_addr = ifa->ifa_broadcast;
 			
+			dnode->slave_indev = in_dev_get(dnode->slave_dev);
+			
+			/* Disable rp_filter and enable forwarding */
+			if (dnode->slave_indev) {
+				rp_filter = dnode->slave_indev->cnf.rp_filter;
+				forwarding = dnode->slave_indev->cnf.forwarding;
+				dnode->slave_indev->cnf.rp_filter = 0; 
+				dnode->slave_indev->cnf.forwarding = 1;
+ 			}
+			dsr_node_unlock(dnode);
+
 			DEBUG("New ip=%s broadcast=%s\n", 
 			      print_ip(addr), 
 			      print_ip(bc));
@@ -63,8 +75,13 @@ static int dsr_dev_inetaddr_event(struct notifier_block *this,
 		break;
         case NETDEV_DOWN:
 		DEBUG("notifier down\n");
+		/* Restore rp_filter and forwarding setting */
+		if (indev && indev->dev == dsr_dev) {
+			
+		}
                 break;
-        default:
+	case NETDEV_REGISTER:
+	default:
                 break;
         };
 	return NOTIFY_DONE;
@@ -94,12 +111,8 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 		break;
         case NETDEV_UP:
 		DEBUG("Netdev up %s\n", dev->name);
-		if (dev == dsr_dev && ConfVal(PromiscOperation)) {
+		if (dev == dsr_dev && ConfVal(PromiscOperation)) 
 			dev_set_promiscuity(dnode->slave_dev, +1);
-			/* printk("setting promiscuous mode %d\n",  */
-/* 			       dnode->slave_dev->promiscuity); */
-		
-		}
 		break;
         case NETDEV_UNREGISTER:
 		DEBUG("Netdev unregister %s\n", dev->name); 
@@ -114,10 +127,16 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 		break;
         case NETDEV_DOWN:
 		DEBUG("Netdev down %s\n", dev->name);
-		if (dev == dsr_dev && ConfVal(PromiscOperation)) {
-			dev_set_promiscuity(dnode->slave_dev, -1);
-		/* 	printk("Disabling promiscuous mode %d\n",  */
-/* 			       dnode->slave_dev->promiscuity); */
+		if (dev == dsr_dev) {
+			if (ConfVal(PromiscOperation))
+				dev_set_promiscuity(dnode->slave_dev, -1);
+			
+			if (dsr_node->slave_indev) {
+				dsr_node->slave_indev->cnf.rp_filter = rp_filter; 
+				dsr_node->slave_indev->cnf.forwarding = forwarding; 
+				in_dev_put(dsr_node->slave_indev);
+				dsr_node->slave_indev = NULL;	
+			}
 		}
                 break;
         default:
