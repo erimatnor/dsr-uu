@@ -190,7 +190,7 @@ int dsr_rrep_send(dsr_srt_t *srt)
 		res = -1;
 		goto out_err;
 	}
-	len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_RREP_OPT_LEN(srt);
+	len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) + DSR_RREP_OPT_LEN(srt);
 	
 	skb = kdsr_pkt_alloc(len, dev);
 	
