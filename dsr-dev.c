@@ -25,8 +25,8 @@
 #include "dsr-io.h"
 
 /* Our dsr device */
-struct net_device *dsr_dev;
-struct dsr_node *dsr_node;
+static struct net_device *dsr_dev;
+static struct dsr_node *dsr_node;
 static int rp_filter = 0;
 static int forwarding = 0;
 
@@ -371,16 +371,22 @@ int  dsr_dev_init(char *ifname)
 	struct dsr_node *dnode;
 
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(2,4,20)
-	dsr_dev = init_etherdev(NULL, sizeof(struct dsr_node));
-	dev_alloc_name(dsr_dev, "dsr%d");
-	dsr_dev->init = &dsr_dev_setup;	
-#else
-	dsr_dev = alloc_netdev(sizeof(struct dsr_node),
-			       "dsr%d", dsr_dev_setup);
-#endif
+       
+	dsr_dev = alloc_etherdev(sizeof(struct dsr_node));
+
 	if (!dsr_dev)
 		return -ENOMEM;
 
+	dsr_dev->init = dsr_dev_setup;
+	
+	dev_alloc_name(dsr_dev, "dsr%d");
+	dsr_dev->init = &dsr_dev_setup;
+#else
+	dsr_dev = alloc_netdev(sizeof(struct dsr_node),
+			       "dsr%d", dsr_dev_setup);
+	if (!dsr_dev)
+		return -ENOMEM;
+#endif
 	dnode = dsr_node = (struct dsr_node *)dsr_dev->priv;
 
 	dsr_node_init(dnode);
@@ -447,16 +453,16 @@ int  dsr_dev_init(char *ifname)
 		goto cleanup_netdevice_notifier;
 	/* We must increment usage count since we hold a reference */
 	dev_hold(dsr_dev);
-	return res;
+	return 0;
  cleanup_netdevice_notifier:
 	unregister_netdevice_notifier(&netdev_notifier);
  cleanup_netdev_register:
 	unregister_netdev(dsr_dev);
  cleanup_netdev:
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,4,20)
-	kfree(dsr_dev);
-#else
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2,4,20)
 	free_netdev(dsr_dev);
+#else
+	kfree(dsr_dev);
 #endif
 	return res;
 } 
@@ -466,9 +472,9 @@ void __exit dsr_dev_cleanup(void)
         unregister_netdevice_notifier(&netdev_notifier);
 	unregister_inetaddr_notifier(&inetaddr_notifier);
 	unregister_netdev(dsr_dev);
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,4,20)
-	kfree(dsr_dev);
-#else
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2,4,20)
 	free_netdev(dsr_dev);
+#else
+	kfree(dsr_dev);
 #endif
 }

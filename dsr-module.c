@@ -463,6 +463,7 @@ static int __init dsr_module_init(void)
 	dbg_init();
 #endif
 	parse_mackill();
+	
 
 	res = dsr_dev_init(ifname);
 
@@ -559,10 +560,10 @@ static void __exit dsr_module_cleanup(void)
 	nf_unregister_hook(&dsr_pre_routing_hook);
 	nf_unregister_hook(&dsr_ip_forward_hook);
 	send_buf_cleanup();
-	dsr_dev_cleanup();
 	rreq_tbl_cleanup();
 	neigh_tbl_cleanup();
 	maint_buf_cleanup();
+	dsr_dev_cleanup();
 #ifdef DEBUG
 	dbg_cleanup();
 #endif
