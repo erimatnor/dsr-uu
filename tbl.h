@@ -9,12 +9,13 @@
 
 #define TBL_FIRST(tbl) (tbl)->head.next
 #define TBL_EMPTY(tbl) (TBL_FIRST(tbl) == &(tbl)->head)
+#define TBL_FULL(tbl) ((tbl)->len >= (tbl)->max_len)
 #define tbl_is_first(tbl, e) (&e->l == TBL_FIRST(tbl))
 
 struct tbl {
 	struct list_head head;
-	unsigned int len;
-	unsigned int max_len;
+	volatile unsigned int len;
+	volatile unsigned int max_len;
 	rwlock_t lock;
 };
 
@@ -133,7 +134,7 @@ static inline int __tbl_del(struct tbl *t, struct list_head *l)
 	return 1;
 }
 
-static inline int __tbl_do_for_first(struct tbl *t, void *data, do_t func)
+static inline int __tbl_find_do(struct tbl *t, void *data, do_t func)
 {
 	struct list_head *pos, *tmp;
     
@@ -144,12 +145,12 @@ static inline int __tbl_do_for_first(struct tbl *t, void *data, do_t func)
 	return 0;
 }
 
-static inline int tbl_do_for_first(struct tbl *t, void *data, do_t func)
+static inline int tbl_find_do(struct tbl *t, void *data, do_t func)
 {
 	int res;
 	
 	write_lock_bh(&t->lock);
-	res = __tbl_do_for_first(t, data, func);
+	res = __tbl_find_do(t, data, func);
 	write_unlock_bh(&t->lock);
 
 	return res;
@@ -181,18 +182,18 @@ static inline void *tbl_find_detach(struct tbl *t, void *id, criteria_t crit)
 {
 	struct list_head *e;
 
-	read_lock_bh(&t->lock);
+	write_lock_bh(&t->lock);
 
 	e = __tbl_find(t, id, crit);
 	
 	if (!e) {
-		read_unlock_bh(&t->lock);
+		write_unlock_bh(&t->lock);
 		return NULL;
 	}
 	list_del(e);
 	t->len--;
 
-	read_unlock_bh(&t->lock);
+	write_unlock_bh(&t->lock);
 	
 	return e;
 }
@@ -211,18 +212,18 @@ static inline void *tbl_detach_first(struct tbl *t)
 {
 	struct list_head *e;
 
-	read_lock_bh(&t->lock);
+	write_lock_bh(&t->lock);
 
 	e = TBL_FIRST(t);
 	
 	if (!e) {
-		read_unlock_bh(&t->lock);
+		write_unlock_bh(&t->lock);
 		return NULL;
 	}
 	list_del(e);
 	t->len--;
 
-	read_unlock_bh(&t->lock);
+	write_unlock_bh(&t->lock);
 	
 	return e;
 }
@@ -250,7 +251,17 @@ static inline int tbl_del(struct tbl *t, struct list_head *l)
 	return res;
 }
 
+static inline int tbl_del_first(struct tbl *t)
+{
+	struct list_head *l;
+	int n = 0;
 
+	l = tbl_detach_first(t);
+	
+	kfree(l);
+
+	return n;
+}
 static inline int tbl_for_each_del(struct tbl *t, void *id, criteria_t crit)
 {
 	struct list_head *pos, *tmp;

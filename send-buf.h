@@ -6,6 +6,7 @@
 #define SEND_BUF_DROP 1
 #define SEND_BUF_SEND 2
 
+void send_buf_set_max_len(unsigned int max_len);
 int send_buf_find(__u32 daddr);
 int send_buf_enqueue_packet(struct dsr_pkt *dp, int (*okfn)(struct dsr_pkt *));
 int send_buf_set_verdict(int verdict, unsigned long daddr);

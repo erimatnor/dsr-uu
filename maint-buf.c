@@ -6,12 +6,9 @@
 #include "dsr-rtc.h"
 #include "dsr-rerr.h"
 
-#define MAINT_BUF_MAX_LEN 100
-#define MAX_REXMT 2
-
 TBL(maint_buf, MAINT_BUF_MAX_LEN);
 
-struct timer_list ack_timer;
+static struct timer_list ack_timer;
 
 struct maint_entry {
 	struct list_head l;
@@ -68,6 +65,11 @@ static inline int crit_nxt_hop_rexmt(void *pos, void *nh)
 		return 1;
 	}
 	return 0;
+}
+
+void maint_buf_set_max_len(unsigned int max_len)
+{
+	maint_buf.max_len = max_len;
 }
 
 static struct maint_entry *maint_entry_create(struct dsr_pkt *dp)
@@ -228,7 +230,7 @@ int maint_buf_mark_acked(struct in_addr nxt_hop, unsigned short id)
 	d.nxt_hop = &nxt_hop;
 
 	/* Find the buffered packet to mark as acked */
-	return tbl_do_for_first(&maint_buf, &d, crit_mark_acked);
+	return tbl_find_do(&maint_buf, &d, crit_mark_acked);
 }
 
 int maint_buf_init(void)

@@ -306,7 +306,7 @@ int dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 	
 	/* Remove pending RREQs */
 	
-	rreq_tbl_del(rrep_opt_srt->dst);
+	/* rreq_tbl_disable_route_discovery(rrep_opt_srt->dst); */
 	
 	kfree(rrep_opt_srt);
 	

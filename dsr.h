@@ -18,17 +18,11 @@
 			       * adding the dsr header. A better solution should
 			       * probably be found... */
 
-/* typedef struct dsr_rreq_opt_opt struct dsr_rreq_opt; */
-/* typedef struct dsr_rrep_opt struct dsr_rrep_opt; */
-/* typedef struct dsr_srt_opt dsr_srt_opt_t; */
-
-
-/* Local device info (shared data) */
-//extern struct netdev_info ldev_info;  /* defined in dsr-dev.c */
 enum {
 	BroadCastJitter,
 	RouteCacheTimeout,
 	SendBufferTimeout,
+	SendBufferSize,
 	RequestTableSize,
 	RequestTableIds,
 	MaxRequestRexmt,
@@ -44,6 +38,11 @@ enum {
 	PARAMS_MAX,
 };
 
+#define MAINT_BUF_MAX_LEN 100
+#define RREQ_TBL_MAX_LEN 64 /* Should be enough */
+#define SEND_BUF_MAX_LEN 100
+#define RREQ_TLB_MAX_ID 16
+
 static struct { 
 	const char *name; 
 	const int val; 
@@ -51,12 +50,13 @@ static struct {
 	{ "BroadCastJitter", 10 },
 	{ "RouteCacheTimeout", 300000 },
 	{ "SendBufferTimeout", 30 },
-	{ "RequestTableSize", 64 },
-	{ "RequestTableIds", 16 },
+	{ "SendBufferSize", SEND_BUF_MAX_LEN },
+	{ "RequestTableSize", RREQ_TBL_MAX_LEN },
+	{ "RequestTableIds", RREQ_TLB_MAX_ID },
 	{ "MaxRequestRexmt", 5 },
 	{ "RequestPeriod", 10 },
 	{ "NonpropRequestTimeout", 30 },
-	{ "RexmtBufferSize", 50 },
+	{ "RexmtBufferSize", MAINT_BUF_MAX_LEN },
 	{ "MaintHoldoffTime", 250000 },
 	{ "MaxMaintRexmt", 2 },
 	{ "TryPassiveAcks", 1 },

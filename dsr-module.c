@@ -349,7 +349,7 @@ static int dsr_config_proc_read(char *buffer, char **start, off_t offset, int le
 static int dsr_config_proc_write(struct file* file, const char* buffer, 
 				unsigned long count, void* data) {
 #define CMD_MAX_LEN 256
-  char cmd[CMD_MAX_LEN ];
+  char cmd[CMD_MAX_LEN];
   int i;
   
   memset(cmd, '\0', CMD_MAX_LEN);
@@ -368,14 +368,24 @@ static int dsr_config_proc_write(struct file* file, const char* buffer,
 	  if (strlen(cmd) - 2 <= n)
 		  return -EFAULT;
 
-	  if (strncmp(cmd, params_def[i].name, n) >= 0) {
+	  if (strncmp(cmd, params_def[i].name, n) == 0) {
 		  char *from, *to;
-		  int val = 0;
+		  unsigned int val = 0;
 		  
 		  from = strstr(cmd, "="); 
 		  from++; /* Exclude '=' */
 		  val = simple_strtol(from, &to, 10); 
 		  set_param(i, val);
+		  
+		  if (i == RequestTableSize)
+			  rreq_tbl_set_max_len(val);
+		  
+		  if (i == RexmtBufferSize)
+			  maint_buf_set_max_len(val);
+
+		  if (i == SendBufferSize)
+			  send_buf_set_max_len(val);
+		  
 		  DEBUG("Setting %s to %d\n",  params_def[i].name, val);
 	  }
   }

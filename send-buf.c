@@ -11,7 +11,6 @@
 #include "dsr-rtc.h"
 #include "kdsr.h"
 
-#define SEND_BUF_MAX_LEN 10
 #define SEND_BUF_PROC_FS_NAME "send_buf"
 
 TBL(send_buf, SEND_BUF_MAX_LEN);
@@ -23,7 +22,7 @@ struct send_buf_entry {
 	int (*okfn)(struct dsr_pkt *);
 };
 
-struct timer_list send_buf_timer;
+static struct timer_list send_buf_timer;
 
 static inline int crit_addr(void *pos, void *addr)
 {
@@ -47,6 +46,12 @@ static inline int crit_garbage(void *pos, void *n)
 	}
 	return 0;
 }
+
+void send_buf_set_max_len(unsigned int max_len)
+{
+	send_buf.max_len = max_len;
+}
+
 static void send_buf_timeout(unsigned long data)
 {
 	struct send_buf_entry *e;

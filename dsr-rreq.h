@@ -19,10 +19,11 @@ struct dsr_rreq_opt {
 #define DSR_RREQ_TOT_LEN IP_HDR_LEN + sizeof(struct dsr_opt_hdr) + sizeof(struct dsr_rreq_opt)
 #define DSR_RREQ_ADDRS_LEN(rreq_opt) (rreq_opt->length - 6)
 
-int rreq_tbl_del(struct in_addr dst);
-int rreq_tbl_init(void);
-void rreq_tbl_cleanup(void);
+void rreq_tbl_set_max_len(unsigned int max_len);
+int rreq_tbl_disable_route_discovery(struct in_addr dst);
 int dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt);
 int dsr_rreq_route_discovery(struct in_addr target);
+int rreq_tbl_init(void);
+void rreq_tbl_cleanup(void);
 
 #endif  /* _DSR_RREQ */
