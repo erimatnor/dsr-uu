@@ -326,9 +326,6 @@ int NSCLASS lc_link_add(struct in_addr src, struct in_addr dst,
 		DEBUG("Could not add new link\n");
 	
 	DSR_WRITE_UNLOCK(&LC.lock);
-	
-/* 	lc_print(&LC, lc_print_buf); */
-/* 	DEBUG("\n%s\n", lc_print_buf); */
 
 	return 0;
 }
@@ -359,9 +356,6 @@ int NSCLASS lc_link_del(struct in_addr src, struct in_addr dst)
 	}	
 	
 	__lc_link_del(&LC, link);
-
-/* 	lc_print(&LC, lc_print_buf); */
-/* 	DEBUG("\n%s\n", lc_print_buf); */
  out:
 	LC.src = NULL;
 	DSR_WRITE_UNLOCK(&LC.lock);
@@ -404,7 +398,6 @@ void NSCLASS __dijkstra(struct in_addr src)
 {	
 	TBL(S, LC_NODES_MAX);
 	struct lc_node *src_node, *u;
-/* 	char buf[20000]; */
 	int i = 0;
 
 	if (TBL_EMPTY(&LC.nodes)) {
@@ -420,12 +413,7 @@ void NSCLASS __dijkstra(struct in_addr src)
 		return;
 	
 	while ((u = __dijkstra_find_lowest_cost_node(&LC.nodes))) {
-	       
-	/* 	printf("#%d:\n", i); */
-/* 		fflush(stdout); */
-/* 		lc_print(&LC, buf); */
-/* 		printf("%s\n", buf); */
-/* 		fflush(stdout); */
+
 		tbl_detach(&LC.nodes, &u->l);
 		
 		/* Add to S */
