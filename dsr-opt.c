@@ -2,6 +2,10 @@
 #include <net/ip.h>
 #endif
 
+#ifdef NS2
+#include "ns-agent.h"
+#endif
+
 #include "debug.h"
 #include "dsr.h"
 #include "dsr-opt.h"
@@ -10,10 +14,6 @@
 #include "dsr-rerr.h"
 #include "dsr-srt.h"
 #include "dsr-ack.h"
-
-#ifdef NS2
-#include "ns-agent.h"
-#endif
 
 struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, int len, unsigned int protocol)
 {

@@ -3,6 +3,10 @@
 #include <linux/module.h>
 #endif
 
+#ifdef NS2
+#include "ns-agent.h"
+#else
+
 #include "dsr.h"
 #include "debug.h"
 #include "tbl.h"
@@ -11,10 +15,6 @@
 #include "link-cache.h"
 #include "dsr-rerr.h"
 #include "timer.h"
-
-#ifdef NS2
-#include "ns-agent.h"
-#else
 
 #define MAINT_BUF_PROC_FS_NAME "maint_buf"
 
@@ -176,7 +176,7 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 		return -1;
 	}
 	
-	if (PARAM(UseNetworkLayerAck)) {
+	if (CONFVAL(UseNetworkLayerAck)) {
 		dsr_ack_req_opt_add(dp, m->id);
 		
 		if (empty)
@@ -239,7 +239,7 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 	m->timer_set = 0;
 
 	/* Increase the number of retransmits */	
-	if (++m->rexmt >= PARAM(MaxMaintRexmt)) {
+	if (++m->rexmt >= CONFVAL(MaxMaintRexmt)) {
 		DEBUG("MaxMaintRexmt reached, send RERR\n");
 		lc_link_del(my_addr(), m->nxt_hop);
 

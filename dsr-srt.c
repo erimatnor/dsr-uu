@@ -3,16 +3,16 @@
 #include <net/ip.h>
 #endif
 
+#ifdef NS2
+#include "ns-agent.h"
+#endif
+
 #include "dsr.h"
 #include "dsr-srt.h"
 #include "dsr-opt.h"
 #include "dsr-ack.h"
 #include "link-cache.h"
 #include "debug.h"
-
-#ifdef NS2
-#include "ns-agent.h"
-#endif
 
 struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, struct in_addr myaddr, int index)
 {

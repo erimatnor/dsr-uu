@@ -3,6 +3,10 @@
 #include "dsr-dev.h"
 #endif
 
+#ifdef NS2
+#include "ns-agent.h"
+#endif
+
 #include "tbl.h"
 #include "debug.h"
 #include "dsr-opt.h"
@@ -10,10 +14,6 @@
 #include "link-cache.h"
 #include "neigh.h"
 #include "maint-buf.h"
-
-#ifdef NS2
-#include "ns-agent.h"
-#endif
 
 struct dsr_ack_opt *dsr_ack_opt_add(char *buf, int len, struct in_addr src, 
 				    struct in_addr dst, unsigned short id)

@@ -51,7 +51,7 @@ static inline int crit_garbage(void *pos, void *n)
 	Time *now = (Time *)n; 
 	struct send_buf_entry *e = (struct send_buf_entry *)pos;
 	
-	if (e->qtime + SECONDS(PARAM(SendBufferTimeout)) < *now) {
+	if (e->qtime + SECONDS(CONFVAL(SendBufferTimeout)) < *now) {
 		if (e->dp)
 			dsr_pkt_free(e->dp);
 		return 1;
@@ -87,7 +87,7 @@ void NSCLASS send_buf_timeout(unsigned long data)
 
 	DSR_READ_UNLOCK(&send_buf.lock);
 	
-	send_buf_timer.expires = qtime + SECONDS(PARAM(SendBufferTimeout));
+	send_buf_timer.expires = qtime + SECONDS(CONFVAL(SendBufferTimeout));
 	add_timer(&send_buf_timer);
 }
 
@@ -147,7 +147,7 @@ int NSCLASS send_buf_enqueue_packet(struct dsr_pkt *dp, xmit_fct_t okfn)
 	}
 		
 	if (empty) {
-		send_buf_timer.expires = TimeNow + SECONDS(PARAM(SendBufferTimeout));
+		send_buf_timer.expires = TimeNow + SECONDS(CONFVAL(SendBufferTimeout));
 		add_timer(&send_buf_timer);
 	}
 

@@ -4,15 +4,17 @@
 #undef DEBUG
 #endif
 
+#ifdef NS2
+#include "ns-agent.h"
+#endif
+
 #include "debug.h"
 #include "dsr-rtc.h"
 #include "dsr-srt.h"
 #include "tbl.h"
 #include "link-cache.h"
 
-#ifdef NS2
-#include "ns-agent.h"
-#else
+#ifdef __KERNEL__
 #define DEBUG(f, args...)
 
 MODULE_AUTHOR("erik.nordstrom@it.uu.se");
@@ -21,7 +23,7 @@ MODULE_LICENSE("GPL");
 
 static struct lc_graph LC;
 
-#endif /* NS2 */
+#endif /* __KERNEL__ */
 
 #define LC_NODES_MAX 500
 #define LC_LINKS_MAX 100 /* TODO: Max links should be calculated from Max

@@ -107,7 +107,7 @@ void NSCLASS rreq_tbl_timeout(unsigned long data)
 	__tbl_detach(&rreq_tbl, &e->l);
 	__tbl_add_tail(&rreq_tbl, &e->l);
 	
-	if (e->num_rexmts >= PARAM(MaxRequestRexmt)) {
+	if (e->num_rexmts >= CONFVAL(MaxRequestRexmt)) {
 		DEBUG("MAX RREQs reached for %s\n", 
 		      print_ip(e->node_addr));
 
@@ -164,7 +164,7 @@ struct rreq_tbl_entry *NSCLASS __rreq_tbl_entry_create(struct in_addr node_addr)
 	e->timer->function = &NSCLASS rreq_tbl_timeout;
 	e->timer->data = (unsigned long)e;
 
-	INIT_TBL(&e->rreq_id_tbl, PARAM(RequestTableIds));
+	INIT_TBL(&e->rreq_id_tbl, CONFVAL(RequestTableIds));
 	
 	return e;
 }

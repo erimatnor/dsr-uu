@@ -2,6 +2,10 @@
 #include "dsr-dev.h"
 #endif
 
+#ifdef NS2
+#include "ns-agent.h"
+#endif
+
 #include "dsr.h"
 #include "dsr-rerr.h"
 #include "dsr-opt.h"
@@ -11,9 +15,6 @@
 #include "link-cache.h"
 #include "maint-buf.h"
 
-#ifdef NS2
-#include "ns-agent.h"
-#endif
 
 static struct dsr_rerr_opt *dsr_rerr_opt_add(char *buf, int len, 
 					     int err_type, 

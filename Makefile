@@ -7,7 +7,7 @@ NS_SRC_CPP=ns-agent.cc
 
 DEFS=-DDEBUG 
 
-MODNAME=kdsr
+MODNAME=dsr
 RTC_TRG=linkcache
 RTC_SRC=link-cache.c
 

@@ -19,14 +19,15 @@ class DSRUU;
 #include <mac-802_11.h>
 #include <mobilenode.h>
 #include <linux/if_ether.h>
-#include "tbl.h"
-#include "endian.h"
-#include "dsr.h"
-#include "timer.h"
 
 #define NSCLASS DSRUU::
+#define CONFVAL(name) DSRUU::get_confval(name)
 
+#include "tbl.h"
+#include "endian.h"
+#include "timer.h"
 #define NO_DECLS
+#include "dsr.h"
 #include "dsr-opt.h"
 #include "send-buf.h"
 #include "dsr-rreq.h"
@@ -54,7 +55,6 @@ typedef dsr_opt_hdr hdr_dsr;
 #define DELIVER(pkt) deliver(pkt)
 #define __init
 #define __exit
-#define PARAM(name) DSRUU::get_param(name)
 #define ntohl(x) x
 #define htonl(x) x
 #define htons(x) x
@@ -98,11 +98,15 @@ class DSRUU : public Agent {
 	void mod_timer (DSRUUTimer *t, Time expires_) 
 		{ t->expires = expires_; t->resched(t->expires); }
 	void del_timer (DSRUUTimer *t) { t->cancel(); }
-	static const int get_param(int index) { return params[index]; }
-	static const int set_param(int index, int val) 
-		{ params[index] = val; return val; }
+	static const unsigned int get_confval(enum confval cv) 
+		{ return confvals[cv]; }
+	static const unsigned int set_confval(enum confval cv, unsigned int val)
+		{ confvals[cv] = val; return val; }
 #define NO_GLOBALS
 #undef NO_DECLS
+
+#undef _DSR_H
+#include "dsr.h"
 
 #undef _DSR_OPT_H
 #include "dsr-opt.h"
@@ -155,7 +159,7 @@ class DSRUU : public Agent {
 			return;
 		}
  private:
-	static int params[PARAMS_MAX];
+	static int confvals[CONFVAL_MAX];
 	struct in_addr myaddr;
 	unsigned long macaddr;
 	Trace *trace_;

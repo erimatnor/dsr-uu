@@ -53,6 +53,13 @@ MODULE_PARM(mackill, "s");
 static unsigned char mackill_list[MAX_MACKILL][ETH_ALEN];
 static int mackill_len = 0;
 
+static char *confval_names[CONFVAL_TYPE_MAX] = { "Seconds (s)", 
+						 "Milliseconds (ms)", 
+						 "Microseconds (us)", 
+						 "Nanoseconds (ns)", 
+						 "Quanta", 
+						 "Binary" };
+
 /* Stolen from LUNAR <christian.tschudin@unibas.ch> */
 static int parse_mackill(void)
 {
@@ -253,9 +260,11 @@ static int dsr_config_proc_read(char *buffer, char **start, off_t offset, int le
 	int len = 0;
 	int i;
 	
-	for (i = 0; i < PARAMS_MAX; i++)
-		len += sprintf(buffer+len, "%s=%d\n", 
-			       params_def[i].name, get_param(i));
+	for (i = 0; i < CONFVAL_MAX; i++)
+		len += sprintf(buffer+len, "%s=%u  %s\n", 
+			       confvals_def[i].name, 
+			       get_confval(i), 
+			       confval_names[confvals_def[i].type]);
     
 	*start = buffer + offset;
 	len -= offset;
@@ -280,20 +289,20 @@ static int dsr_config_proc_write(struct file* file, const char* buffer,
   if(copy_from_user(cmd, buffer, count))
 	  return -EFAULT;
 
-  for (i = 0; i < PARAMS_MAX; i++) {
-	  int n = strlen(params_def[i].name);
+  for (i = 0; i < CONFVAL_MAX; i++) {
+	  int n = strlen(confvals_def[i].name);
 	  
 	  if (strlen(cmd) - 2 <= n)
 		  continue;
 
-	  if (strncmp(cmd, params_def[i].name, n) == 0) {
+	  if (strncmp(cmd, confvals_def[i].name, n) == 0) {
 		  char *from, *to;
 		  unsigned int val = 0;
 		  
 		  from = strstr(cmd, "="); 
 		  from++; /* Exclude '=' */
 		  val = simple_strtol(from, &to, 10); 
-		  set_param(i, val);
+		  set_confval(i, val);
 		  
 		  if (i == RequestTableSize)
 			  rreq_tbl_set_max_len(val);
@@ -304,7 +313,7 @@ static int dsr_config_proc_write(struct file* file, const char* buffer,
 		  if (i == SendBufferSize)
 			  send_buf_set_max_len(val);
 		  
-		  DEBUG("Setting %s to %d\n",  params_def[i].name, val);
+		  DEBUG("Setting %s to %d\n",  confvals_def[i].name, val);
 	  }
   }
   return count;

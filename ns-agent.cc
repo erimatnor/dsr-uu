@@ -23,7 +23,7 @@ public:
 } class_DSRUU;
 
 
-int DSRUU::params[PARAMS_MAX];
+int DSRUU::confvals[CONFVAL_MAX];
 
 DSRUU::DSRUU() : Agent(PT_DSR), 
 		 ack_timer(this, "ACKTimer"), 
@@ -43,8 +43,8 @@ DSRUU::DSRUU() : Agent(PT_DSR),
 	ifq_ = NULL;
 	node_ = NULL;
 
-	for (i = 0; i < PARAMS_MAX; i++)
-		params[i] = params_def[i].val;
+	for (i = 0; i < CONFVAL_MAX; i++)
+		confvals[i] = confvals_def[i].val;
 
 	/* Initilize tables */
 	lc_init();
@@ -264,7 +264,7 @@ DSRUU::xmit(struct dsr_pkt *dp)
 	double jitter = 0.0;
 	
 	if ((DATA_PACKET(dp->dh.opth->nh) || dp->dh.opth->nh == PT_PING) && 
-	    PARAM(UseNetworkLayerAck))
+	    CONFVAL(UseNetworkLayerAck))
 		maint_buf_add(dp);
 	
 	p = ns_packet_create(dp);
@@ -292,7 +292,7 @@ DSRUU::xmit(struct dsr_pkt *dp)
 	/* Set packet fields depending on packet type */
 	if (iph->daddr() == DSR_BROADCAST) {
 		/* Broadcast packet */
-		jitter = 0.02 * Random::uniform();
+		jitter = (CONFVAL(BroadCastJitter) / 1000) * Random::uniform();
 	}
 		
 	Scheduler::instance().schedule(ll_, p, jitter);

@@ -22,6 +22,8 @@
 
 #include "dsr-pkt.h"
 
+#ifndef NO_GLOBALS
+
 #define DSR_BROADCAST ((unsigned long int) 0xffffffff)
 #define IPPROTO_DSR 168 /* Is this correct? */
 #define IP_HDR_LEN 20
@@ -30,7 +32,7 @@
 			       * adding the dsr header. A better solution should
 			       * probably be found... */
 
-enum conf {
+enum confval {
 	BroadCastJitter,
 	RouteCacheTimeout,
 	SendBufferTimeout,
@@ -38,6 +40,7 @@ enum conf {
 	RequestTableSize,
 	RequestTableIds,
 	MaxRequestRexmt,
+	MaxRequestPeriod,
 	RequestPeriod,
 	NonpropRequestTimeout,
 	RexmtBufferSize,
@@ -48,45 +51,54 @@ enum conf {
 	PassiveAckTimeout,
 	GratReplyHoldOff,
 	MAX_SALVAGE_COUNT,
-	PARAMS_MAX,
+	CONFVAL_MAX,
 };
 
-enum units {
+enum confval_type {
 	SECONDS,
-	UNITS_MAX,
+	MILLISECONDS,
+	MICROSECONDS,
+	NANOSECONDS,
+	QUANTA,
+	BIN,
+	CONFVAL_TYPE_MAX,
 };
-#define MAINT_BUF_MAX_LEN 100
+
+#define MAINT_BUF_MAX_LEN 50
 #define RREQ_TBL_MAX_LEN 64 /* Should be enough */
 #define SEND_BUF_MAX_LEN 100
 #define RREQ_TLB_MAX_ID 16
 
 static struct { 
 	const char *name; 
-	const int val; 
-} params_def[PARAMS_MAX] = {
-	{ "BroadCastJitter", 10 },
-	{ "RouteCacheTimeout", 300 },
-	{ "SendBufferTimeout", 30 },
-	{ "SendBufferSize", SEND_BUF_MAX_LEN },
-	{ "RequestTableSize", RREQ_TBL_MAX_LEN },
-	{ "RequestTableIds", RREQ_TLB_MAX_ID },
-	{ "MaxRequestRexmt", 5 },
-	{ "RequestPeriod", 10 },
-	{ "NonpropRequestTimeout", 30 },
+	const unsigned int val; 
+	enum confval_type type;
+} confvals_def[CONFVAL_MAX] = {
+	{ "BroadCastJitter", 10 , MILLISECONDS },
+	{ "RouteCacheTimeout", 300, SECONDS },
+	{ "SendBufferTimeout", 30, SECONDS },
+	{ "SendBufferSize", SEND_BUF_MAX_LEN, QUANTA },
+	{ "RequestTableSize", RREQ_TBL_MAX_LEN, QUANTA },
+	{ "RequestTableIds", RREQ_TLB_MAX_ID, QUANTA },
+	{ "MaxRequestRexmt", 16, QUANTA  },
+	{ "MaxRequestPeriod", 10, SECONDS },
+	{ "RequestPeriod", 500, MILLISECONDS },
+	{ "NonpropRequestTimeout", 30, MILLISECONDS },
 	{ "RexmtBufferSize", MAINT_BUF_MAX_LEN },
-	{ "MaintHoldoffTime", 250000 },
-	{ "MaxMaintRexmt", 2 },
-	{ "UseNetworkLayerAck", 1 },
-	{ "TryPassiveAcks", 1 },
-	{ "PassiveAckTimeout", 100000 },
-	{ "GratReplyHoldOff", 1 },
-	{ "MAX_SALVAGE_COUNT", 15 }
+	{ "MaintHoldoffTime", 250, MILLISECONDS },
+	{ "MaxMaintRexmt", 2, QUANTA },
+	{ "UseNetworkLayerAck", 1, BIN },
+	{ "TryPassiveAcks", 1, QUANTA },
+	{ "PassiveAckTimeout", 100, MILLISECONDS },
+	{ "GratReplyHoldOff", 1, SECONDS },
+	{ "MAX_SALVAGE_COUNT", 15, QUANTA }
 };
+
 
 struct dsr_node {
 	struct in_addr ifaddr;
 	struct in_addr bcaddr;
-	int params[PARAMS_MAX];
+	unsigned int confvals[CONFVAL_MAX];
 #ifdef __KERNEL__
 	struct net_device *dev;
 	struct net_device *slave_dev;
@@ -110,27 +122,28 @@ struct dsr_node {
 
 #ifdef __KERNEL__
 
-#define PARAM(name) (get_param(name))
+#define CONFVAL(name) (get_confval(name))
+#define CONFVAL_USECS(name) (confval_to_usecs(name))
 
 extern struct dsr_node *dsr_node;
 
-static inline const int get_param(int index)
+static inline const unsigned int get_confval(enum confval cv)
 {
-	int param = 0;
+	unsigned int val = 0;
 	
 	if (dsr_node) {
 		DSR_SPIN_LOCK(&dsr_node->lock);
-		param = dsr_node->params[index];
+		val = dsr_node->confvals[cv];
 		DSR_SPIN_UNLOCK(&dsr_node->lock);
 	}
-	return param;  
+	return val;  
 }
-static inline const int set_param(int index, int val)
+
+static inline const int set_confval(enum confval cv, unsigned int val)
 {
-	
 	if (dsr_node) {
 		DSR_SPIN_LOCK(&dsr_node->lock);
-		dsr_node->params[index] = val;
+		dsr_node->confvals[cv] = val;
 		DSR_SPIN_UNLOCK(&dsr_node->lock);
 	} else
 		return -1;
@@ -146,8 +159,8 @@ static inline void dsr_node_init(struct dsr_node *dn)
 	dn->dev = NULL;
 	dn->slave_dev = NULL;
 	
-	for (i = 0; i < PARAMS_MAX; i++) {
-		dn->params[i] = params_def[i].val;
+	for (i = 0; i < CONFVAL_MAX; i++) {
+		dn->confvals[i] = confvals_def[i].val;
 	}
 }
 
@@ -195,6 +208,43 @@ static inline void dsr_node_unlock(struct dsr_node *dnode)
 	spin_unlock(&dnode->lock);
 }
 
+
 #endif
+
+#endif /* NO_GLOBALS */
+
+#ifndef NO_DECLS
+
+static inline unsigned long confval_to_usecs(enum confval cv)
+{
+	unsigned long usecs = 0;
+	unsigned int val;
+	
+	val = CONFVAL(cv);
+	
+	switch (confvals_def[cv].type) {
+	case SECONDS:
+		usecs = val * 1000000;
+		break;
+	case MILLISECONDS:
+		usecs = val * 1000;
+		break;
+	case MICROSECONDS:
+		usecs = val;
+		break;
+	case NANOSECONDS:
+		usecs = val / 1000;
+		break;
+	case BIN:
+	case QUANTA:
+	case CONFVAL_TYPE_MAX:
+		break;
+	}
+	
+	return usecs;
+}
+
+
+#endif /* NO_DECLS */
 
 #endif /* _DSR_H */
