@@ -9,7 +9,7 @@ dsr_hdr_t *dsr_hdr_add(char *buf, int len, unsigned int protocol)
 {
 	dsr_hdr_t *dh;
 	
-	if (len < sizeof(dsr_hdr_t))
+	if (len < DSR_OPT_HDR_LEN)
 		return NULL;
 	
 	dh = (dsr_hdr_t *)buf;
@@ -17,7 +17,7 @@ dsr_hdr_t *dsr_hdr_add(char *buf, int len, unsigned int protocol)
 	dh->nh = protocol;
 	dh->f = 0;
 	dh->res = 0;
-      	dh->length = htons(len);
+      	dh->length = htons(len - DSR_OPT_HDR_LEN);
 
 	return dh;
 }
@@ -48,23 +48,12 @@ struct iphdr *dsr_build_ip(char *buf, int len, struct in_addr src,
 	return iph;
 }
 
-void dsr_recv(char *buf, int len)
+void dsr_recv(char *buf, int len, struct in_addr src, struct in_addr dst)
 {	
-	struct iphdr *iph;
-	struct in_addr src;
 	dsr_hdr_t *dh;
 	dsr_opt_t *dopt;
 
-	iph = (struct iphdr *)buf;
-
-	src.s_addr = iph->saddr;
-
-	if (len < ntohs(iph->tot_len)) {
-		DEBUG("received data to short according to IP header!\n");
-		return;
-	}
-
-	dh = DSR_FIXED_HDR(iph);
+	dh = (dsr_hdr_t *)buf;
 
 	if (len < ntohs(dh->length)) {
 		DEBUG("received data to short according to DSR header!\n");

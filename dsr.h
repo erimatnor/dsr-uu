@@ -63,7 +63,7 @@ extern struct netdev_info ldev_info;  /* defined in dsr-dev.c */
 struct iphdr *dsr_build_ip(char *buf, int len, struct in_addr src, 
 			   struct in_addr dst, int ttl);
 dsr_hdr_t *dsr_hdr_add(char *buf, int len, unsigned int protocol);
-void dsr_recv(char *buf, int len);
+void dsr_recv(char *buf, int len, struct in_addr src, struct in_addr dst);
 int dsr_rrep_send(dsr_srt_t *srt);
 
 #endif /* _DSR_H */

@@ -7,6 +7,7 @@
 #include <linux/if_ether.h>
 #include <linux/socket.h>
 #include <net/arp.h>
+#include <net/ip.h>
 #include <net/neighbour.h>
 #ifdef KERNEL26
 #include <linux/moduleparam.h>
@@ -34,10 +35,23 @@ MODULE_PARM(ifname, "s");
 
 static int kdsr_recv(struct sk_buff *skb)
 {
-	DEBUG("received dsr packet\n");
+	struct iphdr *iph;
+	struct in_addr src, dst;
 
-	// dsr_recv();
-	dsr_recv(skb->data, skb->len);
+	DEBUG("received dsr packet\n");
+	
+	iph = skb->nh.iph;
+		
+	if ((skb->len + (iph->ihl << 2)) < ntohs(iph->tot_len)) {
+		DEBUG("data to short according to IP header len=%d tot_len=%d!\n", skb->len + (iph->ihl << 2), ntohs(iph->tot_len));
+		return -1;
+	}
+	
+	src.s_addr = iph->saddr;
+	dst.s_addr = iph->daddr;
+
+	/* Process packet */
+	dsr_recv(skb->data, skb->len, src, dst);
 
 	kfree_skb(skb);
 
