@@ -239,7 +239,7 @@ void __init dbg_init(void)
 {
 	struct proc_dir_entry *entry;
 	
-	entry = create_proc_entry("dsr_dbg", S_IRUSR, proc_net);
+	entry = create_proc_entry("dsr_dbg", S_IRUSR | S_IRGRP | S_IROTH, proc_net);
 	if (entry)
 		entry->proc_fops = &proc_dbg_operations;
 }

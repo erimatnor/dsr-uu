@@ -23,7 +23,8 @@ static inline int crit_nxt_hop_del(void *pos, void *nh)
 	struct maint_entry *p = pos;
 	
 	if (p->nxt_hop.s_addr == nxt_hop->s_addr) {
-		dsr_pkt_free(p->dp);
+		if (p->dp)
+			dsr_pkt_free(p->dp);
 		/* TODO: Salvage or send RERR ? */
 		return 1;
 	}
@@ -38,7 +39,6 @@ static inline int crit_nxt_hop_rexmt(void *pos, void *nh)
 	if (p->nxt_hop.s_addr == nxt_hop->s_addr) {
 		p->rexmt++;
 		p->tx_time = jiffies;
-		/* TODO: Salvage or send RERR ? */
 		return 1;
 	}
 	return 0;
@@ -66,6 +66,7 @@ static struct maint_entry *maint_entry_create(struct dsr_pkt *dp)
 int maint_buf_add(struct dsr_pkt *dp)
 {
 	struct maint_entry *me;
+	unsigned short id;
 
 	me = maint_entry_create(dp);
 	
@@ -73,12 +74,25 @@ int maint_buf_add(struct dsr_pkt *dp)
 		return -1;
 
 	if (tbl_add(&maint_buf, &me->l, crit_none) < 0) {
-		DEBUG("Buffer full, dropping packet!n");
+		DEBUG("Buffer full, dropping packet!\n");
 		dsr_pkt_free(dp);
 		kfree(me);
 		return -1;
 	}
+
+	id = neigh_tbl_get_id(dp->nxt_hop);
 	
+	if (!id) {
+		DEBUG("Could not get request id\n");
+		tbl_del(&maint_buf, &me->l);
+		dsr_pkt_free(dp);
+		return -1;
+		
+	}
+	dsr_ack_req_opt_add(dp, id);
+		
+	neigh_tbl_set_ack_req_timer(dp->nxt_hop);
+
 	return 1;
 }
 

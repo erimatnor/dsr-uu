@@ -56,7 +56,7 @@ static inline char *print_pkt(char *p, int len)
 	int i, l = 0;
 
 	for (i = 0; i < len; i++)
-		l = l + sprintf(buf+l, "%02X", (unsigned char)p[i]);
+		l += sprintf(buf+l, "%02X", (unsigned char)p[i]);
 	
 	return buf;
 }

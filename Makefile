@@ -1,5 +1,5 @@
 
-SRC=dsr-module.c dsr-pkt.c dsr-dev.c dsr-opt.c dsr-rreq.c dsr-rrep.c dsr-rerr.c dsr-srt.c send-buf.c debug.c neigh.c maint-buf.c dsr-ack.c 
+SRC=dsr-module.c dsr-pkt.c dsr-dev.c dsr-opt.c dsr-rreq.c dsr-rrep.c dsr-rerr.c dsr-ack.c dsr-srt.c send-buf.c debug.c neigh.c maint-buf.c
 
 DEFS=-DDEBUG 
 
@@ -84,24 +84,34 @@ clean:
 endif
 # DO NOT DELETE
 
-dsr-ack.o: tbl.h dsr.h debug.h dsr-opt.h dsr-ack.h dsr-dev.h dsr-rtc.h
-dsr-ack.o: dsr-srt.h
-dsr-dev.o: debug.h dsr.h kdsr.h dsr-opt.h dsr-rreq.h dsr-rtc.h dsr-srt.h
-dsr-dev.o: send-buf.h
-dsr-module.o: dsr.h dsr-opt.h dsr-dev.h dsr-rreq.h dsr-rrep.h dsr-srt.h
-dsr-module.o: send-buf.h debug.h dsr-rtc.h dsr-ack.h
-dsr-opt.o: debug.h dsr.h dsr-opt.h dsr-rreq.h dsr-rrep.h dsr-srt.h dsr-ack.h
-dsr-opt.o: kdsr.h
-dsr-rrep.o: dsr.h debug.h tbl.h dsr-rrep.h dsr-srt.h dsr-opt.h dsr-rtc.h
-dsr-rrep.o: dsr-dev.h send-buf.h kdsr.h
-dsr-rreq.o: debug.h dsr.h tbl.h kdsr.h dsr-rrep.h dsr-srt.h dsr-rreq.h
-dsr-rreq.o: dsr-opt.h dsr-rtc.h dsr-dev.h send-buf.h
-dsr-rtc-simple.o: tbl.h dsr-rtc.h dsr-srt.h dsr.h debug.h
-dsr-srt.o: dsr.h dsr-srt.h dsr-opt.h dsr-ack.h debug.h
-link-cache.o: dsr-rtc.h dsr-srt.h dsr.h tbl.h debug.h
-send-buf.o: send-buf.h dsr.h debug.h dsr-rtc.h dsr-srt.h kdsr.h
-dsr-rrep.o: dsr.h dsr-srt.h
-dsr-rreq.o: dsr.h
-dsr-rtc.o: dsr-srt.h dsr.h
-dsr-srt.o: dsr.h
-send-buf.o: dsr.h
+debug.o: debug.h
+dsr-ack.o: tbl.h dsr.h dsr-pkt.h debug.h dsr-opt.h dsr-ack.h dsr-dev.h
+dsr-ack.o: dsr-rtc.h dsr-srt.h neigh.h maint-buf.h
+dsr-dev.o: debug.h dsr.h dsr-pkt.h kdsr.h dsr-opt.h dsr-rreq.h dsr-rtc.h
+dsr-dev.o: dsr-srt.h dsr-ack.h send-buf.h maint-buf.h
+dsr-module.o: dsr.h dsr-pkt.h dsr-dev.h dsr-rreq.h dsr-rrep.h dsr-srt.h
+dsr-module.o: dsr-ack.h send-buf.h debug.h dsr-rtc.h maint-buf.h neigh.h
+dsr-module.o: dsr-opt.h
+dsr-opt.o: debug.h dsr.h dsr-pkt.h dsr-opt.h dsr-rreq.h dsr-rrep.h dsr-srt.h
+dsr-opt.o: dsr-ack.h kdsr.h
+dsr-pkt.o: dsr.h dsr-pkt.h dsr-opt.h
+dsr-rerr.o: dsr-rerr.h dsr.h dsr-pkt.h dsr-opt.h debug.h dsr-srt.h dsr-ack.h
+dsr-rerr.o: dsr-dev.h dsr-rtc.h
+dsr-rrep.o: dsr.h dsr-pkt.h debug.h tbl.h dsr-rrep.h dsr-srt.h dsr-rreq.h
+dsr-rrep.o: dsr-opt.h dsr-rtc.h dsr-dev.h send-buf.h kdsr.h
+dsr-rreq.o: debug.h dsr.h dsr-pkt.h tbl.h kdsr.h dsr-rrep.h dsr-srt.h
+dsr-rreq.o: dsr-rreq.h dsr-opt.h dsr-rtc.h dsr-dev.h send-buf.h
+dsr-rtc-simple.o: tbl.h dsr-rtc.h dsr-srt.h dsr.h dsr-pkt.h debug.h
+dsr-srt.o: dsr.h dsr-pkt.h dsr-srt.h dsr-opt.h dsr-ack.h dsr-rtc.h debug.h
+link-cache.o: dsr-rtc.h dsr-srt.h dsr.h dsr-pkt.h tbl.h debug.h
+maint-buf.o: dsr.h dsr-pkt.h debug.h tbl.h neigh.h dsr-ack.h
+neigh.o: tbl.h neigh.h dsr.h dsr-pkt.h debug.h dsr-rtc.h dsr-srt.h dsr-ack.h
+send-buf.o: send-buf.h dsr.h dsr-pkt.h debug.h dsr-rtc.h dsr-srt.h kdsr.h
+dsr.o: dsr-pkt.h
+dsr-rerr.o: dsr.h dsr-pkt.h
+dsr-rrep.o: dsr.h dsr-pkt.h dsr-srt.h
+dsr-rreq.o: dsr.h dsr-pkt.h
+dsr-rtc.o: dsr-srt.h dsr.h dsr-pkt.h
+dsr-srt.o: dsr.h dsr-pkt.h
+neigh.o: dsr.h dsr-pkt.h
+send-buf.o: dsr.h dsr-pkt.h

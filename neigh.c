@@ -6,6 +6,7 @@
 #include "debug.h"
 #include "dsr-rtc.h"
 #include "dsr-ack.h"
+#include "maint-buf.h"
 
 #define NEIGH_TBL_MAX_LEN 50
 #define MAX_AREQ_TX 2
@@ -84,17 +85,16 @@ static inline int crit_addr_id_reset(void *entry, void *data)
 	} *d;
 	
 	struct neighbor *n = entry;
+	d = data;
 
-	if (data) {
-		d = data;
+	if (d) {
 
 		DEBUG("neigh=%s id=%u ent->neigh=%s, ent->id=%u\n", print_ip(d->a->s_addr), *(d->id), print_ip(n->addr.s_addr), n->id_req);
 
 		if (n->addr.s_addr == d->a->s_addr &&
 		    n->id_req == *(d->id)) {
 			
-			if (timer_pending(&n->ack_req_timer))
-				del_timer(&n->ack_req_timer);
+			del_timer_sync(&n->ack_req_timer);
 			
 			n->reqs = 0;
 			n->rtt = JIFFIES_TO_MSEC(jiffies - n->last_ack_req_tx_time);
@@ -104,8 +104,7 @@ static inline int crit_addr_id_reset(void *entry, void *data)
 		}
 		
 	} else {
-		if (timer_pending(&n->ack_req_timer))
-			del_timer(&n->ack_req_timer);
+		del_timer_sync(&n->ack_req_timer);
 		n->reqs = 0;
 	}
 	
@@ -158,7 +157,7 @@ static inline void __neigh_tbl_set_ack_req_timer(struct neighbor *neigh)
 	neigh->ack_req_timer.data = (unsigned long)neigh;
 
 	if (timer_pending(&neigh->ack_req_timer))
-		mod_timer(&neigh->ack_req_timer, jiffies + MSEC_TO_JIFFIES(neigh->rtt + 5));
+		return;
 	else {
 		neigh->ack_req_timer.expires = jiffies + MSEC_TO_JIFFIES(neigh->rtt + 5);
 		add_timer(&neigh->ack_req_timer);
@@ -193,14 +192,18 @@ static void neigh_tbl_ack_req_timeout(unsigned long data)
 	
 	DEBUG("ACK REQ Timeout %s\n", print_ip(neigh->addr.s_addr));
 	
-	if (++neigh->reqs >= MAX_AREQ_TX) {
+	neigh->reqs++;
+	
+
+	if (neigh->reqs >= MAX_AREQ_TX) {
 		lc_link_del(my_addr(), neigh->addr);
+		maint_buf_del(neigh->addr);
 		DEBUG("Send RERR!!!\n");
 		/* TODO: Salvage */
 	} else {
 		DEBUG("Resending ACK to %s\n", print_ip(neigh->addr.s_addr));
-		dsr_ack_req_send(neigh->addr, ++neigh->id_req);
 		__neigh_tbl_set_ack_req_timer(neigh);
+		dsr_ack_req_send(neigh->addr, ++neigh->id_req);
 	}
  out:
 	write_unlock_bh(&neigh_tbl.lock);
@@ -304,7 +307,7 @@ int neigh_tbl_get_hwaddr(struct in_addr neigh_addr, struct sockaddr *hw_addr)
 
 unsigned short neigh_tbl_get_id(struct in_addr neigh_addr)
 {
-	unsigned short id;
+	unsigned short id = 0;
 
 	struct {
 		struct in_addr *a;

@@ -231,19 +231,12 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 	struct sk_buff *skb;
 	int res = -1;
 	
-#define ADD_ACK_REQ 1
-
 	if (!dp)
 		return -1;
 
 	/* Only buffer packets with data */
 	if (dp->payload_len)
 		maint_buf_add(dp);
-
-	if (ADD_ACK_REQ && dp->payload_len) {
-		if (!dsr_ack_req_opt_add(dp))
-			goto out_err;
-	}
 
 	dsr_node_lock(dsr_node);
 	skb = dsr_skb_create(dp, dsr_node->slave_dev);

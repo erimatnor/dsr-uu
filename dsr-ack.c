@@ -129,7 +129,7 @@ static struct dsr_ack_req_opt *dsr_ack_req_opt_create(char *buf, int len,
 	return ack_req;
 }
 
-struct dsr_ack_req_opt *dsr_ack_req_opt_add(struct dsr_pkt *dp)
+struct dsr_ack_req_opt *dsr_ack_req_opt_add(struct dsr_pkt *dp, unsigned short id)
 {
 	char *buf = NULL;
 	int prot = 0, tot_len = 0, ttl = IPDEFTTL;
@@ -178,9 +178,7 @@ struct dsr_ack_req_opt *dsr_ack_req_opt_add(struct dsr_pkt *dp)
 		dp->dh.opth->p_len = htons(ntohs(dp->dh.opth->p_len) + DSR_ACK_REQ_HDR_LEN);
 	}
 	
-	neigh_tbl_set_ack_req_timer(dp->nxt_hop);
-
-	return dsr_ack_req_opt_create(buf, DSR_ACK_REQ_HDR_LEN, neigh_tbl_get_id(dp->nxt_hop));
+	return dsr_ack_req_opt_create(buf, DSR_ACK_REQ_HDR_LEN, id);
 }
 
 int dsr_ack_req_send(struct in_addr neigh_addr, unsigned short id)
@@ -240,14 +238,23 @@ int dsr_ack_req_send(struct in_addr neigh_addr, unsigned short id)
 }
 
 
-int dsr_ack_req_opt_recv(struct dsr_pkt *dp, struct dsr_ack_req_opt *ack_req)
+int dsr_ack_req_opt_recv(struct dsr_pkt *dp, struct dsr_ack_req_opt *ack_req_opt)
 {
-	if (!ack_req || !dp)
+	unsigned short id;
+
+	if (!ack_req_opt || !dp)
 		return DSR_PKT_ERROR;
 	
-	dp->ack_req_opt = ack_req;
-	
-	return DSR_PKT_SEND_ACK;
+	dp->ack_req_opt = ack_req_opt;
+
+	id = ntohs(ack_req_opt->id);
+
+	DEBUG("ACK REQ: src=%s id=%u\n", 
+	      print_ip(dp->src.s_addr), id);
+		
+	dsr_ack_send(dp->src, id);
+
+	return DSR_PKT_NONE;
 }
 
 
@@ -270,10 +277,10 @@ int dsr_ack_opt_recv(struct dsr_ack_opt *ack)
 	if (dst.s_addr != myaddr.s_addr)
 		return DSR_PKT_ERROR;
 
+	neigh_tbl_reset_ack_req_timer(src, id);
+
 	/* Purge packets buffered for this next hop */
 	maint_buf_del(src);
-
-	neigh_tbl_reset_ack_req_timer(src, id);
 
 	return DSR_PKT_NONE;
 }

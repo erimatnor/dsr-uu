@@ -101,7 +101,8 @@ int dsr_rerr_send(struct dsr_pkt *dp_trigg)
 	if (!buf)
 		goto out_err;
 	
-	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN, IP_HDR_LEN + len, IPPROTO_DSR, IPDEFTTL);
+	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN, 
+				  IP_HDR_LEN + len, IPPROTO_DSR, IPDEFTTL);
 
 	if (!dp->nh.iph) {
 		DEBUG("Could not create IP header\n");
