@@ -117,22 +117,26 @@ int send_buf_enqueue_packet(struct dsr_pkt *dp, int (*okfn)(struct dsr_pkt *))
 	res = tbl_add_tail(&send_buf, &e->l);
 	
 	if (res < 0) {
-		struct send_buf_entry *f;
+		DEBUG("Could not buffer packet\n");
+		kfree(e);
+		return -1;
+	/* 	struct send_buf_entry *f; */
 		
-		DEBUG("buffer full, removing first\n");
-		f = tbl_detach_first(&send_buf);
+/* 		DEBUG("buffer full, removing first\n"); */
+/* 		f = tbl_detach_first(&send_buf); */
 		
-		dsr_pkt_free(f->dp);
-		kfree(f);
+/* 		if (f) { */
+/* 			dsr_pkt_free(f->dp); */
+/* 			kfree(f); */
+/* 		} */
 
-		res = tbl_add_tail(&send_buf, &e->l);
+/* 		res = tbl_add_tail(&send_buf, &e->l); */
 		
-		if (res < 0) {
-			DEBUG("Could not buffer packet\n");
-			dsr_pkt_free(e->dp);
-			kfree (e);
-			return -1;
-		}
+/* 		if (res < 0) { */
+/* 			DEBUG("Could not buffer packet\n"); */
+/* 			kfree (e); */
+/* 			return -1; */
+/* 		} */
 	}
 		
 	if (empty) {

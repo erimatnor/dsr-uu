@@ -50,7 +50,7 @@ static inline int __tbl_add(struct tbl *t, struct list_head *l, criteria_t crit)
 	int len;
 
 	if (t->len >= t->max_len) {
-		printk(KERN_WARNING "Max list len reached\n");
+		//printk(KERN_WARNING "Max list len reached\n");
 		return -ENOSPC;
 	}
     
@@ -77,7 +77,7 @@ static inline int __tbl_add_tail(struct tbl *t, struct list_head *l)
 	int len;
 
 	if (t->len >= t->max_len) {
-		printk(KERN_WARNING "Max list len reached\n");
+		//printk(KERN_WARNING "Max list len reached\n");
 		return -ENOSPC;
 	}
     
@@ -213,13 +213,14 @@ static inline void *tbl_detach_first(struct tbl *t)
 	struct list_head *e;
 
 	write_lock_bh(&t->lock);
-
-	e = TBL_FIRST(t);
 	
-	if (!e) {
+	if (TBL_EMPTY(t)) {
 		write_unlock_bh(&t->lock);
 		return NULL;
 	}
+
+	e = TBL_FIRST(t);
+	
 	list_del(e);
 	t->len--;
 
@@ -249,6 +250,26 @@ static inline int tbl_del(struct tbl *t, struct list_head *l)
 	write_unlock_bh(&t->lock);
 	
 	return res;
+}
+static inline int tbl_find_del(struct tbl *t, void *id, criteria_t crit)
+{
+	struct list_head *e;
+
+	write_lock_bh(&t->lock);
+
+	e = __tbl_find(t, id, crit);
+	
+	if (!e) {
+		write_unlock_bh(&t->lock);
+		return -1;
+	}
+	list_del(e);
+	t->len--;
+	kfree(e);
+
+	write_unlock_bh(&t->lock);
+	
+	return 1;
 }
 
 static inline int tbl_del_first(struct tbl *t)

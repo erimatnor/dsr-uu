@@ -281,8 +281,7 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	int res = 0;
 #ifdef DEBUG
 	atomic_inc(&num_pkts);
-#endif 		
-	
+#endif 			
 	ethh = (struct ethhdr *)skb->data;
 		
 	switch (ntohs(ethh->h_proto)) {
@@ -298,8 +297,7 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 			DEBUG("Could not allocate DSR packet\n");
 			return -1;
 		}
-	
-	
+		
 		dp->srt = dsr_rtc_find(dp->src, dp->dst);
 		
 		if (dp->srt) {
@@ -319,7 +317,8 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 			
 			if (res < 0) {
 				DEBUG("Queueing failed!\n");
-				break;
+				dsr_pkt_free(dp);
+				return -1;
 			}
 			res = dsr_rreq_route_discovery(dp->dst);
 			

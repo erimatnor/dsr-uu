@@ -5,6 +5,7 @@
 #include "dsr-ack.h"
 #include "dsr-dev.h"
 #include "dsr-rtc.h"
+#include "maint-buf.h"
 
 
 static struct dsr_rerr_opt *dsr_rerr_opt_add(char *buf, int len, 
@@ -157,10 +158,10 @@ int dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 /* 		buf += (dp_trigg->ack_opt[i]->length + 2); */
 /* 	} */
 	
-	DEBUG("Send RERR err_src %s err_dst %s fin_dst %s\n", 
+	DEBUG("Send RERR err_src %s err_dst %s unr_dst %s\n", 
 	      print_ip(rerr_opt->err_src), 
 	      print_ip(rerr_opt->err_dst),
-	      print_ip((u_int32_t)*rerr_opt->info));
+	      print_ip(*((u_int32_t *)rerr_opt->info)));
 
 	dsr_dev_xmit(dp);
 	
@@ -193,6 +194,10 @@ int dsr_rerr_opt_recv(struct dsr_rerr_opt *rerr_opt)
 		      print_ip(rerr_opt->err_dst), 
 		      print_ip(unr_addr.s_addr));
 			
+		/* For now we drop all unacked packets... should probably
+		 * salvage */
+		maint_buf_del_all(err_dst);
+
 		/* Remove broken link from cache */
 		lc_link_del(err_src, unr_addr);
 		break;

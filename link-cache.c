@@ -194,7 +194,8 @@ static inline struct lc_node *lc_node_create(struct in_addr addr)
 	
 	if (!n)
 		return NULL;
-		
+	
+	memset(n, 0, sizeof(struct lc_node));
 	n->addr = addr;
 	n->links = 0;
 	n->cost = LC_COST_INF;
@@ -230,7 +231,8 @@ static int __lc_link_tbl_add(struct lc_node *src, struct lc_node *dst,
 			DEBUG("Could not allocate link\n");
 			return -1;
 		}
-		
+		memset(link, 0, sizeof(struct lc_link));
+
 		DEBUG("Adding Link %s <-> %s cost=%d\n", 
 		      print_ip(src->addr.s_addr), 
 		      print_ip(dst->addr.s_addr), 
@@ -247,6 +249,9 @@ static int __lc_link_tbl_add(struct lc_node *src, struct lc_node *dst,
 	link->cost = cost;
 	link->expire = jiffies + (timeout / 1000 * HZ);
 	
+	src->links++;
+	dst->links++;
+
 	return res;
 }
 
@@ -286,8 +291,6 @@ int lc_link_add(struct in_addr src, struct in_addr dst,
 	res = __lc_link_tbl_add(sn, dn, timeout, status, cost);
 		
 	if (res) {	
-		sn->links++;
-		dn->links++;
 #ifdef LC_TIMER
 		if (!timer_pending(&LC.timer))
 			lc_garbage_collect_set();
@@ -305,14 +308,15 @@ int lc_link_add(struct in_addr src, struct in_addr dst,
 int lc_link_del(struct in_addr src, struct in_addr dst)
 {
 	struct lc_link *link;
-	
+	int res = 1;
+
 	write_lock_bh(&LC.lock);
 
 	link = __lc_link_find(src, dst);
 
 	if (!link) {
-		write_unlock_bh(&LC.lock);
-		return 0;
+		res = -1;
+		goto out;
 	}	
 	
 	__lc_link_del(link);
@@ -321,15 +325,17 @@ int lc_link_del(struct in_addr src, struct in_addr dst)
 	link = __lc_link_find(dst, src);
 
 	if (!link) {
-		write_unlock_bh(&LC.lock);
-		return 0;
+		res = -1;
+		goto out;
 	}	
 	
 	__lc_link_del(link);
 
+ out:
+	LC.src = NULL;
 	write_unlock_bh(&LC.lock);
 	
-	return 1;
+	return res;
 }
 
 static inline void __dijkstra_init_single_source(struct in_addr src)
@@ -362,15 +368,14 @@ static void __lc_move(struct tbl *to, struct tbl *from)
 		
 		n = tbl_detach_first(from);
 		
-		tbl_add(to, &n->l, crit_none);
+		tbl_add_tail(to, &n->l);
 	}
 }
 
 static void __dijkstra(struct in_addr src)
 {	
 	TBL(S, LC_NODES_MAX);
-	struct lc_node *src_node;
-	int i = 0;
+	struct lc_node *src_node, *u;
 		
 	if (TBL_EMPTY(&LC.nodes)) {
 		DEBUG("No nodes in Link Cache\n");
@@ -384,24 +389,13 @@ static void __dijkstra(struct in_addr src)
 	if (!src_node) 
 		return;
 	
-	while (!TBL_EMPTY(&LC.nodes)) {
-		struct lc_node *u;
+	while ((u = __dijkstra_find_lowest_cost_node())) {
 		
-		i++;
-
-	u = __dijkstra_find_lowest_cost_node();
-	
-	if (!u) {
-		DEBUG("Dijkstra Error? No lowest cost node u!\n");
-		continue;
-	} else
-		DEBUG("Lowest cost node %d=%s\n", i, print_ip(u->addr.s_addr));
-
 		tbl_detach(&LC.nodes, &u->l);
 		
 		/* Add to S */
-		tbl_add(&S, &u->l, crit_none);
-
+		tbl_add_tail(&S, &u->l);
+		
 		tbl_do_for_each(&LC.links, u, do_relax);
 	}
 	
@@ -428,8 +422,7 @@ struct dsr_srt *dsr_rtc_find(struct in_addr src, struct in_addr dst)
 
 	if (!dst_node) {
 		DEBUG("%s not found\n", print_ip(dst.s_addr));
-		write_unlock_bh(&LC.lock);
-		return NULL;
+		goto out;
 	}
 	
 	DEBUG("Hops to %s: %u\n", print_ip(dst.s_addr), dst_node->hops);
@@ -440,6 +433,11 @@ struct dsr_srt *dsr_rtc_find(struct in_addr src, struct in_addr dst)
 		
 		srt = kmalloc(sizeof(srt) * dst_node->hops, GFP_ATOMIC);
 		
+		if (!srt) {
+			DEBUG("Could not allocate source route!!!\n");
+			goto out;
+		}
+
 		srt->dst = dst;
 		srt->src = src;
 		
@@ -453,6 +451,7 @@ struct dsr_srt *dsr_rtc_find(struct in_addr src, struct in_addr dst)
 			DEBUG("hop count ERROR i+1=%d hops=%d!!!\n", i + 1, 
 			       dst_node->hops);
 	}
+ out:
 	write_unlock_bh(&LC.lock);
 
 	return srt;

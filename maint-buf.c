@@ -22,14 +22,14 @@ struct maint_entry {
 	unsigned short id;
 	unsigned long tx_time;
 	unsigned long rto;
-	int acked;
+	int timer_set;
 	struct dsr_pkt *dp;
 };
 
 static void maint_buf_set_timeout(void);
 static void maint_buf_timeout(unsigned long data);
 
-static inline int crit_mark_acked(void *pos, void *data)
+static inline int crit_addr_id_del(void *pos, void *data)
 {	
 	struct maint_entry *m = pos;
 	struct {
@@ -44,12 +44,36 @@ static inline int crit_mark_acked(void *pos, void *data)
 	
 	if (m->nxt_hop.s_addr == d->nxt_hop->s_addr &&
 	    m->id == *(d->id)) {
-		m->acked = 1;
+		
+		if (m->dp)
+			dsr_pkt_free(m->dp);
+
+		if (m->timer_set) 
+			del_timer_sync(&ack_timer);
+		
 		return 1;
 	}
-
 	return 0;
 }
+
+static inline int crit_addr_del(void *pos, void *data)
+{	
+	struct maint_entry *m = pos;
+	struct in_addr *addr = data;
+	
+	if (m->nxt_hop.s_addr == addr->s_addr) {
+		
+		if (m->dp)
+			dsr_pkt_free(m->dp);
+
+		if (m->timer_set) 
+			del_timer_sync(&ack_timer);
+		
+		return 1;
+	}
+	return 0;
+}
+
 static inline int crit_free_pkt(void *pos, void *foo)
 {
 	struct maint_entry *m = pos;
@@ -104,7 +128,7 @@ static struct maint_entry *maint_entry_create(struct dsr_pkt *dp)
 	m->rexmt = 0;
 	m->id = id;
 	m->rto = rto;
-	m->acked = 0;
+	m->timer_set = 0;
 	m->dp = dsr_pkt_alloc(skb_copy(dp->skb, GFP_ATOMIC));
 	m->dp->nxt_hop = dp->nxt_hop;
 
@@ -143,20 +167,21 @@ static void maint_buf_set_timeout(void)
 	unsigned long tx_time, rto;
 	unsigned long now = jiffies;
 	
-	read_lock_bh(&maint_buf.lock);
+	write_lock_bh(&maint_buf.lock);
 	/* Get first packet in maintenance buffer */
 	m = __tbl_find(&maint_buf, NULL, crit_none);
 	
 	if (!m) {
 		DEBUG("No packet to set timeout for\n");
-		read_unlock_bh(&maint_buf.lock);
+		write_unlock_bh(&maint_buf.lock);
 		return;
 	}
 
 	tx_time = m->tx_time;
 	rto = m->rto;
-	
-	read_unlock_bh(&maint_buf.lock);
+	m->timer_set = 1;
+
+	write_unlock_bh(&maint_buf.lock);
 	
 	DEBUG("now=%lu exp=%lu\n", now, tx_time + rto);
 
@@ -187,13 +212,15 @@ static void maint_buf_timeout(unsigned long data)
 	DEBUG("nxt_hop=%s id=%u rexmt=%d\n", 
 	      print_ip(m->nxt_hop.s_addr), m->id, m->rexmt);
 	
-	if (m->acked) {
-		DEBUG("Packet was ACK'd, freeing\n");
-		if (m->dp)
-			dsr_pkt_free(m->dp);
-		kfree(m);
-		goto out;
-	}
+	m->timer_set = 0;
+
+/* 	if (m->acked) { */
+/* 		DEBUG("Packet was ACK'd, freeing\n"); */
+/* 		if (m->dp) */
+/* 			dsr_pkt_free(m->dp); */
+/* 		kfree(m); */
+/* 		goto out; */
+/* 	} */
 
 	/* Increase the number of retransmits */	
 	if (++m->rexmt >= PARAM(MaxMaintRexmt)) {
@@ -223,7 +250,18 @@ static void maint_buf_timeout(unsigned long data)
 	return;
 }
 
-int maint_buf_mark_acked(struct in_addr nxt_hop, unsigned short id)
+int maint_buf_del_all(struct in_addr nxt_hop)
+{
+      	/* Find the buffered packet to mark as acked */
+	if (!tbl_for_each_del(&maint_buf, &nxt_hop, crit_addr_del))
+		return 0;
+
+	if (!TBL_EMPTY(&maint_buf) && !timer_pending(&ack_timer))
+		maint_buf_set_timeout();
+	
+	return 1;
+}
+int maint_buf_del(struct in_addr nxt_hop, unsigned short id)
 {
 	struct {
 		struct in_addr *nxt_hop;
@@ -234,14 +272,20 @@ int maint_buf_mark_acked(struct in_addr nxt_hop, unsigned short id)
 	d.nxt_hop = &nxt_hop;
 
 	/* Find the buffered packet to mark as acked */
-	return tbl_find_do(&maint_buf, &d, crit_mark_acked);
+	if (!tbl_find_del(&maint_buf, &d, crit_addr_id_del))
+		return 0;
+
+	if (!TBL_EMPTY(&maint_buf) && !timer_pending(&ack_timer))
+		maint_buf_set_timeout();
+	
+	return 1;
 }
 static int maint_buf_get_info(char *buffer, char **start, off_t offset, int length)
 {
 	struct list_head *p;
 	int len;
 
-	len = sprintf(buffer, "# %-15s %-6s %-6s %-8s %-3s\n", "IPAddr", "Rexmt", "Id", "TxTime", "Ack");
+	len = sprintf(buffer, "# %-15s %-6s %-6s %-8s\n", "IPAddr", "Rexmt", "Id", "TxTime");
 
 	read_lock_bh(&maint_buf.lock);
 
@@ -249,7 +293,7 @@ static int maint_buf_get_info(char *buffer, char **start, off_t offset, int leng
 		struct maint_entry *e = (struct maint_entry *)p;
 		
 		if (e && e->dp)
-			len += sprintf(buffer+len, "  %-15s %-6d %-6u %-8lu %-3s\n", print_ip(e->dp->dst.s_addr), e->rexmt, e->id, (jiffies - e->tx_time) / HZ, e->acked ? "Yes" : "No");
+			len += sprintf(buffer+len, "  %-15s %-6d %-6u %-8lu\n", print_ip(e->dp->dst.s_addr), e->rexmt, e->id, (jiffies - e->tx_time) / HZ);
 	}
 
 	len += sprintf(buffer+len,
