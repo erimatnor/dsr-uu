@@ -61,11 +61,12 @@ typedef struct timer_list DSRUUTimer;
 
 #define SECONDS(secs) (secs*HZ)
 
-void timer_set(DSRUUTimer *t, usecs_t usecs)
+void timer_set(DSRUUTimer *t, struct timeval *expires)
 {
-        unsigned long expires;
+	unsigned long exp_jiffies;
+#ifdef KERNEL26
 	
-	expires = jiffies + ((usecs * HZ) / 1000000l);
+	exp_jiffies = timeval_to_jiffies(expires) = jiffies + ((usecs * HZ) / 1000000l);
 
 	if (timer_pending(t))
 		mod_timer(t, expires); 
