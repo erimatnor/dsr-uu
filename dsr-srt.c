@@ -50,8 +50,8 @@ static int dsr_srt_find_addr(struct dsr_srt *srt, struct in_addr addr, int index
 	if (n == 0 || index >= n)
 		return 0;
 	
-	for (; index < n; index++)
-		if (srt->addrs[index].s_addr == addr.s_addr)
+	for (; index > 0; index--)
+		if (srt->addrs[n-index].s_addr == addr.s_addr)
 			return 1;
 
 	if (addr.s_addr == srt->dst.s_addr)
@@ -304,7 +304,7 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp)
 	 * intended next hop... */
 	if (next_hop_intended.s_addr != myaddr.s_addr && 
 	    dp->srt_opt->sleft > 0 &&
-	    dsr_srt_find_addr(dp->srt, myaddr, dp->srt_opt->sleft-1) && 
+	    dsr_srt_find_addr(dp->srt, myaddr, dp->srt_opt->sleft) && 
 	    !grat_rrep_tbl_find(dp->src, dp->prv_hop)) {
 		struct dsr_srt *srt, *srt_cut;
 		
@@ -318,15 +318,16 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp)
 		if (!srt_cut)
 			return DSR_PKT_DROP;
 		
-		srt = dsr_rtc_find(myaddr, dp->src);
-		
+		/* srt = dsr_rtc_find(myaddr, dp->src); */
+		srt = dsr_srt_new_rev(srt_cut);
+
 		if (!srt) {
 			DEBUG("No route to %s\n", print_ip(dp->src));
 			FREE(srt_cut);
 			return DSR_PKT_DROP;
 		}
-		DEBUG("my srt: %s\n", print_srt(srt));
 		DEBUG("shortcut: %s\n", print_srt(srt_cut));
+		DEBUG("my srt: %s\n", print_srt(srt));
 		
 		grat_rrep_tbl_add(dp->src, dp->prv_hop);
 		

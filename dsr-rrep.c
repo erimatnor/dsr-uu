@@ -128,8 +128,7 @@ int NSCLASS grat_rrep_tbl_find(struct in_addr src, struct in_addr prev_hop)
 	return 0;
 }
 
-#ifdef __KERNEL__
-static int grat_rrep_tbl_print(char *buf)
+static int grat_rrep_tbl_print(struct tbl *t, char *buf)
 {
 	list_t *pos;
 	int len = 0;
@@ -137,11 +136,11 @@ static int grat_rrep_tbl_print(char *buf)
 
 	gettime(&now);
 
-	DSR_READ_LOCK(&grat_rrep_tbl.lock);
+	DSR_READ_LOCK(&t->lock);
     
 	len += sprintf(buf, "# %-15s %-15s Time\n", "Source", "Prev hop");
 
-	list_for_each(pos, &grat_rrep_tbl.head) {
+	list_for_each(pos, &t->head) {
 		struct grat_rrep_entry *e = (struct grat_rrep_entry *)pos;
 		
 		len += sprintf(buf+len, "  %-15s %-15s %lu\n", 
@@ -150,15 +149,18 @@ static int grat_rrep_tbl_print(char *buf)
 			       timeval_diff(&e->expires, &now) / 1000000);
 	}
     
-	DSR_READ_UNLOCK(&grat_rrep_tbl.lock);
-	return len;
+	DSR_READ_UNLOCK(&t->lock);
 
+	return len;
 }
+
+#ifdef __KERNEL__
+
 static int grat_rrep_tbl_proc_info(char *buffer, char **start, off_t offset, int length)
 {
 	int len;
 
-	len = grat_rrep_tbl_print(buffer);
+	len = grat_rrep_tbl_print(&grat_rrep_tbl, buffer);
     
 	*start = buffer + offset;
 	len -= offset;
@@ -296,6 +298,7 @@ int NSCLASS dsr_rrep_send(struct dsr_srt *srt, struct dsr_srt *srt_to_me)
 	/* if (ConfVal(UseNetworkLayerAck)) */
 /* 		dp->flags |= PKT_REQUEST_ACK; */
 	
+	DEBUG("opts=%u\n", (unsigned int)dp->dsr_opts);
 	dp->flags |= PKT_XMIT_JITTER;
 
 	XMIT(dp);

@@ -109,6 +109,8 @@ DSRUU::trace(const char *func, const char *fmt, ...)
 	return len;
 }
 
+/* Should probably find a way to set the arp table entry manually... However,
+ * sending a fake arp will do for now. */
 int
 DSRUU::arpset(struct in_addr addr, unsigned int mac_addr)
 {
@@ -195,8 +197,7 @@ DSRUU::ns_packet_create(struct dsr_pkt *dp)
 	if (!dp->p)
 		dp->p = allocpkt();
 
-	tot_len = IP_HDR_LEN +
-		dsr_opts_len + dp->payload_len;
+	tot_len = IP_HDR_LEN + dsr_opts_len + dp->payload_len;
 	
 	mh = HDR_MAC(dp->p);
 	cmh = HDR_CMN(dp->p);
@@ -229,7 +230,9 @@ DSRUU::ns_packet_create(struct dsr_pkt *dp)
 	// Clear DSR part of packet
 	memset(opth, 0, dsr_opts_len);
 	
-	DEBUG("Building packet dsr_opts_len=%d p_len=%d\n", dsr_opts_len, dp->dh.opth->p_len);
+	DEBUG("Building packet dsr_opts_len=%d p_len=%d\n", 
+	      dsr_opts_len, dp->dh.opth->p_len);
+
 	// Copy message contents into packet
 	if (dsr_opts_len)
 		memcpy(opth, dp->dh.raw, dsr_opts_len);
@@ -418,8 +421,6 @@ DSRUU::tap(const Packet *p)
 
 	return;
 }
-
-
 
 enum {
 	SET_ADDR,
