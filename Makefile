@@ -112,64 +112,44 @@ endian.h: endian.c
 
 depend:
 	@echo "Updating Makefile dependencies..."
-	@makedepend -Y./ -- $(DEFS) -- *.c *.h &>/dev/null
+	@makedepend -Y./ -- $(DEFS) -- $(SRC) &>/dev/null
 
 TODO:
 	grep -n "TODO:" *.c *.h > TODO
 	cat TODO
 
 TAGS: *.c *.h
-	etags.emacs *.c *.h
+	etags.emacs $(SRC) *.h
 
 clean:
 	rm -rf .*ko* $(RTC_TRG).*mod* $(MODNAME).*mod* .*cmd .tmp_versions *~ *.ko *.o *.ver Makefile.bak .*o.d TAGS TODO endian endian.h $(NS_TARGET)
 endif
 # DO NOT DELETE
 
-debug.o: debug.h
-dsr-ack.o: tbl.h list.h debug.h dsr-opt.h dsr-ack.h dsr.h ./endian.h
-dsr-ack.o: dsr-pkt.h link-cache.h timer.h neigh.h maint-buf.h
-dsr-dev.o: debug.h dsr.h ./endian.h dsr-pkt.h kdsr.h dsr-opt.h dsr-rreq.h
-dsr-dev.o: link-cache.h tbl.h list.h timer.h dsr-srt.h dsr-ack.h send-buf.h
-dsr-dev.o: maint-buf.h dsr-io.h
-dsr-io.o: dsr.h ./endian.h dsr-pkt.h dsr-rreq.h dsr-rrep.h dsr-srt.h debug.h
-dsr-io.o: dsr-ack.h send-buf.h dsr-rtc.h maint-buf.h neigh.h dsr-opt.h
-dsr-io.o: link-cache.h tbl.h list.h timer.h dsr-dev.h
-dsr-module.o: dsr.h ./endian.h dsr-pkt.h dsr-dev.h dsr-io.h debug.h neigh.h
+dsr-module.o: dsr.h dsr-pkt.h timer.h dsr-dev.h dsr-io.h debug.h neigh.h
 dsr-module.o: dsr-rreq.h maint-buf.h send-buf.h
-dsr-opt.o: debug.h dsr.h ./endian.h dsr-pkt.h dsr-opt.h dsr-rreq.h dsr-rrep.h
+dsr-pkt.o: dsr-opt.h dsr.h dsr-pkt.h timer.h
+dsr-dev.o: debug.h dsr.h dsr-pkt.h timer.h kdsr.h dsr-opt.h dsr-rreq.h
+dsr-dev.o: link-cache.h tbl.h list.h dsr-srt.h dsr-ack.h send-buf.h
+dsr-dev.o: maint-buf.h dsr-io.h
+dsr-io.o: dsr-dev.h dsr.h dsr-pkt.h timer.h dsr-rreq.h dsr-rrep.h dsr-srt.h
+dsr-io.o: debug.h dsr-ack.h dsr-rtc.h maint-buf.h neigh.h dsr-opt.h
+dsr-io.o: link-cache.h tbl.h list.h send-buf.h
+dsr-opt.o: debug.h dsr.h dsr-pkt.h timer.h dsr-opt.h dsr-rreq.h dsr-rrep.h
 dsr-opt.o: dsr-srt.h dsr-rerr.h dsr-ack.h
-dsr-pkt.o: dsr.h ./endian.h dsr-pkt.h dsr-opt.h
-dsr-rerr.o: dsr.h ./endian.h dsr-pkt.h dsr-rerr.h dsr-opt.h debug.h dsr-srt.h
-dsr-rerr.o: dsr-ack.h link-cache.h tbl.h list.h timer.h maint-buf.h
-dsr-rrep.o: dsr.h ./endian.h dsr-pkt.h debug.h tbl.h list.h dsr-rrep.h
-dsr-rrep.o: dsr-srt.h dsr-rreq.h dsr-opt.h link-cache.h timer.h send-buf.h
-dsr-rreq.o: debug.h dsr.h ./endian.h dsr-pkt.h tbl.h list.h dsr-rrep.h
-dsr-rreq.o: dsr-srt.h dsr-rreq.h dsr-opt.h link-cache.h timer.h send-buf.h
-dsr-rtc-simple.o: tbl.h list.h dsr-rtc.h dsr-srt.h dsr.h ./endian.h dsr-pkt.h
-dsr-rtc-simple.o: debug.h
-dsr-srt.o: dsr.h ./endian.h dsr-pkt.h dsr-srt.h debug.h dsr-opt.h dsr-ack.h
-dsr-srt.o: link-cache.h tbl.h list.h timer.h
-link-cache.o: debug.h dsr-rtc.h dsr-srt.h dsr.h ./endian.h dsr-pkt.h tbl.h
-link-cache.o: list.h link-cache.h timer.h
-maint-buf.o: dsr.h ./endian.h dsr-pkt.h debug.h tbl.h list.h neigh.h
-maint-buf.o: dsr-ack.h link-cache.h timer.h dsr-rerr.h
-neigh.o: tbl.h list.h neigh.h dsr.h ./endian.h dsr-pkt.h debug.h timer.h
-send-buf.o: tbl.h list.h send-buf.h dsr.h ./endian.h dsr-pkt.h debug.h
-send-buf.o: link-cache.h timer.h dsr-srt.h
-dsr-ack.o: dsr.h ./endian.h dsr-pkt.h
-dsr-dev.o: dsr.h ./endian.h dsr-pkt.h
-dsr.o: ./endian.h dsr-pkt.h
-dsr-rerr.o: dsr.h ./endian.h dsr-pkt.h
-dsr-rrep.o: dsr.h ./endian.h dsr-pkt.h dsr-srt.h debug.h
-dsr-rreq.o: dsr.h ./endian.h dsr-pkt.h
-dsr-rtc.o: dsr-srt.h dsr.h ./endian.h dsr-pkt.h debug.h
-dsr-srt.o: dsr.h ./endian.h dsr-pkt.h debug.h
-kdsr.o: dsr-pkt.h
-link-cache.o: tbl.h list.h timer.h
-neigh.o: dsr.h ./endian.h dsr-pkt.h
-ns-agent.o: tbl.h list.h ./endian.h dsr.h dsr-pkt.h timer.h dsr-opt.h
-ns-agent.o: dsr-rreq.h dsr-rrep.h dsr-srt.h debug.h dsr-rerr.h dsr-ack.h
-ns-agent.o: send-buf.h neigh.h link-cache.h dsr-io.h maint-buf.h
-send-buf.o: dsr.h ./endian.h dsr-pkt.h
-tbl.o: list.h
+dsr-rreq.o: debug.h dsr.h dsr-pkt.h timer.h tbl.h list.h dsr-rrep.h dsr-srt.h
+dsr-rreq.o: dsr-rreq.h dsr-opt.h link-cache.h send-buf.h neigh.h
+dsr-rrep.o: dsr.h dsr-pkt.h timer.h debug.h tbl.h list.h dsr-rrep.h dsr-srt.h
+dsr-rrep.o: dsr-rreq.h dsr-opt.h link-cache.h send-buf.h
+dsr-rerr.o: dsr.h dsr-pkt.h timer.h dsr-rerr.h dsr-opt.h debug.h dsr-srt.h
+dsr-rerr.o: dsr-ack.h link-cache.h tbl.h list.h maint-buf.h
+dsr-ack.o: tbl.h list.h debug.h dsr-opt.h dsr.h dsr-pkt.h timer.h dsr-ack.h
+dsr-ack.o: link-cache.h neigh.h maint-buf.h
+dsr-srt.o: dsr.h dsr-pkt.h timer.h dsr-srt.h debug.h dsr-opt.h dsr-ack.h
+dsr-srt.o: link-cache.h tbl.h list.h neigh.h dsr-rrep.h
+send-buf.o: tbl.h list.h send-buf.h dsr.h dsr-pkt.h timer.h debug.h
+send-buf.o: link-cache.h dsr-srt.h
+debug.o: debug.h dsr.h dsr-pkt.h timer.h
+neigh.o: tbl.h list.h neigh.h dsr.h dsr-pkt.h timer.h debug.h
+maint-buf.o: dsr.h dsr-pkt.h timer.h debug.h tbl.h list.h neigh.h dsr-ack.h
+maint-buf.o: link-cache.h dsr-rerr.h maint-buf.h

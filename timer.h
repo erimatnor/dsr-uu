@@ -3,6 +3,7 @@
 
 #ifdef KERNEL26
 #include <linux/jiffies.h>
+#include <asm/div64.h>
 #endif
 
 typedef unsigned long usecs_t;
@@ -55,15 +56,20 @@ static inline void gettime(struct timeval *tv)
 
 #include <linux/timer.h>
 
+
 typedef struct timer_list DSRUUTimer;
 
 static inline void set_timer(DSRUUTimer *t, struct timeval *expires)
 {
 	unsigned long exp_jiffies;
 #ifdef KERNEL26
-	exp_jiffies = jiffies + timeval_to_jiffies(expires) ;
+	exp_jiffies = timeval_to_jiffies(expires) ;
 #else
-	exp_jiffies = jiffies + ((usecs * HZ) / 1000000l);
+	/* Hmm might overlflow? */
+	unsigned long tmp;
+	tmp = expires->tv_usec * HZ;
+	tmp /= 1000000;
+	exp_jiffies = expires->tv_sec * HZ + tmp;
 #endif
 	if (timer_pending(t))
 		mod_timer(t, exp_jiffies); 
@@ -87,7 +93,7 @@ static inline void gettime(struct timeval *tv)
 	if (HZ < 1000000)
 		tv->tv_usec = now * (1000000l / HZ);
 	else
-		tv->tv_usec = (now * HZ) / 1000000l;
+		tv->tv_usec = (now * HZ) / 1000000UL;
 #endif	
 }
 #endif /* NS2 */
@@ -105,7 +111,7 @@ static inline long timeval_diff(struct timeval *tv1, struct timeval *tv2)
 
 static inline int timeval_add_usecs(struct timeval *tv, usecs_t usecs)
 {
-    long add;		/* Protect against overflows */
+    long add;
 
     if (!tv)
 	return -1;

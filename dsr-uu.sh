@@ -21,10 +21,10 @@ if [ "$command" = "start" ]; then
     echo $IP > .dsr.ip
     host_nr=`echo $IP | awk 'BEGIN{FS="."} { print $4 }'`
 
-    if [ -f linkcache.ko ] && [ -f kdsr.ko ]; then
+    if [ -f linkcache.o ] && [ -f dsr.o ]; then
 	# Reconfigure the default interface
-	insmod linkcache.ko
-	insmod kdsr.ko ifname=$IFNAME
+	insmod linkcache.o
+	insmod dsr.o ifname=$IFNAME
 	/sbin/ifconfig $IFNAME 192.168.1.$host_nr up
 	/sbin/ifconfig dsr0 $IP up
 	echo "DSR-UU started with virtual host IP $IP"
@@ -38,7 +38,7 @@ if [ "$command" = "start" ]; then
 elif [ "$command" = "stop" ]; then 
     IP=`cat .dsr.ip`
     /sbin/ifconfig dsr0 down
-    rmmod kdsr linkcache
+    rmmod dsr linkcache
     /sbin/ifconfig $IFNAME $IP up
     rm -f .dsr.ip
 fi
