@@ -297,7 +297,6 @@ int NSCLASS dsr_rrep_send(struct dsr_srt *srt, struct dsr_srt *srt_to_me)
 	/* if (ConfVal(UseNetworkLayerAck)) */
 /* 		dp->flags |= PKT_REQUEST_ACK; */
 	
-	DEBUG("opts=%u\n", (unsigned int)dp->dsr_opts);
 	dp->flags |= PKT_XMIT_JITTER;
 
 	XMIT(dp);
