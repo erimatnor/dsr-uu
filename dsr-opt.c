@@ -24,7 +24,7 @@ void dsr_pkt_free(dsr_pkt_t *dp)
 	if (!dp)
 		return;
 	
-	/* Can't free skb, might be needed further down, or up, the stack */
+	/* Can't free skb, might be needed further down or up the stack */
 
 	if (dp->srt)
 		kfree(dp->srt);

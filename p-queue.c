@@ -175,7 +175,7 @@ int p_queue_find(__u32 daddr)
 }
 
 
-int p_queue_set_verdict(int verdict, __u32 daddr)
+int p_queue_set_verdict(int verdict, struct in_addr addr)
 {
     struct p_queue_entry *entry;
     int pkts = 0;
@@ -183,32 +183,34 @@ int p_queue_set_verdict(int verdict, __u32 daddr)
     if (verdict == P_QUEUE_DROP) {
 	
 	while (1) {
-	    entry = p_queue_find_dequeue_entry(dest_cmp, daddr);
+	    entry = p_queue_find_dequeue_entry(dest_cmp, addr.s_addr);
 	    
 	    if (entry == NULL)
 		return pkts;
-
+	    
 	    /* Send an ICMP message informing the application that the
 	     * destination was unreachable. */
 	    if (pkts == 0)
-		icmp_send(entry->dp->skb, ICMP_DEST_UNREACH, ICMP_HOST_UNREACH, 0);
+		icmp_send(entry->dp->skb, ICMP_DEST_UNREACH, ICMP_HOST_UNREACH, 0);	    
 	    
 	    kfree_skb(entry->dp->skb);
 	    dsr_pkt_free(entry->dp);
 	    kfree(entry);
 	    pkts++;
 	}
+	
 	DEBUG("Dropped %d queued pkts\n", pkts);
 
     } else if (verdict == P_QUEUE_SEND) {
 	/* struct expl_entry e; */
 
 	while (1) {
-	    entry = p_queue_find_dequeue_entry(dest_cmp, daddr);
+	    entry = p_queue_find_dequeue_entry(dest_cmp, addr.s_addr);
 	    
-	    if (entry == NULL)
-		return pkts;
-	    	    
+	    if (entry == NULL) {
+		    DEBUG("No packets for dest %s\n", print_ip(addr.s_addr));
+		    return pkts;
+	    }
 	    entry->dp->srt = dsr_rtc_find(entry->dp->dst);
 	    
 	    /* Add source route */
@@ -233,16 +235,26 @@ int p_queue_set_verdict(int verdict, __u32 daddr)
 static int
 p_queue_get_info(char *buffer, char **start, off_t offset, int length)
 {
+	struct list_head *p;
 	int len;
 
-	read_lock_bh(&queue_lock);
-	
-	len = sprintf(buffer,
-	              "Queue length      : %u\n"
-	              "Queue max. length : %u\n",
-	              queue_total,
-	              queue_maxlen);
+	len = sprintf(buffer, "# Queue info\n");
 
+	read_lock_bh(&queue_lock);
+
+	list_for_each_prev(p, &queue_list) {
+		struct p_queue_entry *entry = (struct p_queue_entry *)p;
+		
+		if (entry && entry->dp)
+			len += sprintf(buffer+len, "%s\n", print_ip(entry->dp->dst.s_addr));
+	}
+
+	len += sprintf(buffer+len,
+		       "\nQueue length      : %u\n"
+		       "Queue max. length : %u\n",
+		       queue_total,
+		       queue_maxlen);
+	
 	read_unlock_bh(&queue_lock);
 	
 	*start = buffer + offset;

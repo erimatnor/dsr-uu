@@ -47,6 +47,7 @@ static dsr_rrep_opt_t *dsr_rrep_opt_add(char *buf, int len, dsr_srt_t *srt)
 
 int dsr_rrep_create(dsr_pkt_t *dp)
 {
+	dsr_srt_t *srt_rev;
 	dsr_rrep_opt_t *rrep;
 	char *off;
 	int l;
@@ -72,9 +73,15 @@ int dsr_rrep_create(dsr_pkt_t *dp)
 	
 	off += DSR_OPT_HDR_LEN;
 	l -= DSR_OPT_HDR_LEN;
-	
+
+	srt_rev = dsr_srt_new_rev(dp->srt);
+
+	if (!srt_rev)
+		return -1;
 	/* Add the source route option to the packet */
-	dsr_srt_opt_add(off, l, dp->srt);
+	dsr_srt_opt_add(off, l, srt_rev);
+	
+	kfree(srt_rev);
 	
 	off += DSR_SRT_OPT_LEN(dp->srt);
 	l -= DSR_SRT_OPT_LEN(dp->srt);
@@ -111,7 +118,7 @@ int dsr_rrep_recv(dsr_pkt_t *dp)
 		DEBUG("RREP for me!\n");
 				
 		/* Send buffered packets */
-		p_queue_set_verdict(P_QUEUE_SEND, dp->dst.s_addr);
+		p_queue_set_verdict(P_QUEUE_SEND, dp->dst);
 				
 	} else {
 		DEBUG("I am not RREP destination\n");
@@ -140,18 +147,19 @@ int dsr_rrep_send(dsr_srt_t *srt)
 		return -1;
 	}
 	
-	DEBUG("Sending RREP\n");
-	
 	dp = dsr_pkt_alloc();
+	
+	if (!dp) {
+		dev_put(dev);
+		return -1;
+	}
 	
 	dp->len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) + DSR_RREP_OPT_LEN(srt);
 		
 	dp->skb = kdsr_pkt_alloc(dp->len, dev);
 	
-	if (!dp->skb) {
-		res = -1;
+	if (!dp->skb)
 		goto out_err;
-	}
 
 	dp->skb->dev = dev;
 	dp->srt = srt;
@@ -161,6 +169,7 @@ int dsr_rrep_send(dsr_srt_t *srt)
 
 	if (res < 0) {
 		DEBUG("Could not create RREP\n");
+		dev_kfree_skb(dp->skb);
 		goto out_err;
 	}
 	
@@ -168,11 +177,12 @@ int dsr_rrep_send(dsr_srt_t *srt)
 		DEBUG("source route is one hop\n");
 		dp->nh.s_addr = srt->src.s_addr;
 	} else		
-		dp->nh.s_addr = srt->addrs->s_addr;
+		dp->nh.s_addr = srt->addrs[0].s_addr;
 	
 	if (kdsr_get_hwaddr(dp->nh, &dest, dev) < 0) {
 		DEBUG("Could not get hardware address for %s\n", 
 		      print_ip(dp->nh.s_addr));
+		dev_kfree_skb(dp->skb);
 		goto out_err;
 	}
 	
@@ -182,9 +192,13 @@ int dsr_rrep_send(dsr_srt_t *srt)
 		DEBUG("RREP transmission failed...\n");
 		dev_kfree_skb(dp->skb);
 		goto out_err;
-	}	
+	}
+	
+	DEBUG("Sending RREP\n");
+		
 	dev_queue_xmit(dp->skb);
- out_err:	
+
+ out_err:
 	dsr_pkt_free(dp);
 	dev_put(dev);
 	return res;

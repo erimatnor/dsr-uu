@@ -36,13 +36,11 @@ module_param(ifname, charp, 0);
 MODULE_PARM(ifname, "s");
 #endif
 
-
-
 static int kdsr_recv(struct sk_buff *skb)
 {
 	dsr_pkt_t *dp;
 	struct iphdr *iph;
-	int ret, newlen;
+	int verdict, newlen;
 
 	DEBUG("received dsr packet\n");
 	
@@ -65,19 +63,26 @@ static int kdsr_recv(struct sk_buff *skb)
 	dp->dst.s_addr = iph->daddr;
 
 	/* Process packet */
-	ret = dsr_recv(dp);
+	verdict = dsr_recv(dp);
 
-	switch (ret) {
+	/* Check verdict... */
+	switch (verdict) {
 	case DSR_PKT_FORWARD:
 		DEBUG("Forwarding %s", print_ip(dp->src.s_addr));
-		DEBUG(" %s", print_ip(dp->dst.s_addr));		
-		DEBUG(" nh %s\n", print_ip(dp->nh.s_addr));
+		printk(" %s", print_ip(dp->dst.s_addr));		
+		printk(" nh %s\n", print_ip(dp->nh.s_addr));
 
-		iph->ttl--;
-
+		if (iph->ttl < 1) {
+			DEBUG("ttl=0, dropping!\n");
+			break;
+		}
+		
 		/* Must checksum be recalculated? */
 		ip_send_check(iph);
-				
+		
+		dsr_dev_queue_xmit(dp);
+		
+		dsr_pkt_free(dp);
 		return 0;
 	case DSR_PKT_DELIVER:
 		newlen = dsr_opts_remove(dp);
@@ -93,10 +98,11 @@ static int kdsr_recv(struct sk_buff *skb)
 	case DSR_PKT_SRT_REMOVE:
 	case DSR_PKT_ERROR:
 	case DSR_PKT_DROP:
+	default:
+		dsr_pkt_free(dp);
+		kfree_skb(skb);
 		break;
 	}
-	dsr_pkt_free(dp);
-	kfree_skb(skb);
 	return 0;
 };
 

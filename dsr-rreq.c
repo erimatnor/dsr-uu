@@ -62,6 +62,65 @@ int dsr_rreq_create(dsr_pkt_t *dp)
 	}
 	return 0;
 }
+int dsr_rreq_send(struct in_addr target)
+{
+	int res = 0;
+	struct net_device *dev;
+	struct sockaddr broadcast = {AF_UNSPEC, {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
+	dsr_pkt_t *dp;
+	
+
+	dev = dev_get_by_index(ldev_info.ifindex);
+	
+	if (!dev) {
+		DEBUG("no send device!\n");
+		return -1;
+	}	
+	
+	dp = dsr_pkt_alloc();
+	
+	if (!dp) {
+		dev_put(dev);
+		return -1;
+	}
+	
+	dp->len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN;
+	
+	dp->skb = kdsr_pkt_alloc(dp->len, dev);
+	
+	if (!dp->skb) {
+		res = -1;
+		goto out_err;
+	}
+	
+	dp->skb->dev = dev;
+	dp->data = dp->skb->data;
+	dp->dst.s_addr = target.s_addr;
+	
+	res = dsr_rreq_create(dp);
+
+	if (res < 0) {
+		DEBUG("Could not create RREQ\n");
+		dev_kfree_skb(dp->skb);
+		goto out_err;
+	}
+	
+	res = dsr_dev_build_hw_hdr(dp->skb, &broadcast);
+	
+	if (res < 0) {
+		DEBUG("RREQ transmission failed...\n");
+		dev_kfree_skb(dp->skb);
+		goto out_err;
+	}
+
+	DEBUG("Sending RREQ for %s\n", print_ip(dp->dst.s_addr));
+	dev_queue_xmit(dp->skb);
+	
+	 out_err:	
+	dsr_pkt_free(dp);
+	dev_put(dev);
+	return res;
+}
 
 int dsr_rreq_recv(dsr_pkt_t *dp)
 {
@@ -95,6 +154,9 @@ int dsr_rreq_recv(dsr_pkt_t *dp)
 	/* 	dev_put(dev); */
 	}
 #endif
+	DEBUG("RREQ target=%s\n", print_ip(rreq->target));
+	DEBUG("my addr %s\n", print_ip(ldev_info.ifaddr.s_addr));
+
 	if (rreq->target == ldev_info.ifaddr.s_addr) {
 		dsr_srt_t *srt_rev;
 		
@@ -104,17 +166,17 @@ int dsr_rreq_recv(dsr_pkt_t *dp)
 
 		srt_rev = dsr_srt_new_rev(dp->srt);
 		
-		DEBUG("srt_rev: %s\n", print_srt(srt_rev));
+		//DEBUG("srt_rev: %s\n", print_srt(srt_rev));
 
 		dsr_rtc_add(srt_rev, 60000, 0);
 
 		/* Send buffered packets */
-		p_queue_set_verdict(P_QUEUE_SEND, srt_rev->dst.s_addr);
-
-		/* send rrep.... */
-		dsr_rrep_send(srt_rev);
+		p_queue_set_verdict(P_QUEUE_SEND, srt_rev->dst);
 
 		kfree(srt_rev);
+
+		/* send rrep.... */
+		dsr_rrep_send(dp->srt);
 	} else {
 		int i, n;
 		
@@ -131,56 +193,3 @@ int dsr_rreq_recv(dsr_pkt_t *dp)
 	return DSR_PKT_DROP;
 }
 
-int dsr_rreq_send(struct in_addr target)
-{
-	int res = 0;
-	struct net_device *dev;
-	struct sockaddr broadcast = {AF_UNSPEC, {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
-	dsr_pkt_t *dp;
-	
-
-	dev = dev_get_by_index(ldev_info.ifindex);
-	
-	if (!dev) {
-		DEBUG("no send device!\n");
-		return -1;
-	}	
-	
-	dp = dsr_pkt_alloc();
-
-	dp->len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN;
-	dp->dst.s_addr = target.s_addr;
-	
-	dp->skb = kdsr_pkt_alloc(dp->len, dev);
-	
-	if (!dp->skb) {
-		res = -1;
-		goto out_err;
-	}
-	
-	dp->skb->dev = dev;
-	dp->data = dp->skb->data;
-	dp->dst.s_addr = target.s_addr;
-	
-	res = dsr_rreq_create(dp);
-
-	if (res < 0) {
-		DEBUG("Could not create RREQ\n");
-		goto out_err;
-	}
-	
-	res = dsr_dev_build_hw_hdr(dp->skb, &broadcast);
-	
-	if (res < 0) {
-		DEBUG("RREQ transmission failed...\n");
-		dev_kfree_skb(dp->skb);
-		goto out_err;
-	}
-
-	dev_queue_xmit(dp->skb);
-
- out_err:	
-	dsr_pkt_free(dp);
-	dev_put(dev);
-	return res;
-}

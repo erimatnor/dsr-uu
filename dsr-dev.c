@@ -237,6 +237,7 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 	dsr_pkt_t *dp;
 	int res = 0;
 	
+	/* Allocate a DSR packet */
 	dp = dsr_pkt_alloc();
 	dp->skb = skb;
 	dp->data = skb->data;
@@ -251,7 +252,6 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 		skb->dev = slave_dev;
 		dev_put(slave_dev);
 		
-		/* Allocate a DSR packet */
 		dp->src.s_addr = skb->nh.iph->saddr;
 		dp->dst.s_addr = skb->nh.iph->daddr;
 					
@@ -287,7 +287,7 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 		} else {			
 			p_queue_enqueue_packet(dp, dsr_dev_queue_xmit);
 			
-			res = dsr_rreq_send(dp->src);
+			res = dsr_rreq_send(dp->dst);
 			
 			if (res < 0)
 				DEBUG("Transmission failed...");
@@ -352,7 +352,8 @@ int __init dsr_dev_init(char *ifname)
 		read_unlock(&dev_base_lock);
 	}
 	
-	
+	DEBUG("Setting %s as slave interface\n", basedev->name);
+
 	res = register_netdev(dsr_dev);
 
 	if (res < 0)

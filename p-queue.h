@@ -9,7 +9,7 @@
 int p_queue_find(__u32 daddr);
 int p_queue_enqueue_packet(dsr_pkt_t *dp, 
 			   int (*okfn)(dsr_pkt_t *));
-int p_queue_set_verdict(int verdict, __u32 daddr);
+int p_queue_set_verdict(int verdict, struct in_addr addr);
 void p_queue_flush(void);
 int p_queue_init(void);
 void p_queue_cleanup(void);
