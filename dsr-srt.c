@@ -185,7 +185,8 @@ int dsr_srt_add(struct dsr_pkt *dp)
 	DEBUG("dsr_opts_len=%d\n", dp->dsr_opts_len);
 	
 
-	buf = kmalloc(len, GFP_ATOMIC);
+	buf = dsr_pkt_alloc_data(dp, len);
+
 
 	if (!buf) {
 		DEBUG("Could allocate memory\n");
@@ -196,7 +197,6 @@ int dsr_srt_add(struct dsr_pkt *dp)
 
 	if (!dp->dh.opth) {
 		DEBUG("Could not create DSR opts header!\n");
-		kfree(buf);
 		return -1;
 	}
 
@@ -207,7 +207,6 @@ int dsr_srt_add(struct dsr_pkt *dp)
 
 	if (!dp->srt_opt) {
 		DEBUG("Could not create Source Route option header!\n");
-		kfree(dp->dh.raw);
 		return -1;
 	}
 

@@ -12,7 +12,7 @@ struct maint_entry {
 	unsigned int rexmt;
 	unsigned short ack_id;
 	unsigned long tx_time;
-	struct sk_buff *skb;
+	struct dsr_pkt *dp;
 };
 
   
@@ -30,7 +30,7 @@ static struct maint_entry *maint_entry_create(struct dsr_pkt *dp)
 	me->nxt_hop = dp->nxt_hop;
 	me->tx_time = jiffies;
 	me->rexmt = 0;
-	me->skb = skb_copy(dp->skb, GFP_ATOMIC);
+	me->dp = dp;
 
 	return me;
 }

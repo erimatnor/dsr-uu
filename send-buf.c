@@ -28,8 +28,8 @@
 
 struct send_buf_entry {
 	struct list_head list;
-	struct dsr_pkt dp;
-	struct sk_buff *skb;
+	struct dsr_pkt *dp;
+/* 	struct sk_buff *skb; */
 	int (*okfn)(struct dsr_pkt *);
 };
 
@@ -91,8 +91,7 @@ static inline void __send_buf_flush(void)
 	int n = 0;
 	
 	while ((entry = __send_buf_find_dequeue_entry(NULL, 0))) {
-		kfree_skb(entry->skb);
-		/* dsr_pkt_free(entry->dp); */
+		dsr_pkt_free(entry->dp);
 		kfree(entry);
 		n++;
 	}
@@ -121,7 +120,7 @@ void send_buf_flush(void)
 	write_unlock_bh(&queue_lock);
 }
 
-int send_buf_enqueue_packet(struct dsr_pkt *dp, struct sk_buff *skb, int (*okfn)(struct dsr_pkt *))
+int send_buf_enqueue_packet(struct dsr_pkt *dp, int (*okfn)(struct dsr_pkt *))
 {
 	int status = -EINVAL;
 	struct send_buf_entry *entry;
@@ -134,11 +133,12 @@ int send_buf_enqueue_packet(struct dsr_pkt *dp, struct sk_buff *skb, int (*okfn)
 	}
 	
 	entry->okfn = okfn;
-	entry->skb = skb;
-	memcpy(&entry->dp, dp, sizeof(struct dsr_pkt));
+	/* entry->skb = skb; */
+/* 	memcpy(&entry->dp, dp, sizeof(struct dsr_pkt)); */
 
-	entry->dp.nh.iph = dp->nh.iph;
-	entry->dp.data = dp->data;
+/* 	entry->dp.nh.iph = dp->nh.iph; */
+/* 	entry->dp.data = dp->data; */
+	entry->dp = dp;
 
 	write_lock_bh(&queue_lock);
 
@@ -162,7 +162,7 @@ int send_buf_enqueue_packet(struct dsr_pkt *dp, struct sk_buff *skb, int (*okfn)
 
 static inline int dest_cmp(struct send_buf_entry *e, unsigned long daddr)
 {
-	return (daddr == e->skb->nh.iph->daddr);
+	return (daddr == e->dp->skb->nh.iph->daddr);
 }
 
 int send_buf_find(__u32 daddr)
@@ -196,9 +196,9 @@ int send_buf_set_verdict(int verdict, unsigned long daddr)
 			/* Send an ICMP message informing the application that the
 			 * destination was unreachable. */
 			if (pkts == 0)
-				icmp_send(entry->skb, ICMP_DEST_UNREACH, ICMP_HOST_UNREACH, 0);	    
+				icmp_send(entry->dp->skb, ICMP_DEST_UNREACH, ICMP_HOST_UNREACH, 0);	    
 	    
-			kfree_skb(entry->skb);
+			dsr_pkt_free(entry->dp);
 			kfree(entry);
 			pkts++;
 		}
@@ -216,27 +216,27 @@ int send_buf_set_verdict(int verdict, unsigned long daddr)
 				break;
 			}
 		    
-			entry->dp.srt = dsr_rtc_find(entry->dp.src, entry->dp.dst);
+			entry->dp->srt = dsr_rtc_find(entry->dp->src, entry->dp->dst);
 		    
-			if (entry->dp.srt) {
+			if (entry->dp->srt) {
 				
-				DEBUG("Source route=%s\n", print_srt(entry->dp.srt));
+				DEBUG("Source route=%s\n", print_srt(entry->dp->srt));
 				
-				if (dsr_srt_add(&entry->dp) < 0) {
+				if (dsr_srt_add(entry->dp) < 0) {
 					DEBUG("Could not add source route\n");
+					dsr_pkt_free(entry->dp);
 				} else {
 					
 					/* Send packet */
-					entry->okfn(&entry->dp);
+					entry->okfn(entry->dp);
 				    
 				}
-				/* Free source route */
-				kfree(entry->dp.srt);
-			} else
+			} else {
 				DEBUG("No source route found for %s!\n", print_ip(daddr));
 		    
+				dsr_pkt_free(entry->dp);
+			}
 			pkts++;
-			kfree_skb(entry->skb); 
 			kfree(entry);
 		}
 		DEBUG("Sent or Removed %d queued pkts\n", pkts);
@@ -256,8 +256,8 @@ static int send_buf_get_info(char *buffer, char **start, off_t offset, int lengt
 	list_for_each_prev(p, &queue_list) {
 		struct send_buf_entry *entry = (struct send_buf_entry *)p;
 		
-		if (entry && entry->skb)
-			len += sprintf(buffer+len, "%s\n", print_ip(entry->skb->nh.iph->daddr));
+		if (entry && entry->dp)
+			len += sprintf(buffer+len, "%s\n", print_ip(entry->dp->dst.s_addr));
 	}
 
 	len += sprintf(buffer+len,

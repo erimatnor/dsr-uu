@@ -215,6 +215,8 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 
 	netif_rx(skb);
 	
+	dsr_pkt_free(dp);
+
 	return 0;
 }
 
@@ -247,6 +249,8 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 	dsr_node->stats.tx_bytes+=skb->len;
 	dsr_node_unlock(dsr_node);
 	
+	dsr_pkt_free(dp);
+
 	return 0;
 }
 
@@ -255,7 +259,7 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	/* struct dsr_node *dnode = (struct dsr_node *)dev->priv; */
 	struct ethhdr *ethh;
-	struct dsr_pkt dp;
+	struct dsr_pkt *dp;
 	int res = 0;
 #ifdef DEBUG
 	atomic_inc(&num_pkts);
@@ -263,55 +267,54 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	DEBUG("headroom=%d skb->data=%lu skb->nh.iph=%lu\n", 
 	      skb_headroom(skb), (unsigned long)skb->data, 
 	      (unsigned long)skb->nh.iph);
-	
-	memset(&dp, 0, sizeof(dp));
-	
-	dp.skb = skb;
+		
+	dp = dsr_pkt_alloc(skb, 0);
 
+	if (!dp) {
+		DEBUG("Could not allocate DSR packet\n");
+		return -1;
+	}
+	
 	ethh = (struct ethhdr *)skb->data;
 	
-	dp.nh.iph = skb->nh.iph;
-	dp.data = skb->data + dev->hard_header_len + (dp.nh.iph->ihl << 2);
-	dp.data_len = skb->len - dev->hard_header_len - (dp.nh.iph->ihl << 2);
-	
-	dp.src.s_addr = skb->nh.iph->saddr;
-	dp.dst.s_addr = skb->nh.iph->daddr;
-	
+	dp->data = skb->data + dev->hard_header_len + (dp->nh.iph->ihl << 2);
+	dp->data_len = skb->len - dev->hard_header_len - (dp->nh.iph->ihl << 2);
+
 	switch (ntohs(ethh->h_proto)) {
 	case ETH_P_IP:
 	    
-		dp.srt = dsr_rtc_find(dp.src, dp.dst);
+		dp->srt = dsr_rtc_find(dp->src, dp->dst);
 		
-		if (dp.srt) {
+		if (dp->srt) {
 
-			if (dsr_srt_add(&dp) < 0) {
+			if (dsr_srt_add(dp) < 0) {
 				DEBUG("Could not add source route\n");
 				break;
 			}
 			/* Send packet */
-			dsr_dev_xmit(&dp);
+			dsr_dev_xmit(dp);
 
-			kfree(dp.srt);
+			return 0;
 
 		} else {			
-			res = send_buf_enqueue_packet(&dp, skb, dsr_dev_xmit);
+			res = send_buf_enqueue_packet(dp, dsr_dev_xmit);
 			
 			if (res < 0) {
 				DEBUG("Queueing failed!\n");
 				break;
 			}
-			res = dsr_rreq_route_discovery(dp.dst);
+			res = dsr_rreq_route_discovery(dp->dst);
 			
 			if (res < 0)
 				DEBUG("RREQ Transmission failed...");
-
+			
 			return 0;
 		}
 		break;
 	default:
 		DEBUG("Unkown packet type\n");
 	}
-	kfree_skb(skb);	
+	dsr_pkt_free(dp);
 	return 0;
 }
 

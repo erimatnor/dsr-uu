@@ -125,7 +125,7 @@ static int dsr_arpset(struct in_addr addr, struct sockaddr *hw_addr,
 
 static int dsr_ip_recv(struct sk_buff *skb)
 {
-	struct dsr_pkt dp;
+	struct dsr_pkt *dp;
 	int action;
 
 #ifdef DEBUG
@@ -133,37 +133,34 @@ static int dsr_ip_recv(struct sk_buff *skb)
 #endif 
 	DEBUG("Received DSR packet\n");
 
-	memset(&dp, 0, sizeof(dp));
-	
-	dp.skb = skb;
-	
-	dp.nh.iph = skb->nh.iph;
-		
-	if ((skb->len + (dp.nh.iph->ihl << 2)) < ntohs(dp.nh.iph->tot_len)) {
-		DEBUG("data to short according to IP header len=%d tot_len=%d!\n", skb->len + (dp.nh.iph->ihl << 2), ntohs(dp.nh.iph->tot_len));
-		kfree_skb(skb);
+	dp = dsr_pkt_alloc(skb, 0);
+
+	if (!dp) {
+		DEBUG("Could not allocate DSR packet\n");
 		return -1;
 	}
 	
-	dp.dh.raw = skb->data;
-	dp.dsr_opts_len = ntohs(dp.dh.opth->p_len) + DSR_OPT_HDR_LEN;
+	if ((skb->len + (dp->nh.iph->ihl << 2)) < ntohs(dp->nh.iph->tot_len)) {
+		DEBUG("data to short according to IP header len=%d tot_len=%d!\n", skb->len + (dp->nh.iph->ihl << 2), ntohs(dp->nh.iph->tot_len));
+		dsr_pkt_free(dp);
+		return -1;
+	}
+	
+	dp->dsr_opts_len = ntohs(dp->dh.opth->p_len) + DSR_OPT_HDR_LEN;
 
-	dp.data = skb->data + dp.dsr_opts_len;
-	dp.data_len = skb->len - dp.dsr_opts_len;
+	dp->data = skb->data + dp->dsr_opts_len;
+	dp->data_len = skb->len - dp->dsr_opts_len;
 
-	/* Get IP stuff that we need */
-	dp.src.s_addr = dp.nh.iph->saddr;
-	dp.dst.s_addr = dp.nh.iph->daddr;
 	
 	DEBUG("iph_len=%d iph_totlen=%d dsr_opts_len=%d data_len=%d\n", 
-	      (dp.nh.iph->ihl << 2), ntohs(dp.nh.iph->tot_len), dp.dsr_opts_len, dp.data_len);
+	      (dp->nh.iph->ihl << 2), ntohs(dp->nh.iph->tot_len), dp->dsr_opts_len, dp->data_len);
 
 	
 	/* Process packet */
-	action = dsr_opt_recv(&dp);
+	action = dsr_opt_recv(dp);
 
 	/* Add mac address of previous hop to the arp table */
-	if (dp.srt && skb->mac.raw) {
+	if (dp->srt && skb->mac.raw) {
 		struct sockaddr hw_addr;
 		struct in_addr prev_hop;
 		struct ethhdr *eth;
@@ -172,29 +169,30 @@ static int dsr_ip_recv(struct sk_buff *skb)
 			
 		memcpy(hw_addr.sa_data, eth->h_source, ETH_ALEN);
 		
-		prev_hop = dsr_srt_prev_hop(dp.srt);
+		prev_hop = dsr_srt_prev_hop(dp->srt);
 
 		dsr_arpset(prev_hop, &hw_addr, skb->dev);
 	}
 
 	if (action & DSR_PKT_DROP || action & DSR_PKT_ERROR) {
 		DEBUG("DSR_PKT_DROP or DSR_PKT_ERROR\n");
-		kfree_skb(skb);
+		dsr_pkt_free(dp);
 		return 0;
 	}
 
 	if (action & DSR_PKT_FORWARD) {
 		DEBUG("Forwarding %s %s nh %s\n", 
-		      print_ip(dp.src.s_addr), 
-		      print_ip(dp.dst.s_addr), 
-		      print_ip(dp.nxt_hop.s_addr));
+		      print_ip(dp->src.s_addr), 
+		      print_ip(dp->dst.s_addr), 
+		      print_ip(dp->nxt_hop.s_addr));
 
-		if (dp.nh.iph->ttl < 1) {
+		if (dp->nh.iph->ttl < 1) {
 			DEBUG("ttl=0, dropping!\n");
 			action = DSR_PKT_NONE;
 		} else {
 			DEBUG("Forwarding (dev_queue_xmit)\n");
-			dsr_dev_xmit(&dp);
+			dsr_dev_xmit(dp);
+			return 0;
 		}
 	}
 	if (action & DSR_PKT_FORWARD_RREQ) {
@@ -203,43 +201,45 @@ static int dsr_ip_recv(struct sk_buff *skb)
 		char *tmp;
 
 		/* We need to add ourselves to the source route in the RREQ */
-		n = DSR_RREQ_ADDRS_LEN(dp.rreq_opt) / sizeof(struct in_addr);
+		n = DSR_RREQ_ADDRS_LEN(dp->rreq_opt) / sizeof(struct in_addr);
 	
-		dsr_len = ntohs(dp.dh.opth->p_len) + DSR_OPT_HDR_LEN;
-		len_to_rreq = (char *)dp.rreq_opt - dp.dh.raw;
+		dsr_len = ntohs(dp->dh.opth->p_len) + DSR_OPT_HDR_LEN;
+		len_to_rreq = (char *)dp->rreq_opt - dp->dh.raw;
 
-		tmp = kmalloc(dsr_len + sizeof(struct in_addr), GFP_ATOMIC);
-		
-		if ((dp.dh.raw + dsr_len) > 
-		    ((char *)dp.rreq_opt + dp.rreq_opt->length + 2)) {
+		tmp = dsr_pkt_alloc_data(dp, dsr_len + sizeof(struct in_addr));
+		/* dsr_pkt_add_dsr_hdr(dsr_len + sizeof(struct in_addr)); */
+
+		if ((dp->dh.raw + dsr_len) > 
+		    ((char *)dp->rreq_opt + dp->rreq_opt->length + 2)) {
 			char *tmp2;
 			int len_after_rreq;
 			
-			len_after_rreq = (dp.dh.raw + dsr_len) - ((char *)dp.rreq_opt + dp.rreq_opt->length + 2);
+			len_after_rreq = (dp->dh.raw + dsr_len) - ((char *)dp->rreq_opt + dp->rreq_opt->length + 2);
 			
 			/* Copy everything up to and including rreq_opt */
-			memcpy(tmp, dp.dh.raw, len_to_rreq + dp.rreq_opt->length + 2);
-			tmp2 = tmp + len_to_rreq + dp.rreq_opt->length + 2 + sizeof(struct in_addr);
+			memcpy(tmp, dp->dh.raw, len_to_rreq + dp->rreq_opt->length + 2);
+			tmp2 = tmp + len_to_rreq + dp->rreq_opt->length + 2 + sizeof(struct in_addr);
 
-			memcpy(tmp2, dp.dh.raw + len_to_rreq + dp.rreq_opt->length + 2 + sizeof(struct in_addr), len_after_rreq);
+			memcpy(tmp2, dp->dh.raw + len_to_rreq + dp->rreq_opt->length + 2 + sizeof(struct in_addr), len_after_rreq);
 
 			
 		} else {
-			memcpy(tmp, dp.dh.raw, dsr_len);
+			memcpy(tmp, dp->dh.raw, dsr_len);
 		}
-		dp.dh.raw = tmp;
-		dp.dh.opth->p_len = htons(dsr_len + sizeof(struct in_addr));
-		dp.dsr_opts_len += sizeof(struct in_addr);
-		dp.rreq_opt = (struct dsr_rreq_opt *)(tmp + len_to_rreq);
-		dp.rreq_opt->addrs[n] = myaddr.s_addr;
-		dp.rreq_opt->length += sizeof(struct in_addr);
+		dp->dh.raw = tmp;
+		dp->dh.opth->p_len = htons(dsr_len + sizeof(struct in_addr));
+		dp->dsr_opts_len += sizeof(struct in_addr);
+		dp->rreq_opt = (struct dsr_rreq_opt *)(tmp + len_to_rreq);
+		dp->rreq_opt->addrs[n] = myaddr.s_addr;
+		dp->rreq_opt->length += sizeof(struct in_addr);
 		
-		dp.nh.iph->tot_len = htons(ntohs(dp.nh.iph->tot_len) + sizeof(struct in_addr));
-		ip_send_check(dp.nh.iph);
+		dp->nh.iph->tot_len = htons(ntohs(dp->nh.iph->tot_len) + sizeof(struct in_addr));
+		ip_send_check(dp->nh.iph);
 
-		dsr_dev_xmit(&dp);
+		dsr_dev_xmit(dp);
 		
-		kfree(dp.dh.raw);
+		return 0;
+
 	}
 
 	if (action & DSR_PKT_SEND_RREP) {
@@ -247,8 +247,8 @@ static int dsr_ip_recv(struct sk_buff *skb)
 
 		DEBUG("Send RREP\n");
 		
-		if (dp.srt) {
-			srt_rev = dsr_srt_new_rev(dp.srt);
+		if (dp->srt) {
+			srt_rev = dsr_srt_new_rev(dp->srt);
 			
 			DEBUG("srt_rev: %s\n", print_srt(srt_rev));
 			/* send rrep.... */
@@ -263,26 +263,26 @@ static int dsr_ip_recv(struct sk_buff *skb)
 	if (action & DSR_PKT_SEND_BUFFERED) {
 		/* Send buffered packets */
 		DEBUG("Sending buffered packets\n");
-		if (dp.srt) {
-			send_buf_set_verdict(SEND_BUF_SEND, dp.srt->src.s_addr);
+		if (dp->srt) {
+			send_buf_set_verdict(SEND_BUF_SEND, dp->srt->src.s_addr);
 		}
 	}
 
 	/* Free source route. Should probably think of a better way to handle
 	 * source routes that are dynamically allocated. */
-	if (dp.srt) {
-		DEBUG("Freeing source route\n");
-		kfree(dp.srt);
-	}
+/* 	if (dp->srt) { */
+/* 		DEBUG("Freeing source route\n"); */
+/* 		kfree(dp->srt); */
+/* 	} */
 
 	if (action & DSR_PKT_DELIVER) {
-		dsr_opts_remove(&dp);
+		dsr_opts_remove(dp);
 		DEBUG("Deliver to DSR device\n");
-		dsr_dev_deliver(&dp);
-		kfree_skb(skb);
+		dsr_dev_deliver(dp);
+		
 		return 0;
 	}
-	kfree_skb(skb);
+	dsr_pkt_free(dp);
 	return 0;
 };
 
@@ -478,7 +478,7 @@ static unsigned int dsr_pre_routing_recv(unsigned int hooknum,
 		/* 	DEBUG("Stolen\n"); */
 			return NF_STOLEN;
 		}
-		DEBUG("Accepted\n");
+		/* DEBUG("Accepted\n"); */
 	}
 	return NF_ACCEPT;	
 }

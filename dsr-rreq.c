@@ -276,68 +276,71 @@ static inline int dsr_rreq_duplicate(struct in_addr src, struct in_addr trg, uns
 
 int dsr_rreq_send(struct in_addr target, int ttl, unsigned long timeout)
 {
-	struct dsr_pkt dp;
-	char ip_buf[IP_HDR_LEN];
+	struct dsr_pkt *dp;
 	char *buf;
-	int len = DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN;
+	int len = IP_HDR_LEN +DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN;
 	
 	if (dsr_rreq_pending(target)) {
 		DEBUG("RREQ recently sent for %s\n", print_ip(target.s_addr));
 		return 0;
 	}
-	memset(&dp, 0, sizeof(dp));
 
-	dp.data = NULL; /* No data in this packet */
-	dp.data_len = 0;
-	dp.dst.s_addr = DSR_BROADCAST;
-	dp.nxt_hop.s_addr = DSR_BROADCAST;
-	dp.dsr_opts_len = len;
-	dp.src = my_addr();
+	dp = dsr_pkt_alloc(NULL, len);
 
-	
-	dp.nh.iph = dsr_build_ip(ip_buf, IP_HDR_LEN, IP_HDR_LEN + len, 
-				 dp.src, dp.dst, ttl);
-	
-	if (!dp.nh.iph) {
-		DEBUG("Could not create IP header\n");
+	if (!dp) {
+		DEBUG("Could not allocate DSR packet\n");
 		return -1;
 	}
 
-	buf = kmalloc(len, GFP_ATOMIC);
+	dp->data = NULL; /* No data in this packet */
+	dp->data_len = 0;
+	dp->dst.s_addr = DSR_BROADCAST;
+	dp->nxt_hop.s_addr = DSR_BROADCAST;
+	dp->dsr_opts_len = len;
+	dp->src = my_addr();
 	
-	if (!buf)
-		return -1;
+	buf = dp->dsr_data;
 	
-	dp.dh.opth = dsr_opt_hdr_add(buf, len, 0);
+	dp->nh.iph = dsr_build_ip(buf, IP_HDR_LEN, IP_HDR_LEN + len, 
+				  dp->src, dp->dst, ttl);
 	
-	if (!dp.dh.opth) {
+	if (!dp->nh.iph) 
+		goto out_err;
+
+	buf += IP_HDR_LEN;
+	len -= IP_HDR_LEN;
+
+	dp->dh.opth = dsr_opt_hdr_add(buf, len, 0);
+	
+	if (!dp->dh.opth) {
 		DEBUG("Could not create DSR opt header\n");
-		kfree(buf);
-		return -1;
+		goto out_err;
 	}
 	
 	buf += DSR_OPT_HDR_LEN;
 	len -= DSR_OPT_HDR_LEN;
 	
-	dp.rreq_opt = dsr_rreq_opt_add(buf, len, target);
+	dp->rreq_opt = dsr_rreq_opt_add(buf, len, target);
 
-	if (!dp.rreq_opt) {
+	if (!dp->rreq_opt) {
 		DEBUG("Could not create RREQ opt\n");
-		kfree(dp.dh.raw);
-		return -1;
+		goto out_err;
 	}
 	
-	dp.nh.iph->ttl = ttl;
+	dp->nh.iph->ttl = ttl;
 	
 	DEBUG("Sending RREQ for %s ttl=%d\n", print_ip(target.s_addr), ttl);
 
-	dsr_dev_xmit(&dp);
-
-	rreq_tbl_add(target, dp.src, target, ttl, rreq_seqno, timeout);
+	rreq_tbl_add(target, dp->src, target, ttl, rreq_seqno, timeout);
 	
-	kfree(dp.dh.raw);
+	dsr_dev_xmit(dp);
 
-	return 1;
+	return 0;
+
+ out_err:	
+	dsr_pkt_free(dp);
+
+	return -1;
 }
 int dsr_rreq_route_discovery(struct in_addr target)
 {
