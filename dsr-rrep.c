@@ -24,9 +24,9 @@ dsr_rrep_opt_t *dsr_rrep_hdr_add(char *buf, int len, dsr_src_rte_t *sr)
 	struct iphdr *iph;
 	dsr_hdr_t *dsr_hdr;
 	dsr_rrep_opt_t *rrep;
-
-	if (buf == NULL || sr == NULL ||
-	    len < (DSR_RREP_HDR_LEN + sr->length + sizeof(u_int32_t)))		return NULL;
+	
+	if (buf == NULL || sr == NULL || len < DSR_RREP_LEN_FROM_SRC_RTE(sr))
+		return NULL;
 
 	iph = (struct iphdr *)buf;
 	
@@ -36,7 +36,7 @@ dsr_rrep_opt_t *dsr_rrep_hdr_add(char *buf, int len, dsr_src_rte_t *sr)
 	iph->tot_len = htons(len);
 	iph->id = 0;
 	iph->frag_off = 0;
-	iph->ttl = 1; /* Should probably change dynamically */
+	iph->ttl = IPDEFTTL; /* Should probably change dynamically */
 	iph->protocol = IPPROTO_DSR;
 	iph->saddr = ldev_info.ifaddr.s_addr;		
 	iph->daddr = sr->initiator.s_addr;

@@ -69,4 +69,5 @@ dsr_src_rte_t *dsr_src_rte_new(struct in_addr initiator, struct in_addr target, 
 dsr_hdr_t *dsr_hdr_add(char *buf, int len, unsigned int protocol);
 void dsr_parse_source_route(struct in_addr initiator, dsr_src_rte_t *sr);
 void dsr_recv(char *buf, int len);
+int dsr_rrep_send(dsr_src_rte_t *sr);
 #endif

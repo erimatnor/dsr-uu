@@ -12,10 +12,21 @@
 #include "dsr.h"
 #include "dsr-dev.h"
 #include "dsr-rreq.h"
+#include "dsr-rrep.h"
 #include "p-queue.h"
 #include "debug.h"
 
 static char *ifname = NULL;
+
+MODULE_AUTHOR("Erik Nordstroem <erikn@it.uu.se>");
+MODULE_DESCRIPTION("Dynamic Source Routing (DSR) protocol stack");
+MODULE_LICENSE("GPL");
+
+#ifdef KERNEL26
+module_param(ifname, charp, 0);
+#else
+MODULE_PARM(ifname, "s");
+#endif
 
 static int kdsr_recv(struct sk_buff *skb)
 {
@@ -70,7 +81,7 @@ struct sk_buff *kdsr_pkt_alloc(unsigned int size, struct net_device *dev)
 	skb->protocol = htons(ETH_P_IP);
 	skb->dev = dev;
 	
-	/* skb_put(skb, size); */
+	skb_put(skb, size);
 
 	//skb->nh.iph = (struct iphdr *)skb->data;
 	
@@ -95,7 +106,7 @@ struct sk_buff *dsr_rreq_create(__u32 taddr, struct net_device *dev)
 
 	target.s_addr = taddr;
 
-	dsr_rreq = dsr_rreq_hdr_add(skb_put(skb, DSR_RREQ_TOT_LEN), skb->len, target);
+	dsr_rreq = dsr_rreq_hdr_add(skb->data, skb->len, target);
 
 	if (!dsr_rreq) {
 		DEBUG("Could not create RREQ\n");
@@ -104,46 +115,51 @@ struct sk_buff *dsr_rreq_create(__u32 taddr, struct net_device *dev)
 	return skb;
 }
 
-
-struct sk_buff *dsr_rrep_create(struct in_addr initiator, struct net_device *dev)
+int dsr_rrep_send(dsr_src_rte_t *sr)
 {
+	int res = 0;
+	struct net_device *dev;
 	struct sk_buff *skb;
-	struct in_addr target;
-	dsr_rreq_opt_t *dsr_rreq;
+	dsr_rrep_opt_t *rrep;
+	
+
+	dev = dev_get_by_index(ldev_info.ifindex);
 	
 	if (!dev) {
-		DEBUG("nod send device specified!\n");
-		return NULL;
+		DEBUG("no send device!\n");
+		res = -1;
+		goto out_err;
 	}
 	
-	skb = kdsr_pkt_alloc(DSR_RREQ_TOT_LEN, dev);
-	
-	if (!skb)
-		return NULL;
-
-	target.s_addr = initiator.s_addr;
-
-	dsr_rreq = dsr_rreq_hdr_add(skb_put(skb, DSR_RREQ_TOT_LEN), skb->len, target);
-
-	if (!dsr_rreq) {
-		DEBUG("Could not create RREQ\n");
-		return NULL;
+	if (!sr) {
+		DEBUG("no source route!\n");
+		res = -1;
+		goto out_err;
 	}
-	return skb;
-}
-
-int dsr_send_rrep(struct in_addr initiator)
-{
 	
+	skb = kdsr_pkt_alloc(DSR_RREP_LEN_FROM_SRC_RTE(sr), dev);
+	
+	if (!skb) {
+		res = -1;
+		goto out_err;
+	}
 
-	return 0;
+	rrep = dsr_rrep_hdr_add(skb->data, skb->len, sr);
+
+	if (!rrep) {
+		DEBUG("Could not create RREP\n");
+		res = -1;
+		goto out_err;
+	}
+	
+	/* Call whatever send function we have */
+
+	
+	return res;
+ out_err:	
+	dev_put(dev);
+	return res;
 }
-
-#ifdef KERNEL26
-module_param(ifname, charp, 0);
-#else
-MODULE_PARM(ifname, "s");
-#endif
 
 static int __init kdsr_init(void)
 {
@@ -200,4 +216,3 @@ static void __exit kdsr_cleanup(void)
 
 module_init(kdsr_init);
 module_exit(kdsr_cleanup);
-MODULE_LICENSE("GPL");

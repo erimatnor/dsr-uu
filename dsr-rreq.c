@@ -3,6 +3,7 @@
 #include "debug.h"
 #include "dsr.h"
 #include "kdsr.h"
+#include "dsr-rrep.h"
 #include "dsr-rreq.h"
 
 static unsigned int rreq_seqno = 1;
@@ -59,9 +60,12 @@ void dsr_rreq_recv(struct in_addr initiator, dsr_rreq_opt_t *rreq)
 		dsr_src_rte_t *sr;
 		DEBUG("I am RREQ target\n");
 		sr = dsr_src_rte_new(initiator, ldev_info.ifaddr, 
-			     rreq->length - DSR_RREQ_HDR_LEN, rreq->addrs);
+				     DSR_RREQ_ADDRS_LEN(rreq), rreq->addrs);
 		
 		/* send rrep.... */
+		dsr_rrep_send(sr);
+
+		kfree(sr);
 
 	} else {
 		/* Forward RREQ */
