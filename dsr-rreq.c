@@ -28,7 +28,7 @@ static dsr_rreq_opt_t *dsr_rreq_opt_add(char *buf, int len,
 	return rreq;
 }
 
-int dsr_rreq_create(char *buf, int len, struct in_addr target)
+int dsr_rreq_create(dsr_pkt_t *dp)
 {
 	struct in_addr dst;
 	dsr_rreq_opt_t *rreq;
@@ -37,13 +37,13 @@ int dsr_rreq_create(char *buf, int len, struct in_addr target)
 	
 	l = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN;
 	
-	if (!buf || len < l)
+	if (!dp->buf || dp->len < l)
 		return -1;
 
 	dst.s_addr = DSR_BROADCAST;
-	off = buf;
+	off = skb->data;
 	
-	dsr_build_ip(off, l, ldev_info.ifaddr, dst, 1);
+	dsr_build_ip(skb->data, l, ldev_info.ifaddr, dst, 1);
 
 	off += IP_HDR_LEN;
 	l -= IP_HDR_LEN;
@@ -53,7 +53,7 @@ int dsr_rreq_create(char *buf, int len, struct in_addr target)
 	off += DSR_OPT_HDR_LEN;
 	l -= DSR_OPT_HDR_LEN;
 
-	rreq = dsr_rreq_opt_add(off, l, target);
+	rreq = dsr_rreq_opt_add(off, l, dp->dst);
 
 	if (!rreq) {
 		DEBUG("Could not create RREQ\n");
@@ -62,22 +62,31 @@ int dsr_rreq_create(char *buf, int len, struct in_addr target)
 	return 0;
 }
 
-void dsr_rreq_recv(dsr_rreq_opt_t *rreq, struct in_addr initiator)
+int dsr_rreq_recv(dsr_pkt_t *dp)
 {
 	dsr_srt_t *srt;
+	dsr_rreq_opt_t *rreq;
 	
-	if (!rreq)
-		return;
-	
-	if (initiator.s_addr == ldev_info.ifaddr.s_addr)
-		return;
+	if (!dp || !dp->rreq)
+		return DSR_PKT_DROP;
 
-	srt = dsr_srt_new(initiator, ldev_info.ifaddr, 
-			  DSR_RREQ_ADDRS_LEN(rreq), rreq->addrs);
+	rreq = dp->rreq;
+
+	if (dp->src.s_addr == ldev_info.ifaddr.s_addr)
+		return DSR_PKT_DROP;
+
+	dp->srt = dsr_srt_new(dp->src, ldev_info.ifaddr, 
+			      DSR_RREQ_ADDRS_LEN(rreq), rreq->addrs);
+#ifdef __KERNEL__
+	/* Add mac address of previous hop to the arp table */
+	if (dp->skb->mac.ethernet) {
+		/* struct net_device *dev = skb->dev; */
 		
-	/* Examine source route if this node already exists in it */
-
-	    
+		memcpy(hw_addr.sa_data, dp->skb->mac.ethernet->h_source, ETH_ALEN);
+		kdsr_arpset(src, &hw_addr, dp->skb->dev);
+	/* 	dev_put(dev); */
+	}
+#endif
 	if (rreq->target == ldev_info.ifaddr.s_addr) {
 		dsr_srt_t *srt_rev;
 		
@@ -96,20 +105,18 @@ void dsr_rreq_recv(dsr_rreq_opt_t *rreq, struct in_addr initiator)
 		dsr_rrep_send(srt_rev);
 
 		kfree(srt_rev);
-
 	} else {
 		int i, n;
 		
 		n = DSR_RREQ_ADDRS_LEN(rreq) / sizeof(struct in_addr);
 		
+		/* Examine source route if this node already exists in it */
 		for (i = 0; i < n; i++)
-			if (srt->addrs[i].s_addr == ldev_info.ifaddr.s_addr)
-				goto out;
-		
+			if (srt->addrs[i].s_addr == ldev_info.ifaddr.s_addr) {
+				return DSR_PKT_DROP;
+			}		
 		/* Forward RREQ */
-		//	dsr_send_rrep(initiator);
+		return DSR_PKT_FORWARD;
 	}
- out:
-	kfree(srt);
-	return;
+	return DSR_PKT_DROP;
 }

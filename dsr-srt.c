@@ -82,58 +82,43 @@ dsr_srt_opt_t *dsr_srt_opt_add(char *buf, int len, dsr_srt_t *srt)
 	return sopt;
 }
 
-void dsr_parse_srt(struct in_addr initiator, dsr_srt_t *srt)
+int dsr_srt_recv(dsr_pkt_t *dp)
 {
-	DEBUG("Parse source route\n");
-	return;
-}
-
-int dsr_srt_recv(dsr_srt_opt_t *sopt, struct in_addr src, struct in_addr dst)
-{
-	dsr_srt_t *srt;
-	int n;
+	dsr_srt_opt_t sopt;
+	int n;	
 	
+	if (!dp || !dp->sopt)
+		return DSR_PKT_ERROR;
 	
-	if (!sopt)
-		return DSR_SRT_ERROR;
+	sopt = dp->sopt;
 	
-	srt = dsr_srt_new(src, dst, sopt->length, sopt->addrs);
+	dp->srt = dsr_srt_new(dp->src, dp->dst, sopt->length, sopt->addrs);
 	
+	/* We should add this source route info to the cache... */
 	n = (sopt->length - 2) / sizeof(struct in_addr);
 	
 	if (sopt->sleft == 0) {
 	/* 	if (dst.s_addr == ldev_info.ifaddr.s_addr) */
 /* 			return DSR_SRT_DELIVER; */
 /* 		else */
-			return DSR_SRT_REMOVE;
+		return DSR_PKT_SRT_REMOVE;
 	}
 	if (sopt->sleft > n) {
 		// Send ICMP parameter error
-		return DSR_SRT_SEND_ICMP;
+		return DSR_PKT_SEND_ICMP;
 	} else {
 		int i;
 
-		sopt->sleft--;
-		
+		sopt->sleft--;		
 		i = n - sopt->sleft;
-	
+
+		/* Fill in next hop */
+		dp->nh->s_addr = sopt->addrs[i];
+
 		/* TODO: check for multicast address in next hop or dst */
 		/* TODO: check MTU and compare to pkt size */
 	
-		return DSR_SRT_FORWARD;
+		return DSR_PKT_FORWARD;
 	}
-	return DSR_SRT_ERROR;
-}
-
-struct in_addr dsr_srt_next_hop(dsr_srt_opt_t *sopt)
-{
-	int n, i;
-	struct in_addr a;
-
-	n = (sopt->length - 2) / sizeof(struct in_addr);
-	i = n - sopt->sleft;
-	
-	a.s_addr = sopt->addrs[i];
-
-	return a;
+	return DSR_PKT_ERROR;
 }

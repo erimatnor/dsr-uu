@@ -185,97 +185,39 @@ int dsr_dev_build_hw_hdr(struct sk_buff *skb, struct sockaddr *dest)
 	return -1;
 }
 
-static int dsr_dev_srt_add(struct sk_buff *skb, dsr_srt_t *srt)
+
+/* Transmit a DSR packet... this function assumes that the packet has a valid
+ * source route already. */
+int dsr_dev_queue_xmit(dsr_pkt_t *dp)
 {
-	struct iphdr *iph;
-	struct sk_buff *nskb;
-	char *ndx;
-	int dsr_len;
-	
-	if (!skb || !srt)
+	struct net_device_stats *stats = dsr_dev->priv;
+	struct ethhdr *ethh;
+	struct sockaddr hw_addr;
+		
+	if (!dp)
 		return -1;
 	
-	/* Calculate extra space needed */
-	dsr_len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt);
-	
-	/* Allocate new data space at head */
-	nskb = skb_copy_expand(skb, skb_headroom(skb),
-			       skb_tailroom(skb) + dsr_len, 
-			       GFP_ATOMIC);
-	
-	if (nskb == NULL) {
-		printk("Could not allocate new skb\n");
-		return -1;	
-	}
-	/* Set old owner */
-	if (skb->sk != NULL)
-		skb_set_owner_w(nskb, skb->sk);
-	
-	dev_kfree_skb(skb);
-	skb = nskb;
-	
-	skb_put(skb, dsr_len);
-	
-	/* Update IP header */
-	iph = skb->nh.iph;
-	
-	iph->tot_len = htons(skb->len - sizeof(struct ethhdr));
-	iph->protocol = IPPROTO_DSR;
-	
-	ip_send_check(iph);
-	
-	/* Get index to where the DSR header should go */
-	ndx = skb->mac.raw + sizeof(struct ethhdr) + (iph->ihl << 2);
-	memcpy(ndx + dsr_len, ndx, dsr_len);
-	
-	dsr_hdr_add(ndx, dsr_len, iph->protocol);
-	
-	dsr_srt_opt_add(ndx + DSR_OPT_HDR_LEN, dsr_len - DSR_OPT_HDR_LEN, srt);
-
-	return 0;
-}
-
-int dsr_dev_queue_xmit(struct sk_buff *skb)
-{
-	struct net_device_stats *stats = skb->dev->priv;
-	struct ethhdr *ethh;
-	struct iphdr *iph;
-	dsr_srt_t *srt;
-	
-	ethh = (struct ethhdr *)skb->data;
+	ethh = dp->skb->mac.ethernet;
 	
 	switch (ntohs(ethh->h_proto)) {
-	case ETH_P_IP:
-		iph = skb->nh.iph;
+	case ETH_P_IP:	
 		
-		srt = dsr_rtc_find(iph->daddr);
+		if (kdsr_get_hwaddr(dp->nh, &hw_addr, skb->dev) < 0)
+			break;
 		
-		if (srt) {
-			struct sockaddr hw_addr;
-			struct in_addr dst;
-		       
-			dst.s_addr = iph->daddr;
-			
-			/* Add source route */
-			if (dsr_dev_srt_add(skb, srt) < 0)
-				break;
-			
-			if (kdsr_get_hwaddr(dst, &hw_addr, skb->dev) < 0)
-				break;
-			
-			/* Build hw header */
-			if (dsr_dev_build_hw_hdr(skb, &hw_addr) < 0)
-				break;
-			
-			/* Send packet */
-			dev_queue_xmit(skb);
-			
-			stats->tx_packets++;
-			stats->tx_bytes+=skb->len;
-
-			/* We must free the source route */
-			kfree(srt);
-		}
+		/* Build hw header */
+		if (dsr_dev_build_hw_hdr(skb, &hw_addr) < 0)
+			break;
+		
+		/* Send packet */
+		dev_queue_xmit(skb);
+		
+		stats->tx_packets++;
+		stats->tx_bytes+=skb->len;
+		
+		/* We must free the source route */
+		kfree(srt);
+	
 		return -1;
 	default:
 		DEBUG("Unkown packet type\n");
@@ -311,9 +253,12 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 		
 		if (srt) {
 			struct sockaddr hw_addr;
-			struct in_addr dst;
+			struct in_addr nh;
 		       
-			dst.s_addr = iph->daddr;
+			if (srt->laddrs == 0)
+				nh.s_addr = srt->dst.s_addr;
+			else
+				nh.s_addr = srt->addrs[0].s_addr;
 			
 			/* Add source route */
 			if (dsr_dev_srt_add(skb, srt) < 0)
@@ -335,9 +280,14 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 			/* We must free the source route */
 			kfree(srt);
 		} else {
+			dsr_pkt_t *dp;
 			/* Ok-function (okfn) calls this function again, hopefully we
 			 * have a route at that point */
-			p_queue_enqueue_packet(skb, dsr_dev_queue_xmit);
+			dp = dsr_pkt_alloc();
+			
+			dp->skb = skb;
+			
+			p_queue_enqueue_packet(dp, dsr_dev_queue_xmit);
 			
 			res = dsr_rreq_send(iph->daddr);
 			

@@ -43,9 +43,8 @@ static dsr_rrep_opt_t *dsr_rrep_opt_add(char *buf, int len, dsr_srt_t *srt)
 	return rrep;	
 }
 
-int dsr_rrep_create(char *buf, int len, dsr_srt_t *srt)
+int dsr_rrep_create(dsr_pkt_t *dp)
 {
-	struct in_addr dst;
 	dsr_rrep_opt_t *rrep;
 	char *off;
 	int l;
@@ -53,27 +52,27 @@ int dsr_rrep_create(char *buf, int len, dsr_srt_t *srt)
 	l = IP_HDR_LEN + DSR_OPT_HDR_LEN + 
 		DSR_SRT_OPT_LEN(srt) + DSR_RREP_OPT_LEN(srt);
 	
-	if (!buf || len < l)
+	if (!dp || !dp->srt || dp->len < l)
 		return -1;
-
-	dst.s_addr = srt->src.s_addr;
-	off = buf;
 	
-	dsr_build_ip(off, l, ldev_info.ifaddr, dst, 1);
-
+	dp->dst.s_addr = srt->src.s_addr;
+	off = dp->data;
+	
+	dsr_build_ip(off, l, ldev_info.ifaddr, dp->dst, 1);
+	
 	off += IP_HDR_LEN;
 	l -= IP_HDR_LEN;
 	
 	dsr_hdr_add(off, l, 0);
-	     
+	
 	off += DSR_OPT_HDR_LEN;
 	l -= DSR_OPT_HDR_LEN;
-
-	/* Add the source route option to the packet */
-	dsr_srt_opt_add(off, l, srt);
 	
-	off += DSR_SRT_OPT_LEN(srt);
-	l -= DSR_SRT_OPT_LEN(srt);
+	/* Add the source route option to the packet */
+	dsr_srt_opt_add(off, l, dp->srt);
+	
+	off += DSR_SRT_OPT_LEN(dp->srt);
+	l -= DSR_SRT_OPT_LEN(dp->srt);
 
 	rrep = dsr_rrep_opt_add(off, l, srt);
 
@@ -84,30 +83,36 @@ int dsr_rrep_create(char *buf, int len, dsr_srt_t *srt)
 	return 0;
 }
 
-void dsr_rrep_recv(dsr_rrep_opt_t *rrep, struct in_addr src, 
-		   struct in_addr dst)
+int dsr_rrep_recv(dsr_pkt_t *dp)
 {
+	dsr_rrep_opt_t *rrep;
 	
-	if (!rrep)
-		return;
+	if (!dp || !dp->rrep)
+		return DSR_PKT_DROP;
 
-	if (dst.s_addr == ldev_info.ifaddr.s_addr) {
-		dsr_srt_t *srt;
+	rrep = dp->rrep;
+	
+	dp->srt = dsr_srt_new(dp->dst, dp->src, DSR_RREP_ADDRS_LEN(rrep), 
+			  rrep->addrs);
+	
+	if (dp->srt) {
+		DEBUG("Adding srt to cache\n");
+		dsr_rtc_add(dp->srt, 60000, 0);
+	}
+		
+	if (dp->dst.s_addr == ldev_info.ifaddr.s_addr) {
 		/*RREP for this node */
 		
 		DEBUG("RREP for me!\n");
-		
-		srt = dsr_srt_new(dst, src, DSR_RREP_ADDRS_LEN(rrep), 
-				  rrep->addrs);
-
-		if (srt) {
-			DEBUG("Adding srt to cache\n");
-			dsr_rtc_add(srt, 60000, 0);
-		}
-		
+				
 		/* Send buffered packets */
-		p_queue_set_verdict(P_QUEUE_SEND, dst.s_addr);
-
-		kfree(srt);
+		p_queue_set_verdict(P_QUEUE_SEND, dp->dst.s_addr);
+				
+	} else {
+		DEBUG("I am not RREP destination\n");
+		/* Forward */
+		return DSR_PKT_FORWARD;
 	}
+	
+	return DSR_PKT_DROP;
 }

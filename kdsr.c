@@ -57,12 +57,14 @@ static int kdsr_arpset(struct in_addr addr, struct sockaddr *hw_addr,
 
 static int kdsr_recv(struct sk_buff *skb)
 {
+	dsr_pkt_t *dp;
 	struct iphdr *iph;
-	struct in_addr src, dst;
+	struct in_addr src, dst, nh;
 	struct sockaddr hw_addr;
 	int ret, newlen;
 
 	DEBUG("received dsr packet\n");
+	
 	
 	iph = skb->nh.iph;
 		
@@ -71,27 +73,34 @@ static int kdsr_recv(struct sk_buff *skb)
 		return -1;
 	}
 	
+	/* Allocate a new packet for internal representation */
+	dp = dsr_pkt_alloc();
+	dp->skb = skb;
+	dp->len = skb->len;
+	dp->data = skb->data;
+	
 	/* Get IP stuff that we need */
 	src.s_addr = iph->saddr;
 	dst.s_addr = iph->daddr;
 
-	/* FIXME: This should probably be put in a function. But how do we call
-	 * it from dsr-rreq without access to the skb? */
-	if (skb->mac.ethernet) {
-		/* struct net_device *dev = skb->dev; */
-		
-		memcpy(hw_addr.sa_data, skb->mac.ethernet->h_source, ETH_ALEN);
-		kdsr_arpset(src, &hw_addr, skb->dev);
-	/* 	dev_put(dev); */
-	}
-
 	/* Process packet */
-	ret = dsr_recv(skb->data, skb->len, src, dst);
+	ret = dsr_recv(dp, src, dst, &nh);
 
 	switch (ret) {
-	case DSR_SRT_FORWARD:
-		break;
-	case DSR_SRT_DELIVER:
+	case DSR_PKT_FORWARD:
+		DEBUG("Forwarding %s", print_ip(src.s_addr));
+		DEBUG(" %s", print_ip(dst.s_addr));		
+		DEBUG(" nh %s\n", print_ip(nh.s_addr));
+
+		iph->ttl--;
+
+		/* Must checksum be recalculated? */
+		ip_send_check(iph);
+		
+		
+		
+		return 0;
+	case DSR_PKT_DELIVER:
 		newlen = dsr_opts_remove(skb->nh.iph, skb->len);
 		
 		if (newlen) {
@@ -99,17 +108,16 @@ static int kdsr_recv(struct sk_buff *skb)
 			/* Trim skb and deliver to IP layer again. */
 			skb_trim(skb, newlen);
 			ip_rcv(skb, skb->dev, NULL);
-			return 0;
 		}
-		break;
-	case DSR_SRT_REMOVE:
-		break;
-	case DSR_SRT_ERROR:
+		return 0;
+	case DSR_PKT_SEND_ICMP:
+	case DSR_PKT_SRT_REMOVE:
+	case DSR_PKT_ERROR:
+	case DSR_PKT_DROP:
 		break;
 	}
-	
+	dsr_pkt_free(dp);
 	kfree_skb(skb);
-
 	return 0;
 };
 
@@ -177,125 +185,6 @@ static struct sk_buff *kdsr_pkt_alloc(unsigned int size, struct net_device *dev)
 	skb_put(skb, size);
 	
 	return skb;
-}
-
-int dsr_rreq_send(u_int32_t target)
-{
-	int len, res = 0;
-	struct net_device *dev;
-	struct sk_buff *skb;
-	struct in_addr t;
-	struct sockaddr broadcast = {AF_UNSPEC, {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
-	dev = dev_get_by_index(ldev_info.ifindex);
-	
-	if (!dev) {
-		DEBUG("no send device!\n");
-		res = -1;
-		goto out_err;
-	}
-
-	len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN;
-	
-	skb = kdsr_pkt_alloc(len, dev);
-	
-	if (!skb) {
-		res = -1;
-		goto out_err;
-	}
-	
-	skb->dev = dev;
-
-	t.s_addr = target;
-	
-	res = dsr_rreq_create(skb->data, skb->len, t);
-
-	if (res < 0) {
-		DEBUG("Could not create RREQ\n");
-		goto out_err;
-	}
-	
-	res = dsr_dev_build_hw_hdr(skb, &broadcast);
-	
-	if (res < 0) {
-		DEBUG("RREQ transmission failed...\n");
-		dev_kfree_skb(skb);
-		goto out_err;
-	}
-
-	dev_queue_xmit(skb);
-
- out_err:	
-	dev_put(dev);
-	return res;
-}
-
-int dsr_rrep_send(dsr_srt_t *srt)
-{
-	int len, res = 0;
-	struct net_device *dev;
-	struct sk_buff *skb;
-	struct sockaddr dest;
-	struct in_addr addr;
-	
-	dev = dev_get_by_index(ldev_info.ifindex);
-	
-	if (!dev) {
-		DEBUG("no send device!\n");
-		res = -1;
-		goto out_err;
-	}
-	
-	if (!srt) {
-		DEBUG("no source route!\n");
-		res = -1;
-		goto out_err;
-	}
-
-	DEBUG("Sending RREP\n");
-
-	len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) + DSR_RREP_OPT_LEN(srt);
-	
-	skb = kdsr_pkt_alloc(len, dev);
-	
-	if (!skb) {
-		res = -1;
-		goto out_err;
-	}
-
-	skb->dev = dev;
-
-	res = dsr_rrep_create(skb->data, skb->len, srt);
-
-	if (res < 0) {
-		DEBUG("Could not create RREP\n");
-		goto out_err;
-	}
-
-	if (srt->laddrs == 0) {
-		DEBUG("source route is one hop\n");
-		addr.s_addr = srt->src.s_addr;
-	} else		
-		addr.s_addr = srt->addrs->s_addr;
-	
-	if (kdsr_get_hwaddr(addr, &dest, dev) < 0) {
-		DEBUG("Could not get hardware address for %s\n", 
-		      print_ip(addr.s_addr));
-		goto out_err;
-	}
-	
-	res = dsr_dev_build_hw_hdr(skb, &dest);
-	
-	if (res < 0) {
-		DEBUG("RREP transmission failed...\n");
-		dev_kfree_skb(skb);
-		goto out_err;
-	}
-	
-	
-	dev_queue_xmit(skb);
- out_err:	
-	dev_put(dev);
-	return res;
 }
 
 static int __init kdsr_init(void)

@@ -4,8 +4,11 @@
 #include <asm/byteorder.h>
 #include <linux/types.h>
 #include <linux/in.h>
+#include <linux/skbuff.h>
+#include <linux/ip.h>
 
 #include "dsr-srt.h"
+#include "dsr-rreq.h"
 
 typedef struct dsr_opt {
 	u_int8_t type;
@@ -58,14 +61,47 @@ struct netdev_info {
 #define IPPROTO_DSR 168 /* Is this correct? */
 #define IP_HDR_LEN 20
 
+/* Internal representation of a packet. For portability */
+typedef struct dsr_pkt {
+	int len;              /* Length of data, i.e., skb->len */
+	char *data;           /* Beginning of data */
+	dsr_hdr_t *dh;
+	dsr_srt_opt_t *sopt;
+	dsr_rreq_opt_t *rreq;
+	dsr_rrep_opt_t *rrep
+	struct in_addr src;   /* IP level data */
+	struct in_addr dst;
+       	struct in_addr nh;
+	int protocol;         /* IP protocol */
+	struct iphdr *iph;
+#ifdef __KERNEL__
+	struct sk_buff *skb;
+#endif
+	struct dsr_srt_t *srt;
+} dsr_pkt_t;
+
+/* Packet actions: */
+/* Actions to take after processing source route option: */
+#define DSR_PKT_ERROR          -1
+#define DSR_PKT_SRT_REMOVE      1
+#define DSR_PKT_FORWARD         2
+#define DSR_PKT_DELIVER         3
+#define DSR_PKT_SEND_ICMP       4
+#define DSR_PKT_DROP            5
+
 /* Local device info */
 extern struct netdev_info ldev_info;  /* defined in dsr-dev.c */
+
+dsr_pkt_t *dsr_pkt_alloc(int len);
+void dsr_pkt_free(dsr_pkt_t *dp);
 
 struct iphdr *dsr_build_ip(char *buf, int len, struct in_addr src, 
 			   struct in_addr dst, int ttl);
 dsr_hdr_t *dsr_hdr_add(char *buf, int len, unsigned int protocol);
-int dsr_recv(char *buf, int len, struct in_addr src, struct in_addr dst);
+int dsr_srt_add(dsr_pkt_t *dp);
+int dsr_recv(dsr_pkt_t *dp);
+int dsr_opts_remove(dsr_pkt_t *dp);
+int dsr_rreq_send(u_int32_t target);
 int dsr_rrep_send(dsr_srt_t *srt);
-int dsr_opts_remove(struct iphdr *iph, int len);
 
 #endif /* _DSR_H */

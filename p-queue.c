@@ -14,6 +14,7 @@
 
 #include "p-queue.h"
 #include "debug.h"
+#include "dsr-rtc.h"
 /*
  * This is basically a shameless rippoff of the linux kernel's ip_queue module.
  */
@@ -30,10 +31,9 @@ struct p_rt_info {
 };
 
 struct p_queue_entry {
-    struct list_head list;
-    struct sk_buff *skb;
-    int (*okfn)(struct sk_buff *);
-    struct p_rt_info rt_info;
+	struct list_head list;
+	dsr_pkt_t *dp;
+	int (*okfn)(struct sk_buff *);
 };
 
 typedef int (*p_queue_cmpfn)(struct p_queue_entry *, unsigned long);
@@ -134,11 +134,10 @@ void p_queue_flush(void)
 	write_unlock_bh(&queue_lock);
 }
 
-int p_queue_enqueue_packet(struct sk_buff *skb, int (*okfn)(struct sk_buff *))
+int p_queue_enqueue_packet(dsr_pkt_t *dp, int (*okfn)(dsr_pkt_t *))
 {
 	int status = -EINVAL;
 	struct p_queue_entry *entry;
-	struct iphdr *iph = skb->nh.iph;
 
 	entry = kmalloc(sizeof(*entry), GFP_ATOMIC);
 	
@@ -149,10 +148,7 @@ int p_queue_enqueue_packet(struct sk_buff *skb, int (*okfn)(struct sk_buff *))
 
 	/* printk("enquing packet queue_len=%d\n", queue_total); */
 	entry->okfn = okfn;
-	entry->skb = skb;
-	entry->rt_info.tos = iph->tos;
-	entry->rt_info.daddr = iph->daddr;
-	entry->rt_info.saddr = iph->saddr;
+	entry->dp = dp;
 	
 	write_lock_bh(&queue_lock);
 
@@ -195,8 +191,8 @@ int p_queue_find(__u32 daddr)
 int p_queue_set_verdict(int verdict, __u32 daddr)
 {
     struct p_queue_entry *entry;
+    dsr_srt_t *srt;
     int pkts = 0;
-
     
     if (verdict == P_QUEUE_DROP) {
 	
@@ -215,6 +211,8 @@ int p_queue_set_verdict(int verdict, __u32 daddr)
 	    kfree(entry);
 	    pkts++;
 	}
+	DEBUG("Dropped %d queued pkts\n", pkts);
+
     } else if (verdict == P_QUEUE_SEND) {
 	/* struct expl_entry e; */
 
@@ -223,13 +221,24 @@ int p_queue_set_verdict(int verdict, __u32 daddr)
 	    
 	    if (entry == NULL)
 		return pkts;
+	    	    
+	    srt = dsr_rtc_find(entry->skb->nh.iph->daddr);
 	    
+	    /* Add source route */
+	    if (!srt || dsr_dev_srt_add(skb, srt) < 0) {
+		    kfree_skb(entry->dp->skb);
+		    kfree(entry->dp);
+		    kfree(entry);
+		    continue;
+	    }
+		    
 	    pkts++;
 	    
 	    /* Inject packet */
-	    entry->okfn(entry->skb);
+	    entry->okfn(entry->dp);
 	    kfree(entry);
 	}
+	DEBUG("Sent %d queued pkts\n", pkts);
     }
     return 0;
 }

@@ -24,8 +24,7 @@ typedef struct dsr_rrep_opt {
 #define DSR_RREP_ADDRS_LEN(rrep) (rrep->length - (1 + sizeof(struct in_addr))) 
 
 //dsr_rrep_opt_t *dsr_rrep_opt_add(char *buf, int len, dsr_srt_t *sr);
-int dsr_rrep_create(char *buf, int len, dsr_srt_t *srt);
-void dsr_rrep_recv(dsr_rrep_opt_t *rrep, struct in_addr src, 
-		   struct in_addr dst);
+int dsr_rrep_create(dsr_pkt_t *dp);
+int dsr_rrep_recv(dsr_pkt_t *dp);
 
 #endif /* _DSR_RREP */
