@@ -56,10 +56,18 @@ int dsr_rerr_send(struct dsr_pkt *dp_trigg)
 	char *buf;
 	int len, salv/* , i */;
 	
-	if (!dp_trigg || !dp_trigg->srt_opt)
+	if (!dp_trigg)
 		return -1;
-	
+
+	dp_trigg->srt_opt = (struct dsr_srt_opt *)dsr_opt_find_opt(dp_trigg, DSR_OPT_SRT);
+
+	if (!dp_trigg->srt_opt) {
+		DEBUG("Could not find source route option\n");
+		return -1;
+	}
+
 	DEBUG("Send RERR\n");
+
 	GET_SALVAGE(dp_trigg->srt_opt, salv);
 
 	if (salv == 0)
@@ -152,7 +160,7 @@ int dsr_rerr_send(struct dsr_pkt *dp_trigg)
 	DEBUG("Send RERR err_src %s err_dst %s fin_dst %s\n", 
 	      print_ip(rerr_opt->err_src), 
 	      print_ip(rerr_opt->err_dst),
-	      print_ip(dp_trigg->dst.s_addr));
+	      print_ip((u_int32_t)*rerr_opt->info));
 
 	dsr_dev_xmit(dp);
 	
@@ -164,4 +172,37 @@ int dsr_rerr_send(struct dsr_pkt *dp_trigg)
 
 	return -1;
 
+}
+
+int dsr_rerr_opt_recv(struct dsr_rerr_opt *rerr_opt)
+{
+	struct in_addr err_src, err_dst, unr_addr;
+
+	if (!rerr_opt)
+		return -1;
+	
+	switch (rerr_opt->err_type) {
+	case NODE_UNREACHABLE:
+		err_src.s_addr = rerr_opt->err_src;
+		err_dst.s_addr = rerr_opt->err_dst;
+
+		memcpy(&unr_addr, rerr_opt->info, sizeof(struct in_addr));
+
+		DEBUG("NODE_UNREACHABLE err_src=%s err_dst=%s unr=%s\n", 
+		      print_ip(rerr_opt->err_src), 
+		      print_ip(rerr_opt->err_dst), 
+		      print_ip(unr_addr.s_addr));
+			
+		/* Remove broken link from cache */
+		lc_link_del(err_src, unr_addr);
+		break;
+	case FLOW_STATE_NOT_SUPPORTED:
+		DEBUG("FLOW_STATE_NOT_SUPPORTED\n");
+		break;
+	case OPTION_NOT_SUPPORTED:
+		DEBUG("OPTION_NOT_SUPPORTED\n");
+		break;
+	}
+	
+	return 0;
 }

@@ -5,6 +5,7 @@
 #include "dsr-opt.h"
 #include "dsr-rreq.h"
 #include "dsr-rrep.h"
+#include "dsr-rerr.h"
 #include "dsr-srt.h"
 #include "dsr-ack.h"
 #include "kdsr.h"
@@ -48,7 +49,25 @@ struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, struct in_add
 
 	return iph;
 }
-
+struct dsr_opt *dsr_opt_find_opt(struct dsr_pkt *dp, int type)
+{
+	int dsr_len, l;
+	struct dsr_opt *dopt;
+	
+	dsr_len = dsr_pkt_opts_len(dp);
+	
+	l = DSR_OPT_HDR_LEN;
+	dopt = DSR_GET_OPT(dp->dh.opth);
+	
+	while (l < dsr_len && (dsr_len - l) > 2) {
+		if (type == dopt->type)
+			return dopt;
+		
+		l = l + dopt->length + 2;
+		dopt = DSR_GET_NEXT_OPT(dopt);
+	}
+	return NULL;
+}
 
 int dsr_opts_remove(struct dsr_pkt *dp)
 {
@@ -117,10 +136,12 @@ int dsr_opt_recv(struct dsr_pkt *dp)
 			}
 			break;
 		case DSR_OPT_RERR:
-			DEBUG("RERR opt:");
+			DEBUG("RERR opt:\n");
 			if (dp->num_rerr_opts < MAX_RERR_OPTS) {
 				dp->rerr_opt[dp->num_rerr_opts++] = (struct dsr_rerr_opt *)dopt;
+				action |= dsr_rerr_opt_recv((struct dsr_rerr_opt *)dopt);
 			}
+			
 			break;
 		case DSR_OPT_PREV_HOP:
 			break;

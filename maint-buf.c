@@ -127,6 +127,7 @@ static struct maint_entry *maint_entry_create(struct dsr_pkt *dp)
 	m->rexmt = 0;
 	m->id = id;
 	m->dp = dsr_pkt_alloc(skb_copy(dp->skb, GFP_ATOMIC));
+	m->dp->nxt_hop = dp->nxt_hop;
 
 	return m;
 }

@@ -24,11 +24,15 @@ struct dsr_rerr_opt {
 #define DSR_RERR_HDR_LEN sizeof(struct dsr_rerr_opt)
 #define DSR_RERR_OPT_LEN (DSR_RERR_HDR_LEN - 2)
 
+struct node_unreach_info {
+	u_int32_t unr_node;
+};
 
 #define NODE_UNREACHABLE          1
 #define FLOW_STATE_NOT_SUPPORTED  2
 #define OPTION_NOT_SUPPORTED      3
 
 int dsr_rerr_send(struct dsr_pkt *dp_trigg);
+int dsr_rerr_opt_recv(struct dsr_rerr_opt *dsr_rerr_opt);
 
 #endif /* _DSR_RERR_H */

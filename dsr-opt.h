@@ -54,7 +54,7 @@ struct dsr_pad1_opt {
 struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, struct in_addr dst, int ip_len, int totlen, int protocol, int ttl);
 
 int dsr_opt_recv(struct dsr_pkt *dp);
-
+struct dsr_opt *dsr_opt_find_opt(struct dsr_pkt *dp, int type);
 struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, int len, unsigned int protocol);
 int dsr_opts_remove(struct dsr_pkt *dp);
 int dsr_opts_create(struct dsr_pkt *dp);
