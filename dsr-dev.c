@@ -72,7 +72,7 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 	struct net_device_stats *stats = dev->priv;
 	struct ethhdr *ethh;
 	struct iphdr *iph;
-	struct sk_buff *skb_rreq;
+	struct sk_buff *rreq_skb;
 	int res = 0;
 
 	ethh = (struct ethhdr *)skb->data;
@@ -85,14 +85,14 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 		
 		p_queue_enqueue_packet(skb, dev_queue_xmit);
 		
-		skb_rreq = dsr_rreq_create(iph->daddr);
+		rreq_skb = dsr_rreq_create(iph->daddr);
 		
-		if (!skb_rreq) {
+		if (!rreq_skb) {
 			DEBUG("RREQ creation failed!\n");
 			return -1;
 		}
 
-		res = dev_queue_xmit(skb_rreq);
+		res = dev_queue_xmit(rreq_skb);
 		
 		if (res < 0)
 			DEBUG("RREQ transmission failed... Free skb?\n");
