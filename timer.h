@@ -103,7 +103,7 @@ static inline char *print_timeval(struct timeval *tv)
 
 	n = (n + 1) % 2;
 
-	snprintf(buf[n], sizeof(buf), "%ld:%ld:%03lu", tv->tv_sec / 60, 
+	snprintf(buf[n], sizeof(buf), "%ld:%02ld:%03lu", tv->tv_sec / 60, 
 		 tv->tv_sec % 60, 
 		 tv->tv_usec / 1000);
 
@@ -117,8 +117,8 @@ static inline long timeval_diff(struct timeval *tv1, struct timeval *tv2)
 	if (!tv1 || !tv2)
 		return 0;
 	else 
-		return (long)((tv1->tv_sec - tv2->tv_sec) * 1000000 + 
-			      tv1->tv_usec - tv2->tv_usec);
+		return ((tv1->tv_sec - tv2->tv_sec) * 1000000 + 
+			tv1->tv_usec - tv2->tv_usec);
 }
 
 static inline int timeval_add_usecs(struct timeval *tv, usecs_t usecs)

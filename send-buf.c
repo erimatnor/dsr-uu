@@ -36,6 +36,8 @@ struct send_buf_entry {
 	xmit_fct_t okfn;
 };
 
+static int send_buf_print(struct tbl *t, char *buffer);
+
 static inline int crit_addr(void *pos, void *addr)
 {
 	struct in_addr *a = (struct in_addr *)addr; 
@@ -52,7 +54,7 @@ static inline int crit_garbage(void *pos, void *n)
 	struct send_buf_entry *e = (struct send_buf_entry *)pos;
 	
 	if (timeval_diff(now, &e->qtime) >= 
-	    (int)ConfValToUsecs(SendBufferTimeout)) {
+	    (int)ConfValToUsecs(SendBufferTimeout) - 1000) {
 		if (e->dp)
 			dsr_pkt_free(e->dp);
 		return 1;
@@ -70,9 +72,13 @@ void NSCLASS send_buf_timeout(unsigned long data)
 	struct send_buf_entry *e;
 	int pkts;
 	struct timeval expires, now;	
-	
+/* 	char buf[2048]; */
+
 	gettime(&now);
 	
+/* 	send_buf_print(&send_buf, buf); */
+/* 	DEBUG("\n%s\n", buf); */
+
 	pkts = tbl_for_each_del(&send_buf, &now, crit_garbage);
 
 	DEBUG("%d packets garbage collected\n", pkts);
@@ -90,8 +96,9 @@ void NSCLASS send_buf_timeout(unsigned long data)
 	
 	timeval_add_usecs(&expires, ConfValToUsecs(SendBufferTimeout));
 	
+	//DEBUG("now=%s qtime=%s exp=%s\n", print_timeval(&now), print_timeval(&e->qtime), print_timeval(&expires));
 	DSR_READ_UNLOCK(&send_buf.lock);
-	
+
 	set_timer(&send_buf_timer, &expires);
 }
 
@@ -229,8 +236,7 @@ static inline int send_buf_flush(struct tbl *t)
 	return pkts;
 }
 
-#ifdef __KERNEL__
-static int send_buf_get_info(char *buffer, char **start, off_t offset, int length)
+static int send_buf_print(struct tbl *t, char *buffer)
 {
 	list_t *p;
 	int len;
@@ -240,23 +246,35 @@ static int send_buf_get_info(char *buffer, char **start, off_t offset, int lengt
 
 	len = sprintf(buffer, "# %-15s %-8s\n", "IPAddr", "Age (s)");
 
-	DSR_READ_LOCK(&send_buf.lock);
+	DSR_READ_LOCK(&t->lock);
 
-	list_for_each(p, &send_buf.head) {
+	list_for_each(p, &t->head) {
 		struct send_buf_entry *e = (struct send_buf_entry *)p;
 		
 		if (e && e->dp)
-			len += sprintf(buffer+len, "  %-15s %-8lu\n", print_ip(e->dp->dst), timeval_diff(&now, &e->qtime) / 1000000);
+			len += sprintf(buffer+len, "  %-15s %-8lu\n", 
+				       print_ip(e->dp->dst), 
+				       timeval_diff(&now, &e->qtime) / 1000000);
 	}
 
 	len += sprintf(buffer+len,
 		       "\nQueue length      : %u\n"
 		       "Queue max. length : %u\n",
-		       send_buf.len,
-		       send_buf.max_len);
+		       t->len,
+		       t->max_len);
 	
-	DSR_READ_UNLOCK(&send_buf.lock);
+	DSR_READ_UNLOCK(&t->lock);
+
+	return len;
+}
+
+#ifdef __KERNEL__
+static int send_buf_get_info(char *buffer, char **start, off_t offset, int length)
+{
+	int len;
 	
+	len = send_buf_print(&send_buf, buffer);
+
 	*start = buffer + offset;
 	len -= offset;
 

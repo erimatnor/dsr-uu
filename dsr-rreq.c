@@ -335,6 +335,7 @@ int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
 	struct rreq_tbl_entry *e;
 	int ttl, res = 0;
 	struct timeval expires;
+/* 	char buf[2048]; */
 
 #define	TTL_START 1
 	
@@ -355,6 +356,9 @@ int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
 		goto out;
 	}
 	
+/* 	rreq_tbl_print(&rreq_tbl, buf); */
+/* 	DEBUG("\n%s\n", buf); */
+
 	if (e->state == STATE_IN_ROUTE_DISC) {
 		DEBUG("Route discovery for %s already in progress\n", 
 		      print_ip(target));
@@ -491,7 +495,8 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 	struct in_addr trg;
 	struct dsr_srt *srt_rev;
 	int action = DSR_PKT_NONE;
-	
+/* 	char buf[2048]; */
+
 	if (!dp || !rreq_opt || dp->flags & PKT_PROMISC_RECV)
 		return DSR_PKT_DROP;
 
@@ -594,6 +599,8 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		action = DSR_PKT_FORWARD_RREQ;
 	}
  out:
+/* 	rreq_tbl_print(&rreq_tbl, buf); */
+/* 	DEBUG("\n%s\n", buf); */
 	FREE(srt_rev);
 	return action;
 }
