@@ -441,7 +441,14 @@ struct dsr_srt *dsr_rtc_find(struct in_addr src, struct in_addr dst)
 		srt->dst = dst;
 		srt->src = src;
 		
-		for (n = dst_node->pred; n != n->pred; n = n->pred) {
+		if (!dst_node->pred) {
+			kfree(srt);
+			srt = NULL;
+			DEBUG("Predecessor was NULL\n");
+			goto out;			
+		}
+			
+		for (n = dst_node->pred; (n != n->pred) || !n->pred; n = n->pred) {
 			srt->addrs[i] = n->addr;
 			i++;
 		}
