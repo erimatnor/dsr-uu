@@ -75,15 +75,14 @@ struct sk_buff *kdsr_pkt_alloc(unsigned int size, struct net_device *dev)
 	
 	if (!skb)
 		return NULL;
-		
+	
+	/* We align to 16 bytes, for ethernet: 2 bytes + 14 bytes header */
        	skb_reserve(skb, (dev->hard_header_len+15)&~15); 
 	skb->nh.raw = skb->data;
 	skb->protocol = htons(ETH_P_IP);
 	skb->dev = dev;
 	
 	skb_put(skb, size);
-
-	//skb->nh.iph = (struct iphdr *)skb->data;
 	
 	return skb;
 }
