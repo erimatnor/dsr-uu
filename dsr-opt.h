@@ -24,6 +24,10 @@ struct dsr_opt_hdr {
 	struct dsr_opt option[0];
 };
 
+struct dsr_pad1_opt {
+	u_int8_t type;
+};
+
 /* Header lengths */
 #define DSR_OPT_HDR_LEN sizeof(struct dsr_opt_hdr)
 #define DSR_PKT_MIN_LEN 24 /* IP header + DSR header =  20 + 4 */
@@ -43,6 +47,10 @@ struct dsr_opt_hdr {
 #define DSR_FIXED_HDR(iph) (struct dsr_opt_hdr *)((char *)iph + (iph->ihl << 2))
 #define DSR_GET_OPT(opt_hdr) (opt_hdr->option)
 #define DSR_GET_NEXT_OPT(dopt) ((struct dsr_opt *)((char *)dopt + dopt->length + 2))
+
+struct iphdr *dsr_build_ip(char *buf, int len, struct in_addr src, 
+			   struct in_addr dst, int ttl);
+int dsr_opt_recv(struct dsr_pkt *dp);
 
 struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, int len, unsigned int protocol);
 int dsr_opts_remove(struct dsr_pkt *dp);

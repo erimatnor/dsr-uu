@@ -61,10 +61,10 @@ static int kdsr_arpset(struct in_addr addr, struct sockaddr *hw_addr,
 	return 0;
 }
 
-static int kdsr_recv(struct sk_buff *skb)
+static int kdsr_ip_recv(struct sk_buff *skb)
 {
 	struct dsr_pkt dp;
-	int verdict;
+	int action;
 
 	DEBUG("Received DSR packet\n");
 		
@@ -72,6 +72,7 @@ static int kdsr_recv(struct sk_buff *skb)
 		
 	if ((skb->len + (dp.iph->ihl << 2)) < ntohs(dp.iph->tot_len)) {
 		DEBUG("data to short according to IP header len=%d tot_len=%d!\n", skb->len + (dp.iph->ihl << 2), ntohs(dp.iph->tot_len));
+		kfree_skb(skb);
 		return -1;
 	}
 	
@@ -86,7 +87,10 @@ static int kdsr_recv(struct sk_buff *skb)
 	dp.dst.s_addr = dp.iph->daddr;
 
 	/* Process packet */
-	verdict = dsr_recv(&dp);
+	action = dsr_opt_recv(&dp);  /* Kernel panics here!!! */
+
+	kfree_skb(skb);
+	return 0;
 
 	/* Add mac address of previous hop to the arp table */
 	if (dp.srt && dp.srt_opt && skb->mac.raw) {
@@ -109,55 +113,57 @@ static int kdsr_recv(struct sk_buff *skb)
 		kdsr_arpset(prev_hop, &hw_addr, skb->dev);
 	}
 
-	/* Check verdict... */
+	/* Check action... */
 
-	if (verdict & DSR_PKT_SRT_REMOVE) {
-		int len;
-		len = dsr_opts_remove(&dp);
-		if (len)
-			skb_trim(skb, skb->len - len);
+	if (action & DSR_PKT_SRT_REMOVE) {
+		int removed;
+		
+		DEBUG("DSR options remove!\n");
+		removed = dsr_opts_remove(&dp);
+		
+		if (removed)
+			skb_trim(skb, skb->len - removed);
 		else
-			kfree_skb(skb);
+			action = DSR_PKT_ERROR;
 	}
-	if (verdict & DSR_PKT_FORWARD) {
+	if (action & DSR_PKT_FORWARD) {
 		DEBUG("Forwarding %s", print_ip(dp.src.s_addr));
 		printk(" %s", print_ip(dp.dst.s_addr));		
 		printk("nh %s\n", print_ip(dp.nxt_hop.s_addr));
 
 		if (dp.iph->ttl < 1) {
 			DEBUG("ttl=0, dropping!\n");
-			kfree_skb(skb);
+			action = DSR_PKT_DROP;
+		} else {
+			DEBUG("Forwarding (dev_queue_xmit)\n");
+			/* dev_queue_xmit(dp.skb); */
 		}
-		
-		/* dev_queue_xmit(dp.skb); */
 	}
-	
-	if (verdict & DSR_PKT_SEND_ICMP) {
-		DEBUG("Send ICMP\n");
-		kfree_skb(skb);
+	if (action & DSR_PKT_SEND_RREP && dp.srt) {		
+		/* send rrep.... */
+		DEBUG("Send RREP\n");
+	/* 	dsr_rrep_send(dp.srt); */
 	}
 
-	if (verdict & DSR_PKT_DELIVER) {
+	if (action & DSR_PKT_SEND_ICMP) {
+		DEBUG("Send ICMP\n");
+	}
+
+	if (action & DSR_PKT_DROP || action & DSR_PKT_ERROR) {
+		DEBUG("DSR_PKT_DROP or DSR_PKT_ERROR\n");
+		kfree_skb(skb);
+		return 0;
+	}
+	if (action & DSR_PKT_DELIVER) {
 		DEBUG("Deliver to DSR device\n");
 		
 	/* 	dsr_dev_deliver(skb); */
-		kfree_skb(skb);
 	}
 
-	if (verdict & DSR_PKT_DROP) {
-		DEBUG("DSR_PKT_DROP\n");
-		kfree_skb(skb);
-	}
-	
-	if (verdict & DSR_PKT_ERROR) {
-		DEBUG("DSR_PKT_ERROR\n");
-		kfree_skb(skb);
-	}
-		
 	return 0;
 };
 
-static void kdsr_recv_err(struct sk_buff *skb, u32 info)
+static void kdsr_ip_recv_err(struct sk_buff *skb, u32 info)
 {
 	DEBUG("received error, info=%u\n", info);
 	
@@ -170,8 +176,8 @@ static struct inet_protocol dsr_inet_prot = {
 #else
 static struct net_protocol dsr_inet_prot = {
 #endif
-	.handler = kdsr_recv,
-	.err_handler = kdsr_recv_err,
+	.handler = kdsr_ip_recv,
+	.err_handler = kdsr_ip_recv_err,
 #ifdef KERNEL26
 	.no_policy = 1,
 #else
@@ -203,7 +209,7 @@ int kdsr_get_hwaddr(struct in_addr addr, struct sockaddr *hwaddr,
 struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp)
 {
 	struct sk_buff *skb;
-	struct ethhdr *ethh;
+/* 	struct ethhdr *ethh; */
 	struct sockaddr dest = {AF_UNSPEC, {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
 	struct net_device *dev;
 	char *buf;
@@ -216,23 +222,22 @@ struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp)
 
 	ip_len = dp->iph->ihl << 2;
 	
-	len = dev->hard_header_len + 15 + ip_len + dp->dsr_opts_len + dp->data_len;
+	len = ip_len + dp->dsr_opts_len + dp->data_len;
 	
 	DEBUG("dp->data_len=%d dp->dsr_opts_len=%d len=%d\n", 
 	      dp->data_len, dp->dsr_opts_len, len);
 	
-	skb = alloc_skb(len, GFP_ATOMIC);
+	skb = alloc_skb(dev->hard_header_len + 15 + len, GFP_ATOMIC);
 	
 	if (!skb) 
 		return NULL;
-	
 	
 	/* We align to 16 bytes, for ethernet: 2 bytes + 14 bytes header */
        	skb_reserve(skb, (dev->hard_header_len+15)&~15); 
 	skb->nh.raw = skb->data;
 	skb->dev = dev;
 	skb->protocol = htons(ETH_P_IP);
-	ethh = (struct ethhdr *)skb->data;
+/* 	ethh = (struct ethhdr *)skb->data; */
 
 	/* Copy in all the headers in the right order */
 	buf = skb_put(skb, len);
@@ -257,9 +262,9 @@ struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp)
 			return NULL;
 		}
 	}
-	dev->rebuild_header(skb);
+/* 	dev->rebuild_header(skb); */
 
-	memcpy(ethh->h_source, dev->dev_addr, dev->addr_len);	
+	/* memcpy(ethh->h_source, dev->dev_addr, dev->addr_len);	 */
 
 	if (dev->hard_header) {
 		dev->hard_header(skb, dev, ETH_P_IP,

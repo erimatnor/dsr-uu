@@ -271,13 +271,14 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	/* struct dsr_node *dnode = (struct dsr_node *)dev->priv; */
 	struct ethhdr *ethh;
 	struct dsr_pkt dp;
-	struct in_addr dst;
 	int res = 0;
 			
 	DEBUG("headroom=%d skb->data=%lu skb->nh.iph=%lu\n", 
 	      skb_headroom(skb), (unsigned long)skb->data, 
 	      (unsigned long)skb->nh.iph);
 	
+	memset(&dp, 0, sizeof(dp));
+
 	ethh = (struct ethhdr *)skb->data;
 	
 	dp.iph = skb->nh.iph;
@@ -290,7 +291,7 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	switch (ntohs(ethh->h_proto)) {
 	case ETH_P_IP:
 	    
-		dp.srt = dsr_rtc_find(dst);
+		dp.srt = dsr_rtc_find(dp.dst);
 		
 		if (dp.srt) {
 	       
@@ -309,7 +310,7 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 				DEBUG("Queueing failed!\n");
 				break;
 			}
-			res = dsr_rreq_send(dst);
+			res = dsr_rreq_send(dp.dst);
 			
 			if (res < 0)
 				DEBUG("RREQ Transmission failed...");

@@ -41,6 +41,7 @@ struct dsr_pkt {
 #define DSR_PKT_DELIVER        0x8
 #define DSR_PKT_SEND_ICMP      0x10
 #define DSR_PKT_DROP           0x20
+#define DSR_PKT_SEND_RREP      0x40
 
 /* Local device info (shared data) */
 //extern struct netdev_info ldev_info;  /* defined in dsr-dev.c */
@@ -68,9 +69,5 @@ static inline void dsr_node_unlock(struct dsr_node *dnode)
 
 /* struct dsr_pkt *dsr_pkt_alloc(int size); */
 /* void dsr_pkt_free(struct dsr_pkt *dp); */
-
-struct iphdr *dsr_build_ip(char *buf, int len, struct in_addr src, 
-			   struct in_addr dst, int ttl);
-int dsr_recv(struct dsr_pkt *dp);
 
 #endif /* _DSR_H */

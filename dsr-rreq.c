@@ -32,7 +32,6 @@ static struct dsr_rreq_opt *dsr_rreq_opt_add(char *buf, int len,
 
 int dsr_rreq_create(struct dsr_pkt *dp, struct in_addr target, char *buf, int len)
 {
-	
 	dp->iph = dsr_build_ip(buf, len, dp->src, dp->dst, 1);
 	
 	if (!dp->iph) {
@@ -71,7 +70,11 @@ int dsr_rreq_send(struct in_addr target)
 	int len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN;
 	int res = 0;
 	
+	memset(&dp, 0, sizeof(dp));
+	memset(buf, 0, IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN);
+	
 	dp.data = NULL; /* No data in this packet */
+	dp.data_len = 0;
 	dp.dst.s_addr = DSR_BROADCAST;
 	dp.nxt_hop.s_addr = DSR_BROADCAST;
 	
@@ -128,14 +131,12 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp)
 
 		dsr_rtc_add(srt_rev, 60000, 0);
 		
-		/* send rrep.... */
-		dsr_rrep_send(dp->srt);
-		
 		/* Send buffered packets */
 		p_queue_set_verdict(P_QUEUE_SEND, srt_rev->dst.s_addr);
 
 		kfree(srt_rev);
-
+		
+		return DSR_PKT_SEND_RREP | DSR_PKT_DROP;
 	} else {
 		int i, n;
 		

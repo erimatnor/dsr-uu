@@ -95,10 +95,11 @@ int dsr_opts_remove(struct dsr_pkt *dp)
 	/* Return bytes removed */
 	return len;
 }
-int dsr_recv(struct dsr_pkt *dp)
+int dsr_opt_recv(struct dsr_pkt *dp)
 {	
 	int dsr_len, l;
 	int action = 0;
+	int num_rreq_opts = 0;
 	struct dsr_opt *dopt;
 	struct in_addr my_addr;
 
@@ -109,7 +110,6 @@ int dsr_recv(struct dsr_pkt *dp)
 	my_addr = dsr_node->ifaddr;
 	dsr_node_unlock(dsr_node);
 	
-
 	/* Packet for us */
 	if (dp->dst.s_addr == my_addr.s_addr)
 		action |= DSR_PKT_DELIVER;
@@ -127,25 +127,30 @@ int dsr_recv(struct dsr_pkt *dp)
 		case DSR_OPT_PADN:
 			break;
 		case DSR_OPT_RREQ:
-			DEBUG("Received RREQ\n");
+			num_rreq_opts++;
+			DEBUG("RREQ opt:\n");
+			if (num_rreq_opts > 1) {
+				DEBUG("More than one RREQ opt!!! - Ignoring\n");
+				return DSR_PKT_ERROR;
+			}
 			dp->rreq_opt = (struct dsr_rreq_opt *)dopt;
 			action |= dsr_rreq_opt_recv(dp);
 			break;
 		case DSR_OPT_RREP:
-			DEBUG("Received RREP\n");
+			DEBUG("RREP opt:\n");
 			dp->rrep_opt = (struct dsr_rrep_opt *)dopt;
 			action |= dsr_rrep_opt_recv(dp);
 			break;
 		case DSR_OPT_ERR:
-			DEBUG("Received RERR\n");
+			DEBUG("RERR opt:");
 			break;
 		case DSR_OPT_PREV_HOP:
 			break;
 		case DSR_OPT_ACK:
-			DEBUG("Received ACK\n");
+			DEBUG("ACK opt:\n");
 			break;
 		case DSR_OPT_SRT:
-			DEBUG("Received SRT\n");
+			DEBUG("SRT opt:\n");
 			dp->srt_opt = (dsr_srt_opt_t *)dopt;
 			action |= dsr_srt_opt_recv(dp);
 			break;
@@ -156,7 +161,9 @@ int dsr_recv(struct dsr_pkt *dp)
 		case DSR_OPT_AREQ:
 			break;
 		case DSR_OPT_PAD1:
-			break;
+			l++;
+			dopt++;
+			continue;
 		default:
 			DEBUG("Unknown DSR option type=%d\n", dopt->type);
 		}

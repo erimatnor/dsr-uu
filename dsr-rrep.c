@@ -51,7 +51,8 @@ int dsr_rrep_create(struct dsr_pkt *dp, char *buf, int len)
 {
 	struct dsr_srt *srt_rev;
 	struct in_addr my_addr;
-	
+	struct dsr_pad1_opt *pad1_opt;
+
 	if (!dp || !dp->srt)
 		return -1;
 	
@@ -110,11 +111,18 @@ int dsr_rrep_create(struct dsr_pkt *dp, char *buf, int len)
 	len -= DSR_SRT_OPT_LEN(dp->srt);
 
 	dp->rrep_opt = dsr_rrep_opt_add(buf, len, dp->srt);
-
+	
 	if (!dp->rrep_opt) {
 		DEBUG("Could not create RREP option header\n");
 		return -1;
 	}
+
+	buf += DSR_RREP_OPT_LEN(dp->srt);
+	len -= DSR_RREP_OPT_LEN(dp->srt);
+	
+	pad1_opt = (struct dsr_pad1_opt *)buf;
+	pad1_opt->type = DSR_OPT_PAD1;
+	
 	return 0;
 }
 
@@ -122,15 +130,17 @@ int dsr_rrep_create(struct dsr_pkt *dp, char *buf, int len)
 int dsr_rrep_send(struct dsr_srt *srt)
 {
 	struct dsr_pkt dp;
+/* 	struct sk_buff *skb; */
 	int len, res;
 	char *buf;
 
 	if (!srt) {
 		DEBUG("no source route!\n");
 		return -1;
-	}
+	}	
 	
-	
+	memset(&dp, 0, sizeof(dp));
+
 	len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) + DSR_RREP_OPT_LEN(srt);
 	
 	buf = kmalloc(len, GFP_ATOMIC);
@@ -138,7 +148,7 @@ int dsr_rrep_send(struct dsr_srt *srt)
 	if (!buf)
 		return -1;
 	
-	DEBUG("RREP len=%d\n", len);
+	DEBUG("IP_HDR_LEN=%d DSR_OPT_HDR_LEN=%d DSR_SRT_OPT_LEN=%d DSR_RREP_OPT_LEN=%d RREP len=%d\n", IP_HDR_LEN, DSR_OPT_HDR_LEN, DSR_SRT_OPT_LEN(srt), DSR_RREP_OPT_LEN(srt), len);
 	
 	/* Make a copy of the source route */
 	dp.srt = srt;
@@ -153,9 +163,13 @@ int dsr_rrep_send(struct dsr_srt *srt)
 
 	if (res < 0) {
 		DEBUG("Could not create RREP\n");
-	} else 
-		dsr_dev_xmit(&dp);
-	
+	} /* else  */
+		/* dsr_dev_xmit(&dp); */
+	/* skb = kdsr_skb_create(&dp); */
+
+/* 	if (skb) */
+/* 		dev_kfree_skb(skb); */
+
 	kfree(buf);
 	return 0;
 }
