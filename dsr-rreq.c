@@ -1,7 +1,9 @@
 #include <net/ip.h>
+#include <linux/proc_fs.h>
 
 #include "debug.h"
 #include "dsr.h"
+#include "tbl.h"
 #include "kdsr.h"
 #include "dsr-rrep.h"
 #include "dsr-rreq.h"
@@ -10,7 +12,99 @@
 #include "dsr-dev.h"
 #include "p-queue.h"
 
+#define RREQ_TBL_MAX_LEN 512 /* Should be enough */
+#define RREQ_TBL_PROC_NAME "dsr_rreq_tbl"
+
+static TBL(rreq_tbl, RREQ_TBL_MAX_LEN);
+
+struct rreq_tbl_entry {
+	struct list_head l;
+	struct in_addr addr;
+	int ttl;
+	unsigned long sent_time;
+};
+
 static unsigned int rreq_seqno = 1;
+
+
+static inline int crit_address(void *rreq_entry, void *addr)
+{
+	struct in_addr *a = (struct in_addr *)addr; 
+	struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)rreq_entry;
+	
+	if (e->addr.s_addr == a->s_addr)
+		return 1;
+
+	return 0;
+}
+
+struct rreq_tbl_entry *rreq_tbl_add(struct in_addr addr, int ttl, unsigned long time)
+{
+	struct rreq_tbl_entry *e;
+	
+	e = kmalloc(sizeof(struct rreq_tbl_entry), GFP_ATOMIC);
+	
+	if (!e)
+		return NULL;
+	
+	e->addr = addr;
+	e->ttl = ttl;
+	e->sent_time = time;
+
+	if (tbl_add(&rreq_tbl, e, crit_none)) {
+		kfree(e);
+		return NULL;
+	}
+	return e;
+}
+
+static int rreq_tbl_print(char *buf)
+{
+	struct list_head *pos;
+	int len = 0;
+    
+	read_lock_bh(&rreq_tbl.lock);
+    
+	len += sprintf(buf, "# %-15s %-3s Sent      entries=%d max_entries=%d tbl->l=%lu entry->l->next=%lu entry->l->prev=%lu\n", "Addr", "TTL", rreq_tbl.len, rreq_tbl.max_len, (unsigned long)&rreq_tbl.head, (unsigned long)rreq_tbl.head.next, (unsigned long)rreq_tbl.head.prev);
+
+	list_for_each(pos, &rreq_tbl.head) {
+		struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)pos;
+		
+		len += sprintf(buf+len, "  %-15s %-3u %lu\n", print_ip(e->addr.s_addr), e->ttl, (e->sent_time - jiffies) * 1000 / HZ);
+	}
+    
+	read_unlock_bh(&rreq_tbl.lock);
+	return len;
+
+}
+
+static int rreq_tbl_proc_info(char *buffer, char **start, off_t offset, int length)
+{
+	int len;
+
+	len = rreq_tbl_print(buffer);
+    
+	*start = buffer + offset;
+	len -= offset;
+	if (len > length)
+		len = length;
+	else if (len < 0)
+		len = 0;
+	return len;    
+}
+
+int __init rreq_tbl_init(void)
+{
+	proc_net_create(RREQ_TBL_PROC_NAME, 0, rreq_tbl_proc_info);
+	return 0;
+}
+void __exit rreq_tbl_cleanup(void)
+{
+	tbl_flush(&rreq_tbl);
+	proc_net_remove(RREQ_TBL_PROC_NAME);
+}
+
+
 
 static struct dsr_rreq_opt *dsr_rreq_opt_add(char *buf, int len, 
 					struct in_addr target)
@@ -91,6 +185,8 @@ int dsr_rreq_send(struct in_addr target)
 	
 	dsr_dev_xmit(&dp);
 	
+/* 	rreq_tbl_add(target, 5, jiffies); */
+
 	return 0;
 }
 

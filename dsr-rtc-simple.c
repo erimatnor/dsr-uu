@@ -9,6 +9,7 @@
 #include <linux/timer.h>
 #include <linux/proc_fs.h>
 
+#include "tbl.h"
 #include "dsr-rtc.h"
 #include "dsr-srt.h"
 #include "debug.h"
@@ -18,6 +19,7 @@
 static unsigned int rtc_len;
 static rwlock_t rtc_lock = RW_LOCK_UNLOCKED;
 static LIST_HEAD(rtc_head);
+static TBL(rtc_tbl, RTC_MAX_LEN);
 
 #define list_is_first(e) (&e->l == rtc_head.next)
 

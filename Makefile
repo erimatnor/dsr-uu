@@ -77,10 +77,14 @@ clean:
 endif
 # DO NOT DELETE
 
-kdsr.o: dsr.h dsr-srt.h dsr-dev.h dsr-rreq.h dsr-rrep.h p-queue.h debug.h
-dsr-dev.o: debug.h dsr.h dsr-srt.h kdsr.h dsr-rreq.h p-queue.h
-dsr-opt.o: debug.h dsr.h dsr-srt.h dsr-rreq.h kdsr.h
-dsr-rreq.o: debug.h dsr.h dsr-srt.h kdsr.h dsr-rrep.h dsr-rreq.h dsr-rtc.h
-dsr-rrep.o: dsr.h dsr-srt.h debug.h dsr-rrep.h dsr-rtc.h
-dsr-srt.o: dsr.h dsr-srt.h debug.h
-p-queue.o: p-queue.h debug.h
+kdsr.o: dsr.h dsr-opt.h dsr-dev.h dsr-rreq.h dsr-rrep.h dsr-srt.h p-queue.h
+kdsr.o: debug.h
+dsr-dev.o: debug.h dsr.h kdsr.h dsr-opt.h dsr-rreq.h dsr-rtc.h dsr-srt.h
+dsr-dev.o: p-queue.h
+dsr-opt.o: debug.h dsr.h dsr-opt.h dsr-rreq.h dsr-rrep.h dsr-srt.h kdsr.h
+dsr-rreq.o: debug.h dsr.h tbl.h kdsr.h dsr-rrep.h dsr-srt.h dsr-rreq.h
+dsr-rreq.o: dsr-opt.h dsr-rtc.h dsr-dev.h p-queue.h
+dsr-rrep.o: dsr.h debug.h dsr-rrep.h dsr-srt.h dsr-opt.h dsr-rtc.h dsr-dev.h
+dsr-rrep.o: p-queue.h kdsr.h
+dsr-srt.o: dsr.h dsr-srt.h dsr-opt.h debug.h
+p-queue.o: p-queue.h dsr.h debug.h dsr-rtc.h dsr-srt.h kdsr.h

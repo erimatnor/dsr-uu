@@ -18,8 +18,9 @@ struct dsr_rreq_opt {
 #define DSR_RREQ_TOT_LEN IP_HDR_LEN + sizeof(struct dsr_opt_hdr) + sizeof(struct dsr_rreq_opt)
 #define DSR_RREQ_ADDRS_LEN(rreq_opt) (rreq_opt->length - 6)
 
-//struct dsr_rreq_opt *dsr_rreq_opt_add(char *buf, int buflen, struct in_addr target);
-/* int dsr_rreq_create(struct dsr_pkt *dp, struct in_addr target); */
+int rreq_tbl_init(void);
+void rreq_tbl_cleanup(void);
+
 int dsr_rreq_opt_recv(struct dsr_pkt *dp);
 int dsr_rreq_send(struct in_addr target);
 
