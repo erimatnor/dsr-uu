@@ -107,9 +107,9 @@ struct dsr_srt *dsr_srt_new_rev(struct dsr_srt *srt)
 	return srt_rev;
 }
 
-struct dsr_srt *dsr_srt_new_splice(struct dsr_srt *srt, struct in_addr addr)
+struct dsr_srt *dsr_srt_new_split(struct dsr_srt *srt, struct in_addr addr)
 {
-	struct dsr_srt *srt_spliced;
+	struct dsr_srt *srt_split;
 	int i, n;
 
 	if (!srt)
@@ -122,40 +122,40 @@ struct dsr_srt *dsr_srt_new_splice(struct dsr_srt *srt, struct in_addr addr)
 
 	for (i = 0; i < n; i++) {
 		if (addr.s_addr == srt->addrs[i].s_addr)
-			goto splice;	
+			goto split;	
 	}
-	/* Nothing to splice */
+	/* Nothing to split */
 	return NULL;
- splice:
-	srt_spliced =  (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) + 
+ split:
+	srt_split =  (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) + 
 						(i * sizeof(struct in_addr)), 
 						GFP_ATOMIC);
 
-	if (!srt_spliced)
+	if (!srt_split)
 		return NULL;
 
-	srt_spliced->src.s_addr = srt->src.s_addr;
-	srt_spliced->dst.s_addr = srt->addrs[i].s_addr;
-	srt_spliced->laddrs = sizeof(struct in_addr) * i;
+	srt_split->src.s_addr = srt->src.s_addr;
+	srt_split->dst.s_addr = srt->addrs[i].s_addr;
+	srt_split->laddrs = sizeof(struct in_addr) * i;
 
-	memcpy(srt_spliced->addrs, srt->addrs, sizeof(struct in_addr) * i);
+	memcpy(srt_split->addrs, srt->addrs, sizeof(struct in_addr) * i);
 	
-	return srt_spliced;
+	return srt_split;
 }
-struct dsr_srt *dsr_srt_new_splice_rev(struct dsr_srt *srt, struct in_addr addr)
+struct dsr_srt *dsr_srt_new_split_rev(struct dsr_srt *srt, struct in_addr addr)
 {
-	struct dsr_srt *srt_spliced, *srt_spliced_rev;
+	struct dsr_srt *srt_split, *srt_split_rev;
 
-	srt_spliced = dsr_srt_new_splice(srt, addr);
+	srt_split = dsr_srt_new_split(srt, addr);
 
-	if (!srt_spliced)
+	if (!srt_split)
 		return NULL;
 		     
-	srt_spliced_rev = dsr_srt_new_rev(srt_spliced);
+	srt_split_rev = dsr_srt_new_rev(srt_split);
 
-	FREE(srt_spliced);
+	FREE(srt_split);
 	
-	return srt_spliced_rev;
+	return srt_split_rev;
 }
 
 struct dsr_srt *dsr_srt_shortcut(struct dsr_srt *srt, struct in_addr a1, 
@@ -366,7 +366,7 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp)
 		DEBUG("shortcut: %s\n", print_srt(srt_cut));
 		
 		/* srt = dsr_rtc_find(myaddr, dp->src); */
-		srt = dsr_srt_new_splice_rev(srt_cut, myaddr);
+		srt = dsr_srt_new_split_rev(srt_cut, myaddr);
 
 		if (!srt) {
 			DEBUG("No route to %s\n", print_ip(dp->src));
