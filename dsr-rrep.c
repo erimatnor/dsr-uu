@@ -330,7 +330,12 @@ int NSCLASS dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 	struct in_addr myaddr, srt_dst;
 	struct dsr_srt *rrep_opt_srt;
 
-	if (!dp || !dp->rrep_opt || dp->flags & PKT_PROMISC_RECV)
+	if (!dp || !rrep_opt || dp->flags & PKT_PROMISC_RECV)
+		return DSR_PKT_ERROR;
+	
+	if (dp->num_rrep_opts < MAX_RREP_OPTS)
+		dp->rrep_opt[dp->num_rrep_opts++] = rrep_opt;
+	else
 		return DSR_PKT_ERROR;
 
 	myaddr = my_addr();

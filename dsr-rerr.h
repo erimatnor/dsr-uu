@@ -43,7 +43,7 @@ struct node_unreach_info {
 #ifndef NO_DECLS
 
 int dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr);
-int dsr_rerr_opt_recv(struct dsr_rerr_opt *dsr_rerr_opt);
+int dsr_rerr_opt_recv(struct dsr_pkt *dp, struct dsr_rerr_opt *dsr_rerr_opt);
 
 #endif				/* NO_DECLS */
 

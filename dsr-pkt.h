@@ -47,7 +47,7 @@ struct dsr_pkt {
 		char *raw;
 	} dh;
 
-	int num_rrep_opts, num_rerr_opts, num_ack_opts;
+	int num_rrep_opts, num_rerr_opts, num_rreq_opts, num_ack_opts;
 	struct dsr_srt_opt *srt_opt;
 	struct dsr_rreq_opt *rreq_opt;	/* Can only be one */
 	struct dsr_rrep_opt *rrep_opt[MAX_RREP_OPTS];

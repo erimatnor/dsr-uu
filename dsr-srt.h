@@ -89,7 +89,7 @@ struct dsr_srt *dsr_srt_concatenate(struct dsr_srt *srt1, struct dsr_srt *srt2);
 #ifndef NO_DECLS
 
 int dsr_srt_add(struct dsr_pkt *dp);
-int dsr_srt_opt_recv(struct dsr_pkt *dp);
+int dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt);
 
 #endif				/* NO_DECLS */
 

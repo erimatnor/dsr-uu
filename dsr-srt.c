@@ -366,18 +366,20 @@ int NSCLASS dsr_srt_add(struct dsr_pkt *dp)
 	return 0;
 }
 
-int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp)
+int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 {
 	struct in_addr next_hop_intended;
 	struct in_addr myaddr = my_addr();
 	int n;
 
-	if (!dp || !dp->srt_opt)
+	if (!dp || !srt_opt)
 		return DSR_PKT_ERROR;
+	
+	dp->srt_opt = srt_opt;
 
 	/* We should add this source route info to the cache... */
-	dp->srt = dsr_srt_new(dp->src, dp->dst, dp->srt_opt->length,
-			      (char *)dp->srt_opt->addrs);
+	dp->srt = dsr_srt_new(dp->src, dp->dst, srt_opt->length,
+			      (char *)srt_opt->addrs);
 
 	if (!dp->srt) {
 		DEBUG("Create source route failed\n");
@@ -385,11 +387,11 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp)
 	}
 	n = dp->srt->laddrs / sizeof(struct in_addr);
 
-	DEBUG("SR: %s sleft=%d\n", print_srt(dp->srt), dp->srt_opt->sleft);
+	DEBUG("SR: %s sleft=%d\n", print_srt(dp->srt), srt_opt->sleft);
 
-	next_hop_intended = dsr_srt_next_hop(dp->srt, dp->srt_opt->sleft);
-	dp->prv_hop = dsr_srt_prev_hop(dp->srt, dp->srt_opt->sleft - 1);
-	dp->nxt_hop = dsr_srt_next_hop(dp->srt, dp->srt_opt->sleft - 1);
+	next_hop_intended = dsr_srt_next_hop(dp->srt, srt_opt->sleft);
+	dp->prv_hop = dsr_srt_prev_hop(dp->srt, srt_opt->sleft - 1);
+	dp->nxt_hop = dsr_srt_next_hop(dp->srt, srt_opt->sleft - 1);
 
 	DEBUG("next_hop=%s prev_hop=%s next_hop_intended=%s\n",
 	      print_ip(dp->nxt_hop),
@@ -405,8 +407,8 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp)
 	/* Automatic route shortening - Check if this node is the
 	 * intended next hop... */
 	if (next_hop_intended.s_addr != myaddr.s_addr &&
-	    dp->srt_opt->sleft > 0 &&
-	    dsr_srt_find_addr(dp->srt, myaddr, dp->srt_opt->sleft) &&
+	    srt_opt->sleft > 0 &&
+	    dsr_srt_find_addr(dp->srt, myaddr, srt_opt->sleft) &&
 	    !grat_rrep_tbl_find(dp->src, dp->prv_hop)) {
 		struct dsr_srt *srt, *srt_cut;
 
@@ -442,15 +444,15 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp)
 	if (dp->flags & PKT_PROMISC_RECV)
 		return DSR_PKT_DROP;
 
-	if (dp->srt_opt->sleft == 0)
+	if (srt_opt->sleft == 0)
 		return DSR_PKT_SRT_REMOVE;
 
-	if (dp->srt_opt->sleft > n) {
+	if (srt_opt->sleft > n) {
 		// Send ICMP parameter error
 		return DSR_PKT_SEND_ICMP;
 	}
 
-	dp->srt_opt->sleft--;
+	srt_opt->sleft--;
 
 	/* TODO: check for multicast address in next hop or dst */
 	/* TODO: check MTU and compare to pkt size */

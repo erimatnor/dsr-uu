@@ -106,7 +106,6 @@ int NSCLASS dsr_opt_recv(struct dsr_pkt *dp)
 {
 	int dsr_len, l;
 	int action = 0;
-	int num_rreq_opts = 0;
 	struct dsr_opt *dopt;
 	struct in_addr myaddr;
 
@@ -141,36 +140,21 @@ int NSCLASS dsr_opt_recv(struct dsr_pkt *dp)
 		case DSR_OPT_RREQ:
 			if (dp->flags & PKT_PROMISC_RECV)
 				break;
-			num_rreq_opts++;
-			if (num_rreq_opts > 1) {
-				DEBUG("More than one RREQ opt!!! - Ignoring\n");
-				return DSR_PKT_ERROR;
-			}
-			dp->rreq_opt = (struct dsr_rreq_opt *)dopt;
-			action |=
-			    dsr_rreq_opt_recv(dp, (struct dsr_rreq_opt *)dopt);
+			
+			action |= dsr_rreq_opt_recv(dp, (struct dsr_rreq_opt *)dopt);
 			break;
 		case DSR_OPT_RREP:
 			if (dp->flags & PKT_PROMISC_RECV)
 				break;
-			if (dp->num_rrep_opts < MAX_RREP_OPTS) {
-				dp->rrep_opt[dp->num_rrep_opts++] =
-				    (struct dsr_rrep_opt *)dopt;
-				action |=
-				    dsr_rrep_opt_recv(dp,
-						      (struct dsr_rrep_opt *)
-						      dopt);
-			}
+			
+			action |= dsr_rrep_opt_recv(dp, (struct dsr_rrep_opt *)dopt);		       
 			break;
 		case DSR_OPT_RERR:
 			if (dp->flags & PKT_PROMISC_RECV)
 				break;
 			if (dp->num_rerr_opts < MAX_RERR_OPTS) {
-				dp->rerr_opt[dp->num_rerr_opts++] =
-				    (struct dsr_rerr_opt *)dopt;
 				action |=
-				    dsr_rerr_opt_recv((struct dsr_rerr_opt *)
-						      dopt);
+				    dsr_rerr_opt_recv(dp, (struct dsr_rerr_opt *)dopt);
 			}
 
 			break;
@@ -189,8 +173,7 @@ int NSCLASS dsr_opt_recv(struct dsr_pkt *dp)
 			}
 			break;
 		case DSR_OPT_SRT:
-			dp->srt_opt = (struct dsr_srt_opt *)dopt;
-			action |= dsr_srt_opt_recv(dp);
+			action |= dsr_srt_opt_recv(dp, (struct dsr_srt_opt *)dopt);
 			break;
 		case DSR_OPT_TIMEOUT:
 			break;

@@ -187,7 +187,7 @@ int NSCLASS send_buf_set_verdict(int verdict, struct in_addr dst)
 			FREE(e);
 			pkts++;
 		}
-		DEBUG("Dropped %d queued pkts\n", pkts);
+		DEBUG("Dropped %d queued pkts for %s\n", pkts, print_ip(dst));
 		break;
 	case SEND_BUF_SEND:
 
@@ -220,7 +220,7 @@ int NSCLASS send_buf_set_verdict(int verdict, struct in_addr dst)
 			pkts++;
 			FREE(e);
 		}
-		DEBUG("Sent %d queued packets\n", pkts);
+		DEBUG("Sent %d queued packets to %s\n", pkts, print_ip(dst));
 
 		/*      if (pkts == 0) */
 /* 			DEBUG("No packets for dest %s\n", print_ip(dst)); */

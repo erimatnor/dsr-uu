@@ -508,6 +508,15 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 
 	if (!dp || !rreq_opt || dp->flags & PKT_PROMISC_RECV)
 		return DSR_PKT_DROP;
+	
+	dp->num_rreq_opts++;
+	
+	if (dp->num_rreq_opts > 1) {
+		DEBUG("More than one RREQ opt!!! - Ignoring\n");
+		return DSR_PKT_ERROR;
+	}
+
+	dp->rreq_opt = rreq_opt;
 
 	myaddr = my_addr();
 	
