@@ -63,7 +63,7 @@ void dsr_rreq_recv(struct in_addr initiator, dsr_rreq_opt_t *rreq)
 
 	} else {
 		/* Forward RREQ */
-
+		dsr_send_rrep(initiator);
 
 	}
 	
