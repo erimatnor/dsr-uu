@@ -83,7 +83,7 @@ int NSCLASS grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop)
 {
 	struct in_addr q[2] = { src, prev_hop };
 	struct grat_rrep_entry *e;
-	Time time = jiffies;
+	Time time = TimeNow;
 	
 	if (in_tbl(&grat_rrep_tbl, q, crit_query))
 		return 0;
@@ -130,7 +130,7 @@ static int grat_rrep_tbl_print(char *buf)
 		len += sprintf(buf+len, "  %-15s %-15s %lu\n", 
 			       print_ip(e->src), 
 			       print_ip(e->prev_hop),
-			       e->expire ? ((e->expire - jiffies) / HZ) : 0);
+			       e->expire ? ((e->expire - TimeNow) / HZ) : 0);
 	}
     
 	DSR_READ_UNLOCK(&grat_rrep_tbl.lock);

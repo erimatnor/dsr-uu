@@ -6,6 +6,8 @@
 #include "dsr.h"
 #include "dsr-pkt.h"
 
+#define DELIVER(pkt) dsr_dev_deliver(pkt)
+
 int dsr_dev_xmit(struct dsr_pkt *dp);
 int dsr_dev_deliver(struct dsr_pkt *dp);
 

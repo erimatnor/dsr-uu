@@ -35,8 +35,8 @@ struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, struct in_addr myaddr, int 
 			nxt_hop = srt->addrs[index-1];
 	}
 	
-	DEBUG("Next hop for %s is %s\n", 
-	      print_ip(srt->dst), print_ip(nxt_hop));
+/* 	DEBUG("Next hop for %s is %s\n",  */
+/* 	      print_ip(srt->dst), print_ip(nxt_hop)); */
 
 	return nxt_hop;
 }
@@ -64,12 +64,12 @@ struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt, struct in_addr myaddr)
 					prev_hop = srt->addrs[i-1];
 				goto out;
 			}
-			DEBUG("Error! Previous hop not found!\n");
+/* 			DEBUG("Error! Previous hop not found!\n"); */
 			return prev_hop;
 		}
 	}
  out:
-	DEBUG("Previous hop=%s\n", print_ip(prev_hop));
+/* 	DEBUG("Previous hop=%s\n", print_ip(prev_hop)); */
 	return prev_hop;
 }
 
@@ -162,12 +162,12 @@ int dsr_srt_add(struct dsr_pkt *dp)
 
 	len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(dp->srt);
 
-	DEBUG("dsr_opts_len=%d\n", len);
+/* 	DEBUG("dsr_opts_len=%d\n", len); */
 	
 	buf = dsr_pkt_alloc_opts(dp, len);
 
 	if (!buf) {
-		DEBUG("Could allocate memory\n");
+/* 		DEBUG("Could allocate memory\n"); */
 		return -1;
 	}
 
@@ -185,7 +185,7 @@ int dsr_srt_add(struct dsr_pkt *dp)
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, prot);
 
 	if (!dp->dh.opth) {
-		DEBUG("Could not create DSR opts header!\n");
+/* 		DEBUG("Could not create DSR opts header!\n"); */
 		return -1;
 	}
 
@@ -195,7 +195,7 @@ int dsr_srt_add(struct dsr_pkt *dp)
 	dp->srt_opt = dsr_srt_opt_add(buf, len, dp->srt);
 
 	if (!dp->srt_opt) {
-		DEBUG("Could not create Source Route option header!\n");
+/* 		DEBUG("Could not create Source Route option header!\n"); */
 		return -1;
 	}
 

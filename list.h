@@ -60,7 +60,7 @@ static inline int listelm_add(list_t * le, list_t * prev, list_t * next)
 	return LIST_SUCCESS;
 }
 
-static inline int list_add(list_t * head, list_t * le)
+static inline int list_add(list_t * le, list_t * head)
 {
 	
 	if (!head || !le)
@@ -71,7 +71,7 @@ static inline int list_add(list_t * head, list_t * le)
 	return LIST_SUCCESS;
 }
 
-static inline int list_add_tail(list_t * head, list_t * le)
+static inline int list_add_tail(list_t * le, list_t * head)
 {
 
 	if (!head || !le)

@@ -3,15 +3,15 @@
 
 #ifndef NO_DECLS
 
+int maint_buf_init(void);
+void maint_buf_cleanup(void);
+
 void maint_buf_set_max_len(unsigned int max_len);
 int maint_buf_add(struct dsr_pkt *dp);
 int maint_buf_del_all(struct in_addr nxt_hop);
 int maint_buf_del(struct in_addr nxt_hop, unsigned short id);
 void maint_buf_set_timeout(void);
 void maint_buf_timeout(unsigned long data);
-
-int maint_buf_init(void);
-void maint_buf_cleanup(void);
 
 #endif /* NO_DECLS */
 

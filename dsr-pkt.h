@@ -53,17 +53,30 @@ struct dsr_pkt {
 
 /* Packet actions: */
 /* Actions to take after processing source route option: */
-#define DSR_PKT_NONE           0
-#define DSR_PKT_ERROR          0x1
-#define DSR_PKT_SRT_REMOVE     0x2
-#define DSR_PKT_FORWARD        0x4
-#define DSR_PKT_DELIVER        0x8
-#define DSR_PKT_SEND_ICMP      0x10
-#define DSR_PKT_DROP           0x20
-#define DSR_PKT_SEND_RREP      0x40
-#define DSR_PKT_SEND_BUFFERED  0x80
-#define DSR_PKT_FORWARD_RREQ   0x100
-#define DSR_PKT_SEND_ACK       0x200
+/* #define DSR_PKT_NONE           0 */
+/* #define DSR_PKT_ERROR          0x1 */
+/* #define DSR_PKT_SRT_REMOVE     0x2 */
+/* #define DSR_PKT_FORWARD        0x4 */
+/* #define DSR_PKT_DELIVER        0x8 */
+/* #define DSR_PKT_SEND_ICMP      0x10 */
+/* #define DSR_PKT_DROP           0x20 */
+/* #define DSR_PKT_SEND_RREP      0x40 */
+/* #define DSR_PKT_SEND_BUFFERED  0x80 */
+/* #define DSR_PKT_FORWARD_RREQ   0x100 */
+/* #define DSR_PKT_SEND_ACK       0x200 */
+
+#define DSR_PKT_NONE           1
+#define DSR_PKT_SRT_REMOVE     (DSR_PKT_NONE << 2)
+#define DSR_PKT_SEND_ICMP      (DSR_PKT_NONE << 3)
+#define DSR_PKT_SEND_RREP      (DSR_PKT_NONE << 4)
+#define DSR_PKT_SEND_BUFFERED  (DSR_PKT_NONE << 5)
+#define DSR_PKT_SEND_ACK       (DSR_PKT_NONE << 6)
+#define DSR_PKT_FORWARD        (DSR_PKT_NONE << 7)
+#define DSR_PKT_FORWARD_RREQ   (DSR_PKT_NONE << 8)
+#define DSR_PKT_DROP           (DSR_PKT_NONE << 9)
+#define DSR_PKT_ERROR          (DSR_PKT_NONE << 10)
+#define DSR_PKT_DELIVER        (DSR_PKT_NONE << 11)
+#define DSR_PKT_ACTION_LAST    (DSR_PKT_NONE << 12)
 
 static inline int dsr_pkt_opts_len(struct dsr_pkt *dp)
 {

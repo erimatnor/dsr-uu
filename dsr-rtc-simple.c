@@ -69,7 +69,7 @@ static inline void __dsr_rtc_set_next_timeout(void)
 static void dsr_rtc_timeout(unsigned long data)
 {
 	list_t *pos, *tmp;
-	int time = jiffies;
+	int time = TimeNow;
     
 	DSR_WRITE_LOCK(&rtc_lock);
     
@@ -228,7 +228,7 @@ int dsr_rtc_add(struct dsr_srt *srt, unsigned long time,
 	}
 
 	e->flags = flags;
-	e->expires = jiffies + (time * HZ) / 1000;
+	e->expires = TimeNow + (time * HZ) / 1000;
 	memcpy(&e->srt, srt, sizeof(struct dsr_srt));
 	memcpy(e->srt.addrs, srt->addrs, srt->laddrs);
     
@@ -280,7 +280,7 @@ void dsr_rtc_update(struct dsr_srt *srt, unsigned long time,
 	}
 	e->flags = flags;
 	/* Update expire time */
-	e->expires = jiffies + (time * HZ) / 1000;
+	e->expires = TimeNow + (time * HZ) / 1000;
 	memcpy(&e->srt, srt, sizeof(struct dsr_srt));
 	memcpy(e->srt.addrs, srt->addrs, srt->laddrs);
     
@@ -313,7 +313,7 @@ static int dsr_rtc_print(char *buf)
 		flags[num_flags] = '\0';
 	
 		len += sprintf(buf+len, "  %-5s %-8lu %s\n", flags, 
-			       (e->expires - jiffies) * 1000 / HZ,
+			       (e->expires - TimeNow) * 1000 / HZ,
 			       print_srt(&e->srt));
 	}
     

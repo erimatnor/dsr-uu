@@ -184,7 +184,7 @@ int dsr_vprintk(const char *func, const char *fmt, va_list args)
 	spin_unlock_irqrestore(&dbg_logbuf_lock, flags);
 	return printed_len;
 }
-int dsr_printk(const char *func, const char *fmt, ...)
+int trace(const char *func, const char *fmt, ...)
 {
 	va_list args;
 	int r;
@@ -197,9 +197,6 @@ int dsr_printk(const char *func, const char *fmt, ...)
 
 	return r;
 }
-
-EXPORT_SYMBOL(dsr_printk);
-EXPORT_SYMBOL(dsr_vprintk);
 
 static int dbg_log_open(struct inode * inode, struct file * file)
 {
@@ -250,3 +247,6 @@ void __exit dbg_cleanup(void)
 {
 	proc_net_remove("dsr_dbg");
 }
+
+EXPORT_SYMBOL(trace);
+EXPORT_SYMBOL(dsr_vprintk);

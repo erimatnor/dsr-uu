@@ -107,7 +107,7 @@ static inline int crit_nxt_hop_rexmt(void *pos, void *nh)
 	
 	if (m->nxt_hop.s_addr == nxt_hop->s_addr) {
 		m->rexmt++;
-		m->tx_time = jiffies;
+		m->tx_time = TimeNow;
 		return 1;
 	}
 	return 0;
@@ -127,13 +127,11 @@ static struct maint_entry *maint_entry_create(struct dsr_pkt *dp,
 	
 	m = (struct maint_entry *)MALLOC(sizeof(struct maint_entry), GFP_ATOMIC);
 
-	if (!m) {
-		DEBUG("Could not allocate maintenance buf entry\n");
+	if (!m)
 		return NULL;
-	}
 	
 	m->nxt_hop = dp->nxt_hop;
-	m->tx_time = jiffies;
+	m->tx_time = TimeNow;
 	m->rexmt = 0;
 	m->id = id;
 	m->rto = rto;
@@ -191,7 +189,7 @@ void NSCLASS maint_buf_set_timeout(void)
 {
 	struct maint_entry *m;
 	Time tx_time, rto;
-	Time now = jiffies;
+	Time now = TimeNow;
 	
 	DSR_WRITE_LOCK(&maint_buf.lock);
 	/* Get first packet in maintenance buffer */
@@ -256,7 +254,7 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 	} 
 	
 	/* Set new Transmit time */
-	m->tx_time = jiffies;
+	m->tx_time = TimeNow;
 		
 	/* Send new ACK REQ */
 	dsr_ack_req_send(m->nxt_hop, m->id);
@@ -326,7 +324,7 @@ static int maint_buf_get_info(char *buffer, char **start, off_t offset, int leng
 		if (e && e->dp)
 			len += sprintf(buffer+len, "  %-15s %-6d %-6u %-8lu\n",
 				       print_ip(e->dp->dst), e->rexmt, e->id, 
-				       (jiffies - e->tx_time) / HZ);
+				       (TimeNow - e->tx_time) / HZ);
 	}
 
 	len += sprintf(buffer+len,
@@ -347,16 +345,13 @@ static int maint_buf_get_info(char *buffer, char **start, off_t offset, int leng
 	return len;
 }
 
+#endif /* __KERNEL__ */
+
 int NSCLASS maint_buf_init(void)
-{
+{	
 #ifdef __KERNEL__
 	struct proc_dir_entry *proc;
-		
-	init_timer(&ack_timer);
 	
-	ack_timer.function = &maint_buf_timeout;
-	ack_timer.expires = 0;
-
 	proc = proc_net_create(MAINT_BUF_PROC_FS_NAME, 0, maint_buf_get_info);
 	if (proc)
 		proc->owner = THIS_MODULE;
@@ -365,18 +360,23 @@ int NSCLASS maint_buf_init(void)
 		return -1;
 	}
 #endif
-	INIT_TBL(&maint_buf, MAINT_BUF_MAX_LEN);
+	init_timer(&ack_timer);	
+	
+	ack_timer.function = &NSCLASS maint_buf_timeout;
+	ack_timer.expires = 0;
 
+	INIT_TBL(&maint_buf, MAINT_BUF_MAX_LEN);
+ 
 	return 1;
 }
 
 void NSCLASS maint_buf_cleanup(void)
 {
-#ifdef __KERNEL__
 	del_timer_sync(&ack_timer);
+
+	tbl_flush(&maint_buf, crit_free_pkt);
+
+#ifdef __KERNEL__
 	proc_net_remove(MAINT_BUF_PROC_FS_NAME);
 #endif
-	tbl_flush(&maint_buf, crit_free_pkt);
 }
-
-#endif /* __KERNEL__ */

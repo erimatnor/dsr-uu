@@ -67,7 +67,7 @@ void NSCLASS send_buf_timeout(unsigned long data)
 {
 	struct send_buf_entry *e;
 	int pkts;
-	Time qtime, now = jiffies;	
+	Time qtime, now = TimeNow;	
 	
 	pkts = tbl_for_each_del(&send_buf, &now, crit_garbage);
 
@@ -97,14 +97,12 @@ static struct send_buf_entry *send_buf_entry_create(struct dsr_pkt *dp, int (*ok
 	
 	e = (struct send_buf_entry *)MALLOC(sizeof(*e), GFP_ATOMIC);
 	
-	if (!e) {
-		DEBUG("OOM in send_buf_enqueue_packet()\n");
+	if (!e) 
 		return NULL;
-	}
 
 	e->dp = dp;
 	e->okfn = okfn;
-	e->qtime = jiffies;
+	e->qtime = TimeNow;
 
 	return e;
 }
@@ -148,7 +146,7 @@ int NSCLASS send_buf_enqueue_packet(struct dsr_pkt *dp, int (*okfn)(struct dsr_p
 	}
 		
 	if (empty) {
-		send_buf_timer.expires = jiffies + SECONDS(PARAM(SendBufferTimeout));
+		send_buf_timer.expires = TimeNow + SECONDS(PARAM(SendBufferTimeout));
 		add_timer(&send_buf_timer);
 	}
 
@@ -236,7 +234,7 @@ static int send_buf_get_info(char *buffer, char **start, off_t offset, int lengt
 		struct send_buf_entry *e = (struct send_buf_entry *)p;
 		
 		if (e && e->dp)
-			len += sprintf(buffer+len, "  %-15s %-8lu\n", print_ip(e->dp->dst), (jiffies - e->qtime) / HZ);
+			len += sprintf(buffer+len, "  %-15s %-8lu\n", print_ip(e->dp->dst), (TimeNow - e->qtime) / HZ);
 	}
 
 	len += sprintf(buffer+len,
@@ -257,15 +255,14 @@ static int send_buf_get_info(char *buffer, char **start, off_t offset, int lengt
 	return len;
 }
 
+
+#endif /* __KERNEL__ */
+
 int __init NSCLASS send_buf_init(void)
 {
-	
-
 #ifdef __KERNEL__
 	struct proc_dir_entry *proc;
 		
-	init_timer(&send_buf_timer);
-	send_buf_timer.function = &send_buf_timeout;
 
 	proc = proc_net_create(SEND_BUF_PROC_FS_NAME, 0, send_buf_get_info);
 	if (proc)
@@ -274,9 +271,13 @@ int __init NSCLASS send_buf_init(void)
 		printk(KERN_ERR "send_buf: failed to create proc entry\n");
 		return -1;
 	}
-#else
-	INIT_TBL(&send_buf, SEND_BUF_MAX_LEN);
 #endif
+	
+	INIT_TBL(&send_buf, SEND_BUF_MAX_LEN);
+
+	init_timer(&send_buf_timer);
+
+	send_buf_timer.function = &NSCLASS send_buf_timeout;
 
 	return 1;
 }
@@ -298,6 +299,3 @@ void __exit NSCLASS send_buf_cleanup(void)
 	proc_net_remove(SEND_BUF_PROC_FS_NAME);
 #endif
 }
-
-
-#endif /* __KERNEL__ */

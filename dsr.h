@@ -97,13 +97,12 @@ struct dsr_node {
 #define MALLOC(s, p)        kmalloc(s, p)
 #define FREE(p)             kfree(p)
 #define NSCLASS
-#define XMIT(pkt) dsr_dev_xmit(pkt)
+#define TimeNow             jiffies
+#define XMIT(pkt)           dsr_dev_xmit(pkt)
 #else
 #define DSR_SPIN_LOCK(l)
 #define DSR_SPIN_UNLOCK(l)
 #endif /* __KERNEL__ */
-
-
 
 #ifdef __KERNEL__
 

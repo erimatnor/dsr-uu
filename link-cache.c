@@ -98,7 +98,7 @@ static inline int crit_expire(void *pos, void *data)
 	struct lc_link *link = (struct lc_link *)pos;
 	struct lc_graph *lc = (struct lc_graph *)data;
 	
-	if (link->expire < jiffies) {
+	if (link->expire < TimeNow) {
 		__lc_link_del(lc, link);
 		return 1;
 	}
@@ -111,7 +111,6 @@ static inline int do_lowest_cost(void *pos, void *data)
 	struct cheapest_node *cn = (struct cheapest_node *)data;
 
 	if (!cn || n->cost < cn->n->cost) {
-		DEBUG("New lowest cost %lu, %s\n", n->cost, print_ip(n->addr));
 		cn->n = n;		
 	}
 	return 0;
@@ -177,10 +176,10 @@ void NSCLASS lc_garbage_collect_set(void)
 #ifdef __KERNEL__
 	LC.timer.function = lc_garbage_collect;
 	LC.timer.data = 0;
-	LC.timer.expires = jiffies + SECONDS(LC_GARBAGE_COLLECT_INTERVAL);
+	LC.timer.expires = TimeNow + SECONDS(LC_GARBAGE_COLLECT_INTERVAL);
 	add_timer(&LC.timer);
 #else
-	lc_timer.expires = jiffies + SECONDS(LC_GARBAGE_COLLECT_INTERVAL);
+	lc_timer.expires = TimeNow + SECONDS(LC_GARBAGE_COLLECT_INTERVAL);
 	add_timer(&lc_timer);
 #endif
 }
@@ -232,16 +231,10 @@ static int __lc_link_tbl_add(struct tbl *t, struct lc_node *src,
 		link = (struct lc_link *)MALLOC(sizeof(struct lc_link), GFP_ATOMIC);
 		
 		if (!link) {
-			DEBUG("Could not allocate link\n");
 			return -1;
 		}
 		memset(link, 0, sizeof(struct lc_link));
 
-		DEBUG("Adding Link %s <-> %s cost=%d\n", 
-		      print_ip(src->addr), 
-		      print_ip(dst->addr), 
-		      cost);
-		
 		__tbl_add_tail(t, &link->l);
 		
 		link->src = src;
@@ -255,7 +248,7 @@ static int __lc_link_tbl_add(struct tbl *t, struct lc_node *src,
 	
       	link->status = status;
 	link->cost = cost;
-	link->expire = jiffies + SECONDS(timeout / 1000);
+	link->expire = TimeNow + SECONDS(timeout / 1000);
 	
 	return res;
 }
@@ -298,7 +291,11 @@ int NSCLASS lc_link_add(struct in_addr src, struct in_addr dst,
 		
 	if (res) {	
 #ifdef LC_TIMER
+#ifdef NS2
+		if (!timer_pending(&lc_timer))
+#else
 		if (!timer_pending(&LC.timer))
+#endif
 			lc_garbage_collect_set();
 #endif
 		
@@ -346,7 +343,6 @@ int NSCLASS lc_link_del(struct in_addr src, struct in_addr dst)
 
 static inline void __dijkstra_init_single_source(struct tbl *t, struct in_addr src)
 {
-	DEBUG("Initializing source\n");
 	__tbl_do_for_each(t, &src, do_init);
 }
 
@@ -575,7 +571,7 @@ static int lc_print(char *buf)
 			       print_ip(link->src->addr),
 			       print_ip(link->dst->addr),
 			       link->cost,
-			       (link->expire - jiffies) / HZ);
+			       (link->expire - TimeNow) / HZ);
 	}
     
 	len += sprintf(buf+len, "\n# %-15s %-4s %-4s %-5s %12s %12s\n", "Addr", "Hops", "Cost", "Links", "This", "Pred");
@@ -630,12 +626,15 @@ int __init NSCLASS lc_init(void)
 	INIT_TBL(&LC.links, LC_LINKS_MAX);
 	INIT_TBL(&LC.nodes, LC_NODES_MAX);
 
-#ifdef __KERNEL__
-	LC.lock = RW_LOCK_UNLOCKED;
-	LC.src = NULL;
 #ifdef LC_TIMER
 	init_timer(&LC.timer);
 #endif
+	
+	LC.src = NULL;
+
+#ifdef __KERNEL__
+	LC.lock = RW_LOCK_UNLOCKED;
+
 	proc_net_create(LC_PROC_NAME, 0, lc_proc_info);
 #endif
 	return 0;

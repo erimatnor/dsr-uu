@@ -21,6 +21,7 @@
 #include "dsr-ack.h"
 #include "send-buf.h"
 #include "maint-buf.h"
+#include "dsr-io.h"
 
 /* Our dsr device */
 struct net_device *dsr_dev;
@@ -284,7 +285,6 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	/* struct dsr_node *dnode = (struct dsr_node *)dev->priv; */
 	struct ethhdr *ethh;
 	struct dsr_pkt *dp;
-	int res = 0;
 #ifdef DEBUG
 	atomic_inc(&num_pkts);
 #endif 			
@@ -299,40 +299,7 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		
 		dp = dsr_pkt_alloc(skb);
 		
-		if (!dp) {
-			DEBUG("Could not allocate DSR packet\n");
-			return -1;
-		}
-		
-		dp->srt = dsr_rtc_find(dp->src, dp->dst);
-		
-		if (dp->srt) {
-
-			if (dsr_srt_add(dp) < 0) {
-				DEBUG("Could not add source route\n");
-				break;
-			}
-			/* Send packet */
-
-			dsr_dev_xmit(dp);
-			
-			return 0;
-
-		} else {			
-			res = send_buf_enqueue_packet(dp, dsr_dev_xmit);
-			
-			if (res < 0) {
-				DEBUG("Queueing failed!\n");
-				dsr_pkt_free(dp);
-				return -1;
-			}
-			res = dsr_rreq_route_discovery(dp->dst);
-			
-			if (res < 0)
-				DEBUG("RREQ Transmission failed...");
-			
-			return 0;
-		}
+		dsr_start_xmit(dp);
 		break;
 	default:
 		DEBUG("Unkown packet type\n");

@@ -17,7 +17,7 @@ static TBL(neigh_tbl, NEIGH_TBL_MAX_LEN);
 
 #define NEIGH_TBL_PROC_NAME "dsr_neigh_tbl"
 
-static DSRUUTimer garbage_timer;
+static DSRUUTimer neigh_tbl_timer;
 
 #endif /* NS2 */
 
@@ -110,8 +110,8 @@ void NSCLASS neigh_tbl_garbage_timeout(unsigned long data)
 	DSR_READ_LOCK(&neigh_tbl.lock);
 	
 	if (!TBL_EMPTY(&neigh_tbl)) {
-	/* 	garbage_timer.expires = jiffies +  */
-/* 			MSECS_TO_JIFFIES(NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT); */
+	/* 	garbage_timer.expires = TimeNow +  */
+/* 			MSECS_TO_TIMENOW(NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT); */
 	/* 	add_timer(&garbage_timer);	 */
 	}
 
@@ -140,7 +140,7 @@ static struct neighbor *neigh_tbl_create(struct in_addr addr,
 	neigh->rtt = RTT_DEF;
 	memcpy(&neigh->hw_addr, hw_addr, sizeof(struct sockaddr));
 	
-/* 	garbage_timer.expires = jiffies + NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT / 1000*HZ; */
+/* 	garbage_timer.expires = TimeNow + NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT / 1000*HZ; */
 /* 	add_timer(&garbage_timer); */
 
 	return neigh;
@@ -291,22 +291,27 @@ static int neigh_tbl_proc_info(char *buffer, char **start, off_t offset, int len
 	return len;    
 }
 
+#endif /* __KERNEL__ */
 
-int __init neigh_tbl_init(void)
+
+int __init NSCLASS neigh_tbl_init(void)
 {
-	init_timer(&garbage_timer);
+	init_timer(&neigh_tbl_timer);
 	
-	garbage_timer.function = &neigh_tbl_garbage_timeout;
+	neigh_tbl_timer.function = &NSCLASS neigh_tbl_garbage_timeout;
 
+#ifdef __KERNEL__
 	proc_net_create(NEIGH_TBL_PROC_NAME, 0, neigh_tbl_proc_info);
+#endif
 	return 0;
 }
 
 
-void __exit neigh_tbl_cleanup(void)
+void __exit NSCLASS neigh_tbl_cleanup(void)
 {
 	tbl_flush(&neigh_tbl, crit_none);
-	proc_net_remove(NEIGH_TBL_PROC_NAME);
-}
 
-#endif /* __KERNEL__ */
+#ifdef __KERNEL__
+	proc_net_remove(NEIGH_TBL_PROC_NAME);
+#endif
+}

@@ -35,7 +35,7 @@ struct rreq_tbl_entry {
 	int state;
 	struct in_addr node_addr;
 	int ttl;
-	DSRUUTimer timer;
+	DSRUUTimer *timer;
 	Time tx_time;
 	Time last_used;
 	Time timeout;
@@ -52,8 +52,7 @@ struct rreq_tbl_query {
 	struct in_addr *initiator;
 	struct in_addr *target;
 	unsigned int *id;
-};
-	
+};	
 
 static inline int crit_addr(void *pos, void *data)
 {
@@ -98,6 +97,8 @@ void NSCLASS rreq_tbl_timeout(unsigned long data)
 	if (!e)
 		return;
        
+	DEBUG("RREQ Resend Timeout\n");
+
 	DSR_WRITE_LOCK(&rreq_tbl);
 	
 	/* Put at end of list */
@@ -117,14 +118,14 @@ void NSCLASS rreq_tbl_timeout(unsigned long data)
 	e->ttl *= 2; /* Double TTL */
 	e->num_rexmts++; 
 	e->timeout *= 2; /* Double timeout */	
-	e->last_used = jiffies;
+	e->last_used = TimeNow;
 
 	target = e->node_addr;
 	ttl = e->ttl;
 	
-	e->timer.expires = jiffies + e->timeout;
+	e->timer->expires = TimeNow + e->timeout;
 	
-	add_timer(&e->timer);
+	add_timer(e->timer);
 	
 	DSR_WRITE_UNLOCK(&rreq_tbl);
 	
@@ -134,9 +135,9 @@ void NSCLASS rreq_tbl_timeout(unsigned long data)
 struct rreq_tbl_entry *NSCLASS __rreq_tbl_entry_create(struct in_addr node_addr)
 {
 	struct rreq_tbl_entry *e;
-	
-	e = (struct rreq_tbl_entry *)MALLOC(sizeof(struct rreq_tbl_entry), GFP_ATOMIC);
 
+	e = (struct rreq_tbl_entry *)MALLOC(sizeof(struct rreq_tbl_entry), GFP_ATOMIC);
+	
 	if (!e)
 		return NULL;
 
@@ -145,11 +146,22 @@ struct rreq_tbl_entry *NSCLASS __rreq_tbl_entry_create(struct in_addr node_addr)
 	e->ttl = 0;
 	e->tx_time = 0;
 	e->num_rexmts = 0;
-#ifdef __KERNEL__
-	init_timer(&e->timer);
-	e->timer.function = &rreq_tbl_timeout;
-	e->timer.data = (unsigned long)e;
+#ifdef NS2
+	e->timer = new DSRUUTimer(this);
+#else
+	e->timer = MALLOC(sizeof(DSRUUTimer), GFP_ATOMIC);
 #endif
+
+	if (!e->timer) {
+		FREE(e);
+		return NULL;			
+	}
+
+	init_timer(e->timer);
+
+	e->timer->function = &NSCLASS rreq_tbl_timeout;
+	e->timer->data = (unsigned long)e;
+
 	INIT_TBL(&e->rreq_id_tbl, PARAM(RequestTableIds));
 	
 	return e;
@@ -171,8 +183,12 @@ struct rreq_tbl_entry *NSCLASS __rreq_tbl_add(struct in_addr node_addr)
 
 		__tbl_detach(&rreq_tbl, &f->l);
 		
-		del_timer_sync(&f->timer);
-
+		del_timer_sync(f->timer);
+#ifdef NS2
+		delete f->timer;
+#else
+		FREE(f->timer);
+#endif		
 		tbl_flush(&f->rreq_id_tbl, NULL);
 		
 		FREE(f);	
@@ -206,7 +222,7 @@ int NSCLASS rreq_tbl_add_id(struct in_addr initiator, struct in_addr target,
 		goto out;
 	}
 
-	e->last_used = jiffies;
+	e->last_used = TimeNow;
 	
 	if (TBL_FULL(&e->rreq_id_tbl))
 		tbl_del_first(&e->rreq_id_tbl);
@@ -242,10 +258,10 @@ int NSCLASS rreq_tbl_disable_route_discovery(struct in_addr dst)
 		return -1;
 	}
 
-	del_timer_sync(&e->timer);
+	del_timer_sync(e->timer);
 
 	e->state = STATE_LATENT;
-	e->last_used = jiffies;
+	e->last_used = TimeNow;
 	__tbl_detach(&rreq_tbl, &e->l);
 	__tbl_add_tail(&rreq_tbl, &e->l);
 	       
@@ -271,7 +287,6 @@ int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
 		__tbl_add_tail(&rreq_tbl, &e->l);
 	}	
 	
-
 	if (!e) {
 		res = -ENOMEM;
 		goto out;
@@ -283,14 +298,15 @@ int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
 		goto out;
 	} 
 	
-	e->last_used = jiffies;
+	e->last_used = TimeNow;
 	e->ttl = ttl = TTL_START;
 	e->timeout = SECONDS(1);
 	e->state = STATE_IN_ROUTE_DISC;
 	e->num_rexmts = 0;
-	
-	e->timer.expires = jiffies + e->timeout;
-	add_timer(&e->timer);
+
+	e->timer->expires = e->last_used + e->timeout;
+
+	add_timer(e->timer);
 	
 	DSR_WRITE_UNLOCK(&rreq_tbl);
 
@@ -515,12 +531,12 @@ static int rreq_tbl_print(char *buf)
 		if (TBL_EMPTY(&e->rreq_id_tbl))
 			len += sprintf(buf+len, "  %-15s %-6u %-8lu %15s:%s\n",
 				       print_ip(e->node_addr), e->ttl,
-				       e->tx_time ? ((jiffies - e->last_used) * HZ) : 0, "-", "-");
+				       e->tx_time ? ((TimeNow - e->last_used) * HZ) : 0, "-", "-");
 		else {
 			id_e = (struct id_entry *)TBL_FIRST(&e->rreq_id_tbl);
 			len += sprintf(buf+len, "  %-15s %-6u %-8lu %15s:%u\n",
 				       print_ip(e->node_addr), e->ttl,
-				       e->tx_time ? ((jiffies - e->last_used) * HZ) : 0, print_ip(id_e->trg_addr), id_e->id);
+				       e->tx_time ? ((TimeNow - e->last_used) * HZ) : 0, print_ip(id_e->trg_addr), id_e->id);
 		}
 		list_for_each(pos2, &e->rreq_id_tbl.head) {
 			id_e = (struct id_entry *)pos2;
@@ -569,7 +585,12 @@ void __exit NSCLASS rreq_tbl_cleanup(void)
 	struct rreq_tbl_entry *e;
 	
 	while ((e = (struct rreq_tbl_entry *)tbl_detach_first(&rreq_tbl))) {
-		del_timer_sync(&e->timer);
+		del_timer_sync(e->timer);
+#ifdef NS2
+		delete e->timer;
+#else
+		FREE(e->timer);
+#endif		
 		tbl_flush(&e->rreq_id_tbl, crit_none);
 	}
 #ifdef __KERNEL__

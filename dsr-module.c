@@ -19,20 +19,17 @@
 #include <linux/moduleparam.h>
 #endif
 #include <net/icmp.h>
+#include <linux/ctype.h>
 
 #include "dsr.h"
 #include "dsr-dev.h"
-#include "dsr-rreq.h"
-#include "dsr-rrep.h"
-#include "dsr-srt.h"
-#include "dsr-ack.h"
-#include "send-buf.h"
+#include "dsr-io.h"
+#include "dsr-pkt.h"
 #include "debug.h"
-#include "dsr-rtc.h"
-#include "dsr-ack.h"
-#include "maint-buf.h"
 #include "neigh.h"
-#include "dsr-opt.h"
+#include "dsr-rreq.h"
+#include "maint-buf.h"
+#include "send-buf.h"
 
 static char *ifname = NULL;
 static char *mackill = NULL;
@@ -130,7 +127,6 @@ static int dsr_arpset(struct in_addr addr, struct sockaddr *hw_addr,
 static int dsr_ip_recv(struct sk_buff *skb)
 {
 	struct dsr_pkt *dp;
-	int action;
 
 #ifdef DEBUG
 	atomic_inc(&num_pkts);
@@ -155,86 +151,9 @@ static int dsr_ip_recv(struct sk_buff *skb)
 	      (dp->nh.iph->ihl << 2), ntohs(dp->nh.iph->tot_len), dsr_pkt_opts_len(dp), dp->payload_len);
 
 	
-	/* Process packet */
-	action = dsr_opt_recv(dp);
-
 	/* Add mac address of previous hop to the arp table */
-	if (dp->srt && skb->mac.raw) {
-		struct sockaddr hw_addr;
-		struct ethhdr *eth;
-		
-		eth = (struct ethhdr *)skb->mac.raw;
-			
-		memcpy(hw_addr.sa_data, eth->h_source, ETH_ALEN);
-		
-		dp->prv_hop = dsr_srt_prev_hop(dp->srt, my_addr());
-		
-		neigh_tbl_add(dp->prv_hop, &hw_addr);
-	}
-
-	if (action & DSR_PKT_DROP || action & DSR_PKT_ERROR) {
-		DEBUG("DSR_PKT_DROP or DSR_PKT_ERROR\n");
-		dsr_pkt_free(dp);
-		return 0;
-	}
-	if (action & DSR_PKT_SEND_ACK && dp->ack_req_opt && dp->srt) {
-		unsigned short id = ntohs(dp->ack_req_opt->id);
-				
-		DEBUG("send ACK: src=%s prv=%s id=%u\n", 
-		      print_ip(dp->src), 
-		      print_ip(dp->prv_hop), id);
-		
-		dsr_ack_send(dp->prv_hop, id);
-	}
-
-	if (action & DSR_PKT_FORWARD) {
-		DEBUG("Forwarding %s %s nh %s\n", 
-		      print_ip(dp->src), 
-		      print_ip(dp->dst), 
-		      print_ip(dp->nxt_hop));
-
-		if (dp->nh.iph->ttl < 1) {
-			DEBUG("ttl=0, dropping!\n");
-			action = DSR_PKT_NONE;
-		} else {
-			DEBUG("Forwarding (dev_queue_xmit)\n");
-			XMIT(dp);
-			return 0;
-		}
-	}
-	if (action & DSR_PKT_FORWARD_RREQ) {
-		XMIT(dp);
-		return 0;
-	}
-
-	if (action & DSR_PKT_SEND_RREP) {
-
-		DEBUG("Send RREP\n");
-		
-		if (dp->srt) {
-			/* send rrep.... */
-			dsr_rrep_send(dp->srt);
-		}
-	}
-
-	if (action & DSR_PKT_SEND_ICMP) {
-		DEBUG("Send ICMP\n");
-	}
-	if (action & DSR_PKT_SEND_BUFFERED) {
-		/* Send buffered packets */
-		DEBUG("Sending buffered packets\n");
-		if (dp->srt) {
-			send_buf_set_verdict(SEND_BUF_SEND, dp->srt->src);
-		}
-	}
-
-	if (action & DSR_PKT_DELIVER) {
-		dsr_opts_remove(dp);
-		DEBUG("Deliver to DSR device\n");
-		dsr_dev_deliver(dp);
-		return 0;
-	}
-	dsr_pkt_free(dp);
+	dsr_recv(dp);
+	
 	return 0;
 };
 

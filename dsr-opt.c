@@ -94,7 +94,7 @@ int dsr_opts_remove(struct dsr_pkt *dp)
 			
 	len = dsr_pkt_free_opts(dp);
 	
-	DEBUG("Removed %d bytes of DSR options %d payload=%d prot=%02x\n", len, dsr_pkt_opts_len(dp),  dp->payload_len, prot);
+	/* DEBUG("Removed %d bytes of DSR options %d payload=%d prot=%02x\n", len, dsr_pkt_opts_len(dp),  dp->payload_len, prot); */
 
 	/* Return bytes removed */
 	return len;

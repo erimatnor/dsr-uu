@@ -21,10 +21,12 @@ extern atomic_t num_pkts;
 #ifdef DEBUG
 #undef DEBUG
 #define DEBUG_PROC
-#define DEBUG(f, args...) dsr_printk(__FUNCTION__, f, ## args) 
+#define DEBUG(f, args...) trace(__FUNCTION__, f, ## args) 
 #else 
 #define DEBUG(f, args...)
 #endif
+
+#ifndef NO_GLOBALS 
 
 #define DEBUG_BUFLEN 256
 
@@ -70,7 +72,13 @@ static inline char *print_pkt(char *p, int len)
 	return buf;
 }
 
-int dsr_printk(const char *func, const char *fmt, ...);
+#endif /* NO_GLOBALS */
+
+#ifndef NO_DECLS
+
+int trace(const char *func, const char *fmt, ...);
+
+#endif /* NO_DECLS */
 
 #ifdef __KERNEL__
 void __init dbg_init(void);
