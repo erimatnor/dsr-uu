@@ -58,7 +58,7 @@ static struct maint_entry *maint_entry_create(struct dsr_pkt *dp)
 	me->nxt_hop = dp->nxt_hop;
 	me->tx_time = jiffies;
 	me->rexmt = 0;
-	me->dp = dsr_pkt_alloc(skb_copy(dp->skb, GFP_ATOMIC), 0);
+	me->dp = dsr_pkt_alloc(skb_copy(dp->skb, GFP_ATOMIC));
 
 	return me;
 }

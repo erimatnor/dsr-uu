@@ -49,8 +49,10 @@ struct dsr_pad1_opt {
 #define DSR_FIXED_HDR(iph) (struct dsr_opt_hdr *)((char *)iph + (iph->ihl << 2))
 #define DSR_GET_OPT(opt_hdr) (opt_hdr->option)
 #define DSR_GET_NEXT_OPT(dopt) ((struct dsr_opt *)((char *)dopt + dopt->length + 2))
-struct iphdr *dsr_build_ip(char *buf, int buflen, int totlen, 
-			   struct in_addr src, struct in_addr dst, int ttl);
+#define DSR_LAST_OPT(dp, opt) ((dp->dh.raw + ntohs(dp->dh.opth->p_len) + 4) == ((char *)opt + opt->length + 2))
+
+struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, struct in_addr dst, int totlen, int ttl);
+
 int dsr_opt_recv(struct dsr_pkt *dp);
 
 struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, int len, unsigned int protocol);

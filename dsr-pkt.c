@@ -1,44 +1,78 @@
 #include <linux/skbuff.h>
+#include <linux/if_ether.h>
 
 #include "dsr.h"
+#include "dsr-opt.h"
 
-char *dsr_pkt_alloc_data(struct dsr_pkt *dp, int len)
+char *dsr_pkt_alloc_opts(struct dsr_pkt *dp, int len)
 {	
 	if (!dp && len)
 		return NULL;
+	
+	dp->dsr_opts = kmalloc(len + DEFAULT_TAILROOM, GFP_ATOMIC);
 
-	dp->dsr_data = kmalloc(len, GFP_ATOMIC);
-		
-	dp->dsr_data_len = len;
+	if (!dp->dsr_opts)
+		return NULL;
+	
+	dp->end = dp->dsr_opts + len + DEFAULT_TAILROOM;
+	dp->tail = dp->dsr_opts + len;
 
-	return dp->dsr_data;
+	return dp->dsr_opts;
 }
 
-char *dsr_pkt_alloc_data_expand(struct dsr_pkt *dp, int xlen)
+char *dsr_pkt_alloc_opts_expand(struct dsr_pkt *dp, int len)
 {
 	char *tmp;
 	int old_len;
 	
-	if (!dp || !dp->dsr_data)
+	if (!dp || !dp->dsr_opts)
 		return NULL;
 
-	tmp = dp->dsr_data;
-	old_len = dp->dsr_data_len;
+	if (dsr_pkt_tailroom(dp) > len) {
+		tmp = dp->tail;
+		dp->tail = dp->tail + len;
+		return tmp;
+	} 
+		
+	tmp = dp->dsr_opts;
+	old_len = dsr_pkt_opts_len(dp);
 
-	if (!dsr_pkt_alloc_data(dp, dp->dsr_data_len + xlen))
+	if (!dsr_pkt_alloc_opts(dp, old_len + len))
 		return NULL;
 	
-	memcpy(dp->dsr_data, tmp, old_len);
+	memcpy(dp->dsr_opts, tmp, old_len);
 
 	kfree(tmp);
 
-	return (dp->dsr_data + old_len);
+	return (dp->dsr_opts + old_len);
 }
 
+int dsr_pkt_free_opts(struct dsr_pkt *dp)
+{
+	int len;
+	
+	if (!dp->dsr_opts)
+		return -1;
+	
+	len = dsr_pkt_opts_len(dp);
 
-struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb, int len)
+	kfree(dp->dsr_opts);
+	
+	dp->dh.raw = dp->dsr_opts = dp->end = dp->tail = NULL;
+	dp->srt_opt = NULL;
+	dp->rreq_opt = NULL;
+	memset(dp->rrep_opt, 0, sizeof(struct dsr_rrep_opt *) * MAX_RREP_OPTS);
+	memset(dp->rerr_opt, 0, sizeof(struct dsr_rerr_opt *) * MAX_RERR_OPTS);
+	memset(dp->ack_opt, 0, sizeof(struct dsr_ack_opt *) * MAX_ACK_OPTS);
+	dp->num_rrep_opts = dp->num_rerr_opts = dp->num_ack_opts = 0;
+
+	return len;
+}
+
+struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb)
 {
 	struct dsr_pkt *dp;
+	int dsr_opts_len = 0;
 
 	dp = kmalloc(sizeof(struct dsr_pkt), GFP_ATOMIC);
 
@@ -46,21 +80,33 @@ struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb, int len)
 		return NULL;
 	
 	memset(dp, 0, sizeof(struct dsr_pkt));
-
-	
-	if (len && !dsr_pkt_alloc_data(dp, len)) {
-		kfree(dp);
-		return NULL;
-	}
 		
-	if (skb) {
+	if (skb) {		
 		dp->skb = skb;
 		dp->nh.iph = skb->nh.iph;
-		dp->dh.raw = skb->data;
 		
 		dp->src.s_addr = skb->nh.iph->saddr;
 		dp->dst.s_addr = skb->nh.iph->daddr;
+
+		if (dp->nh.iph->protocol == IPPROTO_DSR) {
+			dp->dh.raw = dp->nh.raw + (dp->nh.iph->ihl << 2);
+			dsr_opts_len = ntohs(dp->dh.opth->p_len) + DSR_OPT_HDR_LEN;
+
+			if (!dsr_pkt_alloc_opts(dp, dsr_opts_len)) {
+				kfree(dp);
+				return NULL;
+			}
+		
+			memcpy(dp->dsr_opts, dp->dh.raw, dsr_opts_len);
+		} 
+		
+		dp->payload = dp->nh.raw + 
+			(dp->nh.iph->ihl << 2) + dsr_opts_len;
+		
+		dp->payload_len = ntohs(dp->nh.iph->tot_len) - 
+			(dp->nh.iph->ihl << 2) - dsr_opts_len;	
 	}
+       	
 	return dp;
 }
 
@@ -73,12 +119,8 @@ void dsr_pkt_free(struct dsr_pkt *dp)
 	
 	if (dp->skb)
 		kfree_skb(dp->skb);
-	
-/* 	if (dp->dh.raw) */
-/* 		kfree(dp->dh.raw); */
 
-	if (dp->dsr_data)
-		kfree(dp->dsr_data);
+	dsr_pkt_free_opts(dp);
 
 	if (dp->srt)
 		kfree(dp->srt);

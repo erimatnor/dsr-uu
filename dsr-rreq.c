@@ -278,36 +278,32 @@ int dsr_rreq_send(struct in_addr target, int ttl, unsigned long timeout)
 {
 	struct dsr_pkt *dp;
 	char *buf;
-	int len = IP_HDR_LEN +DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN;
+	int len = DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN;
 	
 	if (dsr_rreq_pending(target)) {
 		DEBUG("RREQ recently sent for %s\n", print_ip(target.s_addr));
 		return 0;
 	}
 
-	dp = dsr_pkt_alloc(NULL, len);
+       	dp = dsr_pkt_alloc(NULL);
 
 	if (!dp) {
 		DEBUG("Could not allocate DSR packet\n");
 		return -1;
 	}
-
-	dp->data = NULL; /* No data in this packet */
-	dp->data_len = 0;
 	dp->dst.s_addr = DSR_BROADCAST;
 	dp->nxt_hop.s_addr = DSR_BROADCAST;
-	dp->dsr_opts_len = len - IP_HDR_LEN;
 	dp->src = my_addr();
+		
+	buf = dsr_pkt_alloc_opts(dp, len);
 	
-	buf = dp->dsr_data;
+	if (!buf)
+		goto out_err;
 	
-	dp->nh.iph = dsr_build_ip(buf, IP_HDR_LEN, len, dp->src, dp->dst, ttl);
+	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN + len, ttl);
 	
 	if (!dp->nh.iph) 
 		goto out_err;
-
-	buf += IP_HDR_LEN;
-	len -= IP_HDR_LEN;
 
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, 0);
 	
@@ -348,13 +344,13 @@ int dsr_rreq_route_discovery(struct in_addr target)
         return dsr_rreq_send(target, ttl, 80 * (ttl + 2));
 }
 
-int dsr_rreq_opt_recv(struct dsr_pkt *dp)
+int dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 {
 	struct in_addr myaddr;
 	struct in_addr trg;
 	struct dsr_srt *srt_rev;
 
-	if (!dp || !dp->rreq_opt)
+	if (!dp || !rreq_opt)
 		return DSR_PKT_DROP;
 
 	myaddr = my_addr();
@@ -362,23 +358,23 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp)
 	if (dp->src.s_addr == myaddr.s_addr)
 		return DSR_PKT_DROP;
 	
-	trg.s_addr = dp->rreq_opt->target;
+	trg.s_addr = rreq_opt->target;
 
-	if (dsr_rreq_duplicate(dp->src, trg, dp->rreq_opt->id)) {
+	if (dsr_rreq_duplicate(dp->src, trg, rreq_opt->id)) {
 		DEBUG("Duplicate RREQ from %s\n", print_ip(dp->src.s_addr));
 		return DSR_PKT_DROP;
 	}
-	rreq_tbl_add(dp->src, dp->src, trg, dp->nh.iph->ttl, dp->rreq_opt->id, 0);
+	rreq_tbl_add(dp->src, dp->src, trg, dp->nh.iph->ttl, rreq_opt->id, 0);
 
 	dp->srt = dsr_srt_new(dp->src, myaddr,
-			      DSR_RREQ_ADDRS_LEN(dp->rreq_opt),
-			      (char *)dp->rreq_opt->addrs);
+			      DSR_RREQ_ADDRS_LEN(rreq_opt),
+			      (char *)rreq_opt->addrs);
 	
 	if (!dp->srt) {
 		DEBUG("Could not extract source route\n");
 		return DSR_PKT_ERROR;
 	}
-	DEBUG("RREQ target=%s\n", print_ip(dp->rreq_opt->target));
+	DEBUG("RREQ target=%s\n", print_ip(rreq_opt->target));
 	DEBUG("my addr %s\n", print_ip(myaddr.s_addr));
 	
         /* Add reversed source route */
@@ -399,28 +395,46 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp)
 
 	kfree(srt_rev);
 		
-	if (dp->rreq_opt->target == myaddr.s_addr) {
+	if (rreq_opt->target == myaddr.s_addr) {
 
 		DEBUG("RREQ OPT for me\n");
 		
 		/* According to the draft, the dest addr in the IP header must
 		 * be updated with the target address */
-		dp->nh.iph->daddr = dp->rreq_opt->target;
-	
-		
+		dp->nh.iph->daddr = rreq_opt->target;
+			
 		return DSR_PKT_SEND_RREP;
 	} else {
 		int i, n;
+		struct in_addr myaddr = my_addr();
+		
 		/* TODO: Reply if I have a route */
 		
-		n = DSR_RREQ_ADDRS_LEN(dp->rreq_opt) / sizeof(struct in_addr);
+		n = DSR_RREQ_ADDRS_LEN(rreq_opt) / sizeof(struct in_addr);
 		
 		/* Examine source route if this node already exists in it */
 		for (i = 0; i < n; i++)
 			if (dp->srt->addrs[i].s_addr == myaddr.s_addr)
 				return DSR_PKT_DROP;
 		
-	      
+		dsr_pkt_alloc_opts_expand(dp, sizeof(struct in_addr));
+		
+		if (!DSR_LAST_OPT(dp, rreq_opt)) {
+			char *to, *from;
+			to = (char *)rreq_opt + rreq_opt->length + 2 + sizeof(struct in_addr);
+			from = (char *)rreq_opt + rreq_opt->length + 2;
+
+			memmove(to, from, sizeof(struct in_addr));
+		}
+		rreq_opt->addrs[n] = myaddr.s_addr;
+		rreq_opt->length += sizeof(struct in_addr);
+		
+		dp->dh.opth->p_len = htons(ntohs(dp->dh.opth->p_len) + 
+					   sizeof(struct in_addr));
+		
+		dsr_build_ip(dp, dp->src, dp->dst, ntohs(dp->nh.iph->tot_len) +
+			     sizeof(struct in_addr), dp->nh.iph->ttl);
+		
 		/* Forward RREQ */
 		return DSR_PKT_FORWARD_RREQ;
 	}

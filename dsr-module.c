@@ -21,7 +21,6 @@
 #include <net/icmp.h>
 
 #include "dsr.h"
-#include "dsr-opt.h"
 #include "dsr-dev.h"
 #include "dsr-rreq.h"
 #include "dsr-rrep.h"
@@ -33,6 +32,7 @@
 #include "dsr-ack.h"
 #include "maint-buf.h"
 #include "neigh.h"
+#include "dsr-opt.h"
 
 static char *ifname = NULL;
 static char *mackill = NULL;
@@ -136,7 +136,7 @@ static int dsr_ip_recv(struct sk_buff *skb)
 #endif 
 	DEBUG("Received DSR packet\n");
 
-	dp = dsr_pkt_alloc(skb, 0);
+	dp = dsr_pkt_alloc(skb);
 
 	if (!dp) {
 		DEBUG("Could not allocate DSR packet\n");
@@ -149,14 +149,9 @@ static int dsr_ip_recv(struct sk_buff *skb)
 		return -1;
 	}
 	
-	dp->dsr_opts_len = ntohs(dp->dh.opth->p_len) + DSR_OPT_HDR_LEN;
-
-	dp->data = skb->data + dp->dsr_opts_len;
-	dp->data_len = skb->len - dp->dsr_opts_len;
-
 	
 	DEBUG("iph_len=%d iph_totlen=%d dsr_opts_len=%d data_len=%d\n", 
-	      (dp->nh.iph->ihl << 2), ntohs(dp->nh.iph->tot_len), dp->dsr_opts_len, dp->data_len);
+	      (dp->nh.iph->ihl << 2), ntohs(dp->nh.iph->tot_len), dsr_pkt_opts_len(dp), dp->payload_len);
 
 	
 	/* Process packet */
@@ -201,45 +196,45 @@ static int dsr_ip_recv(struct sk_buff *skb)
 		}
 	}
 	if (action & DSR_PKT_FORWARD_RREQ) {
-		struct in_addr myaddr = my_addr();
-		int n, dsr_len, len_to_rreq;		
-		char *tmp;
+	/* 	struct in_addr myaddr = my_addr(); */
+/* 		int n, dsr_len, len_to_rreq;		 */
+/* 		char *tmp; */
 
-		/* We need to add ourselves to the source route in the RREQ */
-		n = DSR_RREQ_ADDRS_LEN(dp->rreq_opt) / sizeof(struct in_addr);
+	/* 	/\* We need to add ourselves to the source route in the RREQ *\/ */
+/* 		n = DSR_RREQ_ADDRS_LEN(dp->rreq_opt) / sizeof(struct in_addr); */
 	
-		dsr_len = ntohs(dp->dh.opth->p_len) + DSR_OPT_HDR_LEN;
-		len_to_rreq = (char *)dp->rreq_opt - dp->dh.raw;
+/* 		dsr_len = ntohs(dp->dh.opth->p_len) + DSR_OPT_HDR_LEN; */
+/* 		len_to_rreq = (char *)dp->rreq_opt - dp->dh.raw; */
 
-		tmp = dsr_pkt_alloc_data(dp, dsr_len + sizeof(struct in_addr));
-		/* dsr_pkt_add_dsr_hdr(dsr_len + sizeof(struct in_addr)); */
-
-		if ((dp->dh.raw + dsr_len) > 
-		    ((char *)dp->rreq_opt + dp->rreq_opt->length + 2)) {
-			char *tmp2;
-			int len_after_rreq;
-			
-			len_after_rreq = (dp->dh.raw + dsr_len) - ((char *)dp->rreq_opt + dp->rreq_opt->length + 2);
-			
-			/* Copy everything up to and including rreq_opt */
-			memcpy(tmp, dp->dh.raw, len_to_rreq + dp->rreq_opt->length + 2);
-			tmp2 = tmp + len_to_rreq + dp->rreq_opt->length + 2 + sizeof(struct in_addr);
-
-			memcpy(tmp2, dp->dh.raw + len_to_rreq + dp->rreq_opt->length + 2 + sizeof(struct in_addr), len_after_rreq);
-
-			
-		} else {
-			memcpy(tmp, dp->dh.raw, dsr_len);
-		}
-		dp->dh.raw = tmp;
-		dp->dh.opth->p_len = htons(dsr_len + sizeof(struct in_addr));
-		dp->dsr_opts_len += sizeof(struct in_addr);
-		dp->rreq_opt = (struct dsr_rreq_opt *)(tmp + len_to_rreq);
-		dp->rreq_opt->addrs[n] = myaddr.s_addr;
-		dp->rreq_opt->length += sizeof(struct in_addr);
+/* 		tmp = dsr_pkt_alloc_opts_expand(dp, sizeof(struct in_addr)); */
 		
-		dp->nh.iph->tot_len = htons(ntohs(dp->nh.iph->tot_len) + sizeof(struct in_addr));
-		ip_send_check(dp->nh.iph);
+/* 		/\* dsr_pkt_add_dsr_hdr(dsr_len + sizeof(struct in_addr)); *\/ */
+
+/* 		if ((dp->dh.raw + dsr_len) >  */
+/* 		    ((char *)dp->rreq_opt + dp->rreq_opt->length + 2)) { */
+/* 			char *tmp2; */
+/* 			int len_after_rreq; */
+			
+/* 			len_after_rreq = (dp->dh.raw + dsr_len) - ((char *)dp->rreq_opt + dp->rreq_opt->length + 2); */
+			
+/* 			/\* Copy everything up to and including rreq_opt *\/ */
+/* 			memcpy(tmp, dp->dh.raw, len_to_rreq + dp->rreq_opt->length + 2); */
+/* 			tmp2 = tmp + len_to_rreq + dp->rreq_opt->length + 2 + sizeof(struct in_addr); */
+
+/* 			memcpy(tmp2, dp->dh.raw + len_to_rreq + dp->rreq_opt->length + 2 + sizeof(struct in_addr), len_after_rreq); */
+
+			
+/* 		} else { */
+/* 			memcpy(tmp, dp->dh.raw, dsr_len); */
+/* 		} */
+
+/* 		dp->dh.opth->p_len = htons(dsr_len + sizeof(struct in_addr)); */
+/* 		dp->rreq_opt = (struct dsr_rreq_opt *)(tmp + len_to_rreq); */
+/* 		dp->rreq_opt->addrs[n] = myaddr.s_addr; */
+/* 		dp->rreq_opt->length += sizeof(struct in_addr); */
+		
+/* 		dp->nh.iph->tot_len = htons(ntohs(dp->nh.iph->tot_len) + sizeof(struct in_addr)); */
+/* 		ip_send_check(dp->nh.iph); */
 
 		dsr_dev_xmit(dp);
 		
@@ -323,13 +318,14 @@ struct sk_buff *dsr_skb_create(struct dsr_pkt *dp,
 	char *buf;
 	int ip_len;
 	int tot_len;
+	int dsr_opts_len = dsr_pkt_opts_len(dp);
 	
 	ip_len = dp->nh.iph->ihl << 2;
 	
-	tot_len = ip_len + dp->dsr_opts_len + dp->data_len;
+	tot_len = ip_len + dsr_opts_len + dp->payload_len;
 	
-	DEBUG("iph_len=%d dp->data_len=%d dp->dsr_opts_len=%d TOT len=%d\n", 
-	      ip_len, dp->data_len, dp->dsr_opts_len, tot_len);
+	DEBUG("iph_len=%d dp->payload_len=%d dsr_opts_len=%d TOT len=%d\n", 
+	      ip_len, dp->payload_len, dsr_opts_len, tot_len);
 	
 /* 	skb = alloc_skb(dev->hard_header_len + 15 + tot_len, GFP_ATOMIC); */
 	skb = alloc_skb(tot_len +  LL_RESERVED_SPACE(dev), GFP_ATOMIC);
@@ -353,13 +349,13 @@ struct sk_buff *dsr_skb_create(struct dsr_pkt *dp,
 	
 	buf += ip_len;
 	
-	if (dp->dsr_opts_len && dp->dh.raw) {
-		memcpy(buf, dp->dh.opth, dp->dsr_opts_len);
-		buf += dp->dsr_opts_len;
+	if (dsr_opts_len) {
+		memcpy(buf, dp->dh.opth, dsr_opts_len);
+		buf += dsr_opts_len;
 	}
 
-	if (dp->data_len && dp->data)
-		memcpy(buf, dp->data, dp->data_len);
+	if (dp->payload_len && dp->payload)
+		memcpy(buf, dp->payload, dp->payload_len);
 	
 	return skb;
 }

@@ -73,7 +73,7 @@ int dsr_rerr_send(struct dsr_pkt *dp_trigg)
 		return -1;
 	}
 	
-	len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) + DSR_RERR_HDR_LEN + 4;
+	len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) + DSR_RERR_HDR_LEN + 4;
 
 	/* Also count in RERR opts in trigger packet */
 /* 	for (i = 0; i < dp_trigg->num_rerr_opts; i++) { */
@@ -84,7 +84,7 @@ int dsr_rerr_send(struct dsr_pkt *dp_trigg)
 	/* for (i = 0; i < dp_trigg->num_ack_opts; i++) */
 /* 		len += (dp_trigg->ack_opt[i]->length + 2); */
 
-	dp = dsr_pkt_alloc(NULL, len);
+	dp = dsr_pkt_alloc(NULL);
 	
 	if (!dp) {
 		DEBUG("Could not allocate DSR packet\n");
@@ -95,16 +95,13 @@ int dsr_rerr_send(struct dsr_pkt *dp_trigg)
 	dp->dst = dst;
 	dp->srt = srt;
 	dp->nxt_hop = dsr_srt_next_hop(dp->srt, 0);
-	dp->dsr_opts_len = len - IP_HDR_LEN;
-	dp->data = NULL;
-	dp->data_len = 0;
 
-	buf = dp->dsr_data;
+	buf = dsr_pkt_alloc_opts(dp, len);
+
+	if (!buf)
+		goto out_err;
 	
-	dp->nh.iph = dsr_build_ip(buf, IP_HDR_LEN, len, dp->src, dp->dst, IPDEFTTL);
-
-	buf += IP_HDR_LEN;
-	len -= IP_HDR_LEN;
+	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN + len, IPDEFTTL);
 
 	if (!dp->nh.iph) {
 		DEBUG("Could not create IP header\n");

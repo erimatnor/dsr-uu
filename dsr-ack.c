@@ -50,29 +50,26 @@ int dsr_ack_send(struct in_addr dst, unsigned short id)
 		return -1;
 	}
 
-	len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) + DSR_ACK_HDR_LEN;
+	len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) + DSR_ACK_HDR_LEN;
 
-	dp = dsr_pkt_alloc(NULL, len);
+	dp = dsr_pkt_alloc(NULL);
 	
-	dp->data = NULL; /* No data in this packet */
-	dp->data_len = 0;
 	dp->dst = dst;
 	dp->srt = srt;
 	dp->nxt_hop = dsr_srt_next_hop(dp->srt, 0);
-	dp->dsr_opts_len = len - IP_HDR_LEN;
 	dp->src = my_addr();
 	
-	buf = dp->dsr_data;	
+	buf = dsr_pkt_alloc_opts(dp, len);
+	
+	if (!buf)
+		goto out_err;
 
-	dp->nh.iph = dsr_build_ip(buf, IP_HDR_LEN, len, dp->src, dp->dst, IPDEFTTL);
+	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN + len, IPDEFTTL);
 	
 	if (!dp->nh.iph) {
 		DEBUG("Could not create IP header\n");
 		goto out_err;
 	}
-
-	buf += IP_HDR_LEN;
-	len -= IP_HDR_LEN;
 
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, 0);
 	
@@ -138,21 +135,17 @@ struct dsr_ack_req_opt *dsr_ack_req_opt_add(struct dsr_pkt *dp)
 	if (!dp)
 		return NULL;
 
-	if (dp->dsr_data_len) {
-		buf = dsr_pkt_alloc_data_expand(dp, DSR_ACK_REQ_HDR_LEN);
-	
+
+	if (!dsr_pkt_opts_len(dp)) {
+		
+		buf = dsr_pkt_alloc_opts(dp, DSR_OPT_HDR_LEN + DSR_ACK_REQ_HDR_LEN);
+
 		if (!buf)
 			return NULL;
 		
-		dp->dh.raw = dp->dsr_data;
-
-		dp->dh.opth->p_len = htons(ntohs(dp->dh.opth->p_len) + DSR_ACK_REQ_HDR_LEN);
-		dp->dsr_opts_len += DSR_ACK_REQ_HDR_LEN;
-	} else {
-		buf = dsr_pkt_alloc_data(dp, DSR_OPT_HDR_LEN + DSR_ACK_REQ_HDR_LEN);
-
-		if (!buf)
-			return NULL;
+		dsr_build_ip(dp, dp->src, dp->dst, 
+			     ntohs(dp->nh.iph->tot_len) + DSR_OPT_HDR_LEN + 
+			     DSR_ACK_REQ_HDR_LEN, 1);
 		
 		dp->dh.opth = dsr_opt_hdr_add(buf, DSR_OPT_HDR_LEN + DSR_ACK_REQ_HDR_LEN, 0);
 		
@@ -162,7 +155,21 @@ struct dsr_ack_req_opt *dsr_ack_req_opt_add(struct dsr_pkt *dp)
 		}
 		
 		buf += DSR_OPT_HDR_LEN;
-		dp->dsr_opts_len = DSR_OPT_HDR_LEN + DSR_ACK_REQ_HDR_LEN;
+	
+	} else {
+		
+		buf = dsr_pkt_alloc_opts_expand(dp, DSR_ACK_REQ_HDR_LEN);
+	
+		if (!buf)
+			return NULL;
+
+		dsr_build_ip(dp, dp->src, dp->dst, 
+			     ntohs(dp->nh.iph->tot_len) + 
+			     DSR_ACK_REQ_HDR_LEN, 1);
+
+		dp->dh.raw = dp->dsr_opts;
+
+		dp->dh.opth->p_len = htons(ntohs(dp->dh.opth->p_len) + DSR_ACK_REQ_HDR_LEN);
 	}
 	
 	neigh_tbl_set_ack_req_timer(dp->nxt_hop);
@@ -174,29 +181,26 @@ int dsr_ack_req_send(struct in_addr neigh_addr, unsigned short id)
 {
 	struct dsr_pkt *dp;
 	struct dsr_ack_req_opt *ack_req;
-	int len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_ACK_REQ_HDR_LEN;
+	int len = DSR_OPT_HDR_LEN + DSR_ACK_REQ_HDR_LEN;
 	char *buf;
 	
-	dp = dsr_pkt_alloc(NULL, len);
+	dp = dsr_pkt_alloc(NULL);
 
-	dp->data = NULL; /* No data in this packet */
-	dp->data_len = 0;
 	dp->dst = neigh_addr;
 	dp->nxt_hop = neigh_addr;
-	dp->dsr_opts_len = len - IP_HDR_LEN;
 	dp->src = my_addr();
 
-	buf = dp->dsr_data;
+	buf = dsr_pkt_alloc_opts(dp, len);
 
-	dp->nh.iph = dsr_build_ip(buf, IP_HDR_LEN, len, dp->src, dp->dst, 1);
+	if (!buf)
+		goto out_err;
+
+	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN + len, 1);
 	
 	if (!dp->nh.iph) {
 		DEBUG("Could not create IP header\n");
 		goto out_err;
 	}
-
-	buf += IP_HDR_LEN;
-	len -= IP_HDR_LEN;
 
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, 0);
 	

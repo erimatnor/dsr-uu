@@ -198,9 +198,9 @@ int dsr_rrep_send(struct dsr_srt *srt_to_me)
 		return -1;
 	}	
 		
-	len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt_to_me) + DSR_RREP_OPT_LEN(srt_to_me) + DSR_OPT_PAD1_LEN;
+	len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt_to_me) + DSR_RREP_OPT_LEN(srt_to_me) + DSR_OPT_PAD1_LEN;
 
-	dp = dsr_pkt_alloc(NULL, len);
+	dp = dsr_pkt_alloc(NULL);
 	
 	if (!dp) {
 		DEBUG("Could not allocate DSR packet\n");
@@ -220,10 +220,6 @@ int dsr_rrep_send(struct dsr_srt *srt_to_me)
 	dp->src = my_addr();
 	dp->dst = dp->srt->dst;
 	dp->nxt_hop = dsr_srt_next_hop(dp->srt, 0);
-	dp->dsr_opts_len = len - IP_HDR_LEN;
-	dp->data = NULL;
-	dp->data_len = 0;
-	
 
 	DEBUG("IP_HDR_LEN=%d DSR_OPT_HDR_LEN=%d DSR_SRT_OPT_LEN=%d DSR_RREP_OPT_LEN=%d DSR_OPT_PAD1_LEN=%d RREP len=%d\n", IP_HDR_LEN, DSR_OPT_HDR_LEN, DSR_SRT_OPT_LEN(srt_to_me), DSR_RREP_OPT_LEN(srt_to_me), DSR_OPT_PAD1_LEN, len);
 	
@@ -231,14 +227,13 @@ int dsr_rrep_send(struct dsr_srt *srt_to_me)
 	ttl = srt_to_me->laddrs / sizeof(struct in_addr) + 1;
 
 	DEBUG("TTL=%d, n=%d\n", ttl, srt_to_me->laddrs / sizeof(struct in_addr));
-
-	buf = dp->dsr_data;
-
-	dp->nh.iph = dsr_build_ip(buf, IP_HDR_LEN, len, dp->src, dp->dst, ttl);
+	buf = dsr_pkt_alloc_opts(dp, len);
 	
-	buf += IP_HDR_LEN;
-	len -= IP_HDR_LEN;
+	if (!buf)
+		goto out_err;
 
+	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN + len, ttl);
+	
 	if (!dp->nh.iph) {
 		DEBUG("Could not create IP header\n");
 		goto out_err;

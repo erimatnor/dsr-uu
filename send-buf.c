@@ -137,7 +137,7 @@ int send_buf_enqueue_packet(struct dsr_pkt *dp, int (*okfn)(struct dsr_pkt *))
 /* 	memcpy(&entry->dp, dp, sizeof(struct dsr_pkt)); */
 
 /* 	entry->dp.nh.iph = dp->nh.iph; */
-/* 	entry->dp.data = dp->data; */
+/* 	entry->dp.data = dp->payload; */
 	entry->dp = dp;
 
 	write_lock_bh(&queue_lock);

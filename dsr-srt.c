@@ -164,7 +164,6 @@ int dsr_srt_add(struct dsr_pkt *dp)
 {
 	char *buf;
 	int len;
-	int add_ack_req = 0;
 	
 	if (!dp || !dp->srt || !dp->nh.iph)
 		return -1;
@@ -172,27 +171,23 @@ int dsr_srt_add(struct dsr_pkt *dp)
 	dp->nxt_hop = dsr_srt_next_hop(dp->srt, 0);
 
 	/* Calculate extra space needed */
-	/* add_ack_req = dsr_ack_add_ack_req(dp->nxt_hop); */
 
-	if (add_ack_req)
-		
-		len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(dp->srt) + DSR_ACK_REQ_HDR_LEN;
-	else
-		len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(dp->srt);
+	len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(dp->srt);
 
-	dp->dsr_opts_len = len;
+	DEBUG("dsr_opts_len=%d\n", len);
 	
-	DEBUG("dsr_opts_len=%d\n", dp->dsr_opts_len);
-	
-
-	buf = dsr_pkt_alloc_data(dp, len);
-
+	buf = dsr_pkt_alloc_opts(dp, len);
 
 	if (!buf) {
 		DEBUG("Could allocate memory\n");
 		return -1;
 	}
 	
+	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, ntohs(dp->nh.iph->tot_len) + len, dp->nh.iph->ttl);
+	
+	if (!dp->nh.iph) 
+		return -1;
+
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, dp->nh.iph->protocol);
 
 	if (!dp->dh.opth) {
@@ -213,29 +208,6 @@ int dsr_srt_add(struct dsr_pkt *dp)
 	buf += DSR_SRT_OPT_LEN(dp->srt);
 	len -= DSR_SRT_OPT_LEN(dp->srt);
 	
-	/* if (add_ack_req) { */
-/* 		struct dsr_ack_req_opt *areq; */
-		
-/* 		areq = dsr_ack_req_opt_add(buf, len, dp->nxt_hop); */
-
-/* 		if (!areq) { */
-/* 			DEBUG("Could not create ACK REQ option header!\n"); */
-/* 			kfree(dp->dh.raw); */
-/* 			return -1; */
-/* 		} */
-/* 		buf += DSR_ACK_REQ_HDR_LEN; */
-/* 		len -= DSR_ACK_REQ_HDR_LEN; */
-/* 	} */
-
-	dp->nh.iph->tot_len = 
-		htons(ntohs(dp->nh.iph->tot_len) + dp->dsr_opts_len);
-	
-	DEBUG("New iph->tot_len=%d\n", ntohs(dp->nh.iph->tot_len));
-
-	dp->nh.iph->protocol = IPPROTO_DSR;
-	
-	ip_send_check(dp->nh.iph);
-
 	return 0;
 }
 

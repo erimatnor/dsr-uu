@@ -22,8 +22,7 @@ struct dsr_rreq_opt {
 int rreq_tbl_del(struct in_addr dst);
 int rreq_tbl_init(void);
 void rreq_tbl_cleanup(void);
-
-int dsr_rreq_opt_recv(struct dsr_pkt *dp);
+int dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt);
 int dsr_rreq_route_discovery(struct in_addr target);
 
 #endif  /* _DSR_RREQ */

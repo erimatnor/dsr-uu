@@ -233,10 +233,10 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 		return -1;
 
 	/* Only buffer packets with data */
-	if (dp->data_len)
+	if (dp->payload_len)
 		maint_buf_add(dp);
 
-	if (ADD_ACK_REQ && dp->data_len) {
+	if (ADD_ACK_REQ && dp->payload_len) {
 		if (!dsr_ack_req_opt_add(dp))
 			goto out_err;
 	
@@ -283,25 +283,24 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 #ifdef DEBUG
 	atomic_inc(&num_pkts);
 #endif 		
-	DEBUG("headroom=%d skb->data=%lu skb->nh.iph=%lu\n", 
-	      skb_headroom(skb), (unsigned long)skb->data, 
-	      (unsigned long)skb->nh.iph);
-		
-	dp = dsr_pkt_alloc(skb, 0);
-
-	if (!dp) {
-		DEBUG("Could not allocate DSR packet\n");
-		return -1;
-	}
 	
 	ethh = (struct ethhdr *)skb->data;
-	
-	dp->data = skb->data + dev->hard_header_len + (dp->nh.iph->ihl << 2);
-	dp->data_len = skb->len - dev->hard_header_len - (dp->nh.iph->ihl << 2);
-
+		
 	switch (ntohs(ethh->h_proto)) {
 	case ETH_P_IP:
-	    
+
+		DEBUG("headroom=%d skb->data=%lu skb->nh.iph=%lu\n", 
+		      skb_headroom(skb), (unsigned long)skb->data, 
+		      (unsigned long)skb->nh.iph);
+		
+		dp = dsr_pkt_alloc(skb);
+		
+		if (!dp) {
+			DEBUG("Could not allocate DSR packet\n");
+			return -1;
+		}
+	
+	
 		dp->srt = dsr_rtc_find(dp->src, dp->dst);
 		
 		if (dp->srt) {
@@ -334,7 +333,6 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	default:
 		DEBUG("Unkown packet type\n");
 	}
-	dsr_pkt_free(dp);
 	return 0;
 }
 
