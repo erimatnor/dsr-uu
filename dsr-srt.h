@@ -8,7 +8,7 @@
 #include "dsr.h"
 
 /* Source route options header */
-typedef struct dsr_srt_opt {
+struct dsr_srt_opt {
 	u_int8_t type;
 	u_int8_t length;
 #if defined(__LITTLE_ENDIAN_BITFIELD)
@@ -32,9 +32,9 @@ typedef struct dsr_srt_opt {
 #error  "Please fix <asm/byteorder.h>"
 #endif
 	u_int32_t addrs[0];
-} dsr_srt_opt_t;
+};
 
-#define DSR_SRT_HDR_LEN sizeof(dsr_srt_opt_t)
+#define DSR_SRT_HDR_LEN sizeof(struct dsr_srt_opt)
 #define DSR_SRT_OPT_LEN(srt) (DSR_SRT_HDR_LEN + srt->laddrs)
 
 /* Flags */
@@ -55,7 +55,7 @@ struct dsr_srt *dsr_srt_new(struct in_addr src, struct in_addr dst,
 		       unsigned int length, char *addrs);
 struct dsr_srt *dsr_srt_new_rev(struct dsr_srt *srt);
 char *dsr_srt_opt_make_room(struct dsr_srt *srt, struct sk_buff *skb, int len);
-dsr_srt_opt_t *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt);
+struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt);
 int dsr_srt_opt_recv(struct dsr_pkt *dp);
 int dsr_srt_add(struct dsr_pkt *dp, struct sk_buff *skb);
 void dsr_srt_del(struct dsr_srt *srt);

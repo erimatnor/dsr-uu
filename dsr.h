@@ -36,6 +36,7 @@ struct dsr_pkt {
 
 /* Packet actions: */
 /* Actions to take after processing source route option: */
+#define DSR_PKT_NONE           0
 #define DSR_PKT_ERROR          0x1
 #define DSR_PKT_SRT_REMOVE     0x2
 #define DSR_PKT_FORWARD        0x4
@@ -148,7 +149,12 @@ static inline struct in_addr my_addr(void)
 	}
 	return my_addr;
 }
+static inline unsigned long time_add_msec(unsigned long msecs)
+{
+	unsigned long long t = msecs * HZ / 1000;
 
+	return jiffies + t;
+}
 /* struct dsr_pkt *dsr_pkt_alloc(int size); */
 /* void dsr_pkt_free(struct dsr_pkt *dp); */
 

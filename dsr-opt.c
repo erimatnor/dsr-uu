@@ -6,6 +6,7 @@
 #include "dsr-rreq.h"
 #include "dsr-rrep.h"
 #include "dsr-srt.h"
+#include "dsr-ack.h"
 #include "kdsr.h"
 
 
@@ -131,6 +132,7 @@ int dsr_opts_remove(struct dsr_pkt *dp)
 	if (!dp)
 		return -1;
 
+	DEBUG("Removing DSR opts len=%d\n", dp->dsr_opts_len);
 	/* Update IP header */
 	ip_len = (dp->iph->ihl << 2);
 
@@ -206,10 +208,11 @@ int dsr_opt_recv(struct dsr_pkt *dp)
 			break;
 		case DSR_OPT_ACK:
 			DEBUG("ACK opt:\n");
+			action |= dsr_ack_opt_recv((struct dsr_ack_opt *)dopt);
 			break;
 		case DSR_OPT_SRT:
 			DEBUG("SRT opt:\n");
-			dp->srt_opt = (dsr_srt_opt_t *)dopt;
+			dp->srt_opt = (struct dsr_srt_opt *)dopt;
 			action |= dsr_srt_opt_recv(dp);
 			break;
 		case DSR_OPT_TIMEOUT:	
@@ -217,6 +220,8 @@ int dsr_opt_recv(struct dsr_pkt *dp)
 		case DSR_OPT_FLOWID:
 			break;
 		case DSR_OPT_AREQ:
+			DEBUG("ACK REQ opt:\n");
+			action |= dsr_ack_req_opt_recv(dp, (struct dsr_ack_req_opt *)dopt);
 			break;
 		case DSR_OPT_PAD1:
 			DEBUG("PAD1 opt\n");

@@ -303,7 +303,7 @@ static int lc_print(char *buf)
 {
 	struct list_head *pos;
 	int len = 0;
-    
+	
 	read_lock_bh(&LC.lock);
     
 	len += sprintf(buf, "# %-15s %-15s %-4s Timeout\n", "Src Addr", "Dst Addr", "Cost");

@@ -344,8 +344,8 @@ static inline int dsr_rreq_duplicate(struct in_addr src, struct in_addr trg, uns
 int dsr_rreq_send(struct in_addr target, int ttl, unsigned long timeout)
 {
 	struct dsr_pkt dp;
-	char buf[IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN];
 	int len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN;
+	char buf[len];
 	int res = 0;
 	
 	if (dsr_rreq_pending(target)) {
@@ -353,7 +353,7 @@ int dsr_rreq_send(struct in_addr target, int ttl, unsigned long timeout)
 		return 0;
 	}
 	memset(&dp, 0, sizeof(dp));
-	memset(buf, 0, IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN);
+	memset(buf, 0, len);
 	
 	dp.data = NULL; /* No data in this packet */
 	dp.data_len = 0;

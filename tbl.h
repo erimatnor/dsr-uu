@@ -190,7 +190,7 @@ static inline int tbl_del(struct tbl *t, struct list_head *l)
 	
 	write_lock_bh(&t->lock);
 
-	res = tbl_del(t, l);
+	res = __tbl_del(t, l);
 	
 	write_unlock_bh(&t->lock);
 	

@@ -4,6 +4,7 @@
 #include "dsr.h"
 #include "dsr-srt.h"
 #include "dsr-opt.h"
+#include "dsr-ack.h"
 #include "debug.h"
 
 
@@ -85,14 +86,14 @@ void dsr_srt_del(struct dsr_srt *srt)
 }
 
 
-dsr_srt_opt_t *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt)
+struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt)
 {
-	dsr_srt_opt_t *srt_opt;
+	struct dsr_srt_opt *srt_opt;
 	
 	if (len < DSR_SRT_OPT_LEN(srt))
 		return NULL;
 
-	srt_opt = (dsr_srt_opt_t *)buf;
+	srt_opt = (struct dsr_srt_opt *)buf;
 
 	srt_opt->type = DSR_OPT_SRT;
 	srt_opt->length = srt->laddrs + 2;
@@ -113,12 +114,19 @@ int dsr_srt_add(struct dsr_pkt *dp, struct sk_buff *skb)
 	struct iphdr *iph;
 	char *buf;
 	int len;
+	int add_ack_req = 0;
 	
 	if (!dp || !dp->srt || !skb)
 		return -1;
 
 	/* Calculate extra space needed */
-	dp->dsr_opts_len = len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(dp->srt);
+	add_ack_req = dsr_ack_add_ack_req(dsr_srt_next_hop(dp->srt));
+
+	if (add_ack_req)
+		
+		dp->dsr_opts_len = len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(dp->srt) + DSR_AREQ_HDR_LEN;
+	else
+		dp->dsr_opts_len = len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(dp->srt);
 	
 	DEBUG("dsr_opts_len=%d\n", dp->dsr_opts_len);
 	
@@ -149,6 +157,22 @@ int dsr_srt_add(struct dsr_pkt *dp, struct sk_buff *skb)
 	if (!dp->srt_opt) {
 		DEBUG("Could not create Source Route option header!\n");
 		return -1;
+	}
+
+	buf += DSR_SRT_OPT_LEN(dp->srt);
+	len -= DSR_SRT_OPT_LEN(dp->srt);
+	
+	if (add_ack_req) {
+		struct dsr_ack_req_opt *areq;
+		
+		areq = dsr_ack_req_opt_add(buf, len, dsr_srt_next_hop(dp->srt));
+
+		if (!areq) {
+			DEBUG("Could not create ACK REQ option header!\n");
+			return -1;
+		}
+		buf += DSR_AREQ_HDR_LEN;
+		len -= DSR_AREQ_HDR_LEN;
 	}
 
 	iph = skb->nh.iph;
