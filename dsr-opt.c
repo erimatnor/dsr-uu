@@ -27,20 +27,20 @@ struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, int len, unsigned int protocol)
 	return opt_hdr;
 }
 
-struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, struct in_addr dst, int totlen, int ttl)
+struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, struct in_addr dst, int ip_len, int tot_len, int protocol, int ttl)
 {
 	struct iphdr *iph;
 	
 	dp->nh.iph = iph = (struct iphdr *)dp->ip_data;
 	
 	iph->version = IPVERSION;
-	iph->ihl = 5;
+	iph->ihl = (ip_len >> 2);
 	iph->tos = 0;
-	iph->tot_len = htons(totlen);
+	iph->tot_len = htons(tot_len);
 	iph->id = 0;
 	iph->frag_off = 0;
 	iph->ttl = (ttl ? ttl : IPDEFTTL);
-	iph->protocol = IPPROTO_DSR;
+	iph->protocol = protocol;
 	iph->saddr = src.s_addr;		
 	iph->daddr = dst.s_addr;
 	
@@ -52,58 +52,21 @@ struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, struct in_add
 
 int dsr_opts_remove(struct dsr_pkt *dp)
 {
-	int len, ip_len;
+	int len, ip_len, prot;
 
 	if (!dp)
 		return -1;
-
-	/* Update IP header */
-	/* ip_len = (dp->skb->nh.iph->ihl << 2); */
-
-/* 	/\* Make sure we point to the headers in the skb *\/ */
-/* 	opth = (struct dsr_opt_hdr *)((char *)dp->skb->nh.iph + ip_len); */
-
-/* 	dsr_opts_len = ntohs(opth->p_len) + DSR_OPT_HDR_LEN; */
-
-/* 	DEBUG("Removing DSR opts len=%d\n", dsr_opts_len); */
-
-/* 	if (opth->nh == 0 && dp->payload_len == 0)		 */
-/* 		dp->nh.iph->protocol = IPPROTO_DSR; */
-/* 	else */
-/* 		dp->nh.iph->protocol = opth->nh; */
-
-/* 	dp->skb->nh.iph->tot_len = htons(ip_len + dp->payload_len); */
-
-/* 	ip_send_check(dp->nh.iph); */
-
-/* 	off = (char *)opth; */
-	
-/* 	/\* Move data *\/ */
-/* 	memmove(off, off + dsr_opts_len, dp->payload_len); */
-	
-/* 	len = dsr_opts_len; */
-/* 	dp->payload = off; */
-/* 	dp->dh.opth = NULL; */
-/* 	dp->srt_opt = NULL; */
-/* 	dp->rreq_opt = NULL; */
-/* 	memset(dp->rrep_opt, 0, sizeof(struct dsr_rrep_opt *) * MAX_RREP_OPTS); */
-/* 	memset(dp->rerr_opt, 0, sizeof(struct dsr_rerr_opt *) * MAX_RERR_OPTS); */
-/* 	memset(dp->ack_opt, 0, sizeof(struct dsr_ack_opt *) * MAX_ACK_OPTS); */
-/* 	dp->num_rrep_opts = dp->num_rerr_opts = dp->num_ack_opts = 0; */
 	
 	ip_len = (dp->nh.iph->ihl << 2);
-
-	if (dp->dh.opth->nh == 0 && dp->payload_len == 0)
-		dp->nh.iph->protocol = IPPROTO_DSR;
-	else
-		dp->nh.iph->protocol = dp->dh.opth->nh;
 	
-	dp->skb->nh.iph->tot_len = htons(ip_len + dp->payload_len);
+	prot = dp->dh.opth->nh;
 	
-	ip_send_check(dp->nh.iph);
-	
+	dsr_build_ip(dp, dp->src, dp->dst, ip_len, ip_len + dp->payload_len, prot, dp->nh.iph->ttl);
+		
 	len = dsr_pkt_free_opts(dp);
 	
+	DEBUG("Removed %d bytes of DSR options %d payload=%d prot=%02x\n", len, dsr_pkt_opts_len(dp),  dp->payload_len, prot);
+
 	/* Return bytes removed */
 	return len;
 }

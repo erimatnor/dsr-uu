@@ -300,7 +300,7 @@ int dsr_rreq_send(struct in_addr target, int ttl, unsigned long timeout)
 	if (!buf)
 		goto out_err;
 	
-	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN + len, ttl);
+	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN, IP_HDR_LEN + len, IPPROTO_DSR, ttl);
 	
 	if (!dp->nh.iph) 
 		goto out_err;
@@ -432,8 +432,7 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		dp->dh.opth->p_len = htons(ntohs(dp->dh.opth->p_len) + 
 					   sizeof(struct in_addr));
 		
-		dsr_build_ip(dp, dp->src, dp->dst, ntohs(dp->nh.iph->tot_len) +
-			     sizeof(struct in_addr), dp->nh.iph->ttl);
+		dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN, ntohs(dp->nh.iph->tot_len) + sizeof(struct in_addr), IPPROTO_DSR, dp->nh.iph->ttl);
 		
 		/* Forward RREQ */
 		return DSR_PKT_FORWARD_RREQ;

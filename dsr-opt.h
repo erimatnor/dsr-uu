@@ -51,7 +51,7 @@ struct dsr_pad1_opt {
 #define DSR_GET_NEXT_OPT(dopt) ((struct dsr_opt *)((char *)dopt + dopt->length + 2))
 #define DSR_LAST_OPT(dp, opt) ((dp->dh.raw + ntohs(dp->dh.opth->p_len) + 4) == ((char *)opt + opt->length + 2))
 
-struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, struct in_addr dst, int totlen, int ttl);
+struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, struct in_addr dst, int ip_len, int totlen, int protocol, int ttl);
 
 int dsr_opt_recv(struct dsr_pkt *dp);
 

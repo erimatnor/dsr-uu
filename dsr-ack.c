@@ -64,7 +64,8 @@ int dsr_ack_send(struct in_addr dst, unsigned short id)
 	if (!buf)
 		goto out_err;
 
-	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN + len, IPDEFTTL);
+	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN, 
+				  IP_HDR_LEN + len, IPPROTO_DSR, IPDEFTTL);
 	
 	if (!dp->nh.iph) {
 		DEBUG("Could not create IP header\n");
@@ -131,23 +132,29 @@ static struct dsr_ack_req_opt *dsr_ack_req_opt_create(char *buf, int len,
 struct dsr_ack_req_opt *dsr_ack_req_opt_add(struct dsr_pkt *dp)
 {
 	char *buf = NULL;
-
+	int prot = 0, tot_len = 0, ttl = IPDEFTTL;
+	
 	if (!dp)
 		return NULL;
 
-
+	if (dp->nh.raw) {
+			tot_len = ntohs(dp->nh.iph->tot_len);
+			prot = dp->nh.iph->protocol;
+			ttl = dp->nh.iph->ttl;
+	}
+	
 	if (!dsr_pkt_opts_len(dp)) {
 		
 		buf = dsr_pkt_alloc_opts(dp, DSR_OPT_HDR_LEN + DSR_ACK_REQ_HDR_LEN);
-
+		
 		if (!buf)
 			return NULL;
+
 		
-		dsr_build_ip(dp, dp->src, dp->dst, 
-			     ntohs(dp->nh.iph->tot_len) + DSR_OPT_HDR_LEN + 
-			     DSR_ACK_REQ_HDR_LEN, 1);
+		dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN,
+			      tot_len + DSR_OPT_HDR_LEN + DSR_ACK_REQ_HDR_LEN, IPPROTO_DSR, ttl);
 		
-		dp->dh.opth = dsr_opt_hdr_add(buf, DSR_OPT_HDR_LEN + DSR_ACK_REQ_HDR_LEN, 0);
+		dp->dh.opth = dsr_opt_hdr_add(buf, DSR_OPT_HDR_LEN + DSR_ACK_REQ_HDR_LEN, prot);
 		
 		if (!dp->dh.opth) {
 			DEBUG("Could not create DSR opt header\n");
@@ -163,9 +170,8 @@ struct dsr_ack_req_opt *dsr_ack_req_opt_add(struct dsr_pkt *dp)
 		if (!buf)
 			return NULL;
 
-		dsr_build_ip(dp, dp->src, dp->dst, 
-			     ntohs(dp->nh.iph->tot_len) + 
-			     DSR_ACK_REQ_HDR_LEN, 1);
+		dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN,
+			     tot_len + DSR_ACK_REQ_HDR_LEN, IPPROTO_DSR, ttl);
 
 		dp->dh.raw = dp->dsr_opts;
 
@@ -195,7 +201,8 @@ int dsr_ack_req_send(struct in_addr neigh_addr, unsigned short id)
 	if (!buf)
 		goto out_err;
 
-	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN + len, 1);
+	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN, 
+				  IP_HDR_LEN + len, IPPROTO_DSR, 1);
 	
 	if (!dp->nh.iph) {
 		DEBUG("Could not create IP header\n");

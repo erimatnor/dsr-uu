@@ -232,7 +232,7 @@ int dsr_rrep_send(struct dsr_srt *srt_to_me)
 	if (!buf)
 		goto out_err;
 
-	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN + len, ttl);
+	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN, IP_HDR_LEN + len, IPPROTO_DSR, ttl);
 	
 	if (!dp->nh.iph) {
 		DEBUG("Could not create IP header\n");

@@ -164,6 +164,7 @@ int dsr_srt_add(struct dsr_pkt *dp)
 {
 	char *buf;
 	int len;
+	int prot;
 	
 	if (!dp || !dp->srt || !dp->nh.iph)
 		return -1;
@@ -182,13 +183,16 @@ int dsr_srt_add(struct dsr_pkt *dp)
 		DEBUG("Could allocate memory\n");
 		return -1;
 	}
+	prot = dp->nh.iph->protocol;
 	
-	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, ntohs(dp->nh.iph->tot_len) + len, dp->nh.iph->ttl);
+	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, (dp->nh.iph->ihl << 2), 
+				  ntohs(dp->nh.iph->tot_len) + len, IPPROTO_DSR, 
+				  dp->nh.iph->ttl);
 	
 	if (!dp->nh.iph) 
 		return -1;
 
-	dp->dh.opth = dsr_opt_hdr_add(buf, len, dp->nh.iph->protocol);
+	dp->dh.opth = dsr_opt_hdr_add(buf, len, prot);
 
 	if (!dp->dh.opth) {
 		DEBUG("Could not create DSR opts header!\n");

@@ -1,5 +1,5 @@
-#include <linux/timer.h>
 #include <linux/proc_fs.h>
+#include <linux/timer.h>
 
 #include "tbl.h"
 #include "neigh.h"

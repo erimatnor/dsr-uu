@@ -275,7 +275,7 @@ static int dsr_ip_recv(struct sk_buff *skb)
 		dsr_opts_remove(dp);
 		DEBUG("Deliver to DSR device\n");
 		dsr_dev_deliver(dp);
-		
+		/* dsr_pkt_free(dp); */
 		return 0;
 	}
 	dsr_pkt_free(dp);
@@ -291,26 +291,6 @@ static void dsr_ip_recv_err(struct sk_buff *skb, u32 info)
 
 
 
-/* static int dsr_get_hwaddr(struct in_addr addr, struct sockaddr *hwaddr,  */
-/* 			  struct net_device *dev) */
-/* {	 */
-/* 	struct neighbour *neigh; */
-
-/* 	neigh = neigh_lookup(&arp_tbl, &addr.s_addr, dev); */
-	
-/* 	if (neigh) { */
-		
-/* 		hwaddr->sa_family = AF_UNSPEC; */
-	      
-/* 		read_lock_bh(&neigh->lock); */
-/* 		memcpy(hwaddr->sa_data, neigh->ha, ETH_ALEN); */
-/* 		read_unlock_bh(&neigh->lock); */
-
-/* 		return 0; */
-/* 	} */
-/* 	return -1; */
-/* } */
-
 struct sk_buff *dsr_skb_create(struct dsr_pkt *dp,
 			       struct net_device *dev)
 {
@@ -324,20 +304,24 @@ struct sk_buff *dsr_skb_create(struct dsr_pkt *dp,
 	
 	tot_len = ip_len + dsr_opts_len + dp->payload_len;
 	
-	DEBUG("iph_len=%d dp->payload_len=%d dsr_opts_len=%d TOT len=%d\n", 
-	      ip_len, dp->payload_len, dsr_opts_len, tot_len);
-	
-/* 	skb = alloc_skb(dev->hard_header_len + 15 + tot_len, GFP_ATOMIC); */
+	DEBUG("iph_len=%d dsr_opts_len=%d dp->payload_len=%d tot_len=%d\n", 
+	      ip_len, dsr_opts_len, dp->payload_len, tot_len);
+#ifdef KERNEL26
 	skb = alloc_skb(tot_len +  LL_RESERVED_SPACE(dev), GFP_ATOMIC);
-
+#else
+	skb = alloc_skb(dev->hard_header_len + 15 + tot_len, GFP_ATOMIC);
+#endif
 	if (!skb) {
 		DEBUG("alloc_skb failed\n");
 		return NULL;
 	}
 	
 	/* We align to 16 bytes, for ethernet: 2 bytes + 14 bytes header */
+#ifdef KERNEL26
 	skb_reserve(skb, LL_RESERVED_SPACE(dev));
-       /* 	skb_reserve(skb, (dev->hard_header_len+15)&~15);  */
+#else
+       	skb_reserve(skb, (dev->hard_header_len+15)&~15);
+#endif
 	skb->nh.raw = skb->data;
 	skb->dev = dev;
 	skb->protocol = htons(ETH_P_IP);
@@ -345,15 +329,17 @@ struct sk_buff *dsr_skb_create(struct dsr_pkt *dp,
 	/* Copy in all the headers in the right order */
 	buf = skb_put(skb, tot_len);
 
-	memcpy(buf, dp->nh.iph, ip_len);
+	memcpy(buf, dp->nh.raw, ip_len);
 	
 	buf += ip_len;
 	
+	/* Add DSR header if it exists */
 	if (dsr_opts_len) {
-		memcpy(buf, dp->dh.opth, dsr_opts_len);
+		memcpy(buf, dp->dh.raw, dsr_opts_len);
 		buf += dsr_opts_len;
 	}
 
+	/* Add payload */
 	if (dp->payload_len && dp->payload)
 		memcpy(buf, dp->payload, dp->payload_len);
 	

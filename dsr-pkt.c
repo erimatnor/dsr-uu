@@ -96,15 +96,16 @@ struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb)
 				kfree(dp);
 				return NULL;
 			}
-		
+			
 			memcpy(dp->dsr_opts, dp->dh.raw, dsr_opts_len);
-		} 
-		
+			dp->dh.raw = dp->dsr_opts;
+		} 		
+
 		dp->payload = dp->nh.raw + 
 			(dp->nh.iph->ihl << 2) + dsr_opts_len;
 		
 		dp->payload_len = ntohs(dp->nh.iph->tot_len) - 
-			(dp->nh.iph->ihl << 2) - dsr_opts_len;	
+			(dp->nh.iph->ihl << 2) - dsr_opts_len;
 	}
        	
 	return dp;

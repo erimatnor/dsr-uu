@@ -35,7 +35,7 @@ PATCHLEVEL=$(shell grep ^PATCHLEVEL $(KERNEL_DIR)/Makefile | cut -d' ' -f 3)
 SUBLEVEL=$(shell grep ^SUBLEVEL $(KERNEL_DIR)/Makefile | cut -d' ' -f 3)
 #######
 
-KDEFS=-D__KERNEL__ -DMODULE -DEXPORT_SYMTAB $(DEFS) #-DCONFIG_MODVERSIONS -DMODVERSIONS -include $(KERNEL_INC)/linux/modversions.h 
+KDEFS=-D__KERNEL__ -DMODULE -DEXPORT_SYMTAB $(DEFS) -DCONFIG_MODVERSIONS -DMODVERSIONS -include $(KERNEL_INC)/linux/modversions.h 
 
 KINC=-nostdinc $(shell $(CC) -print-search-dirs | sed -ne 's/install: \(.*\)/-I \1include/gp') -I$(KERNEL_INC)
 KCFLAGS=-Wall -fno-strict-aliasing -O2 $(KDEFS) $(KINC)

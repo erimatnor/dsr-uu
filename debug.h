@@ -49,6 +49,18 @@ static inline char *print_eth(char *addr)
 
 	return buf;
 }
+
+static inline char *print_pkt(char *p, int len)
+{
+	static char buf[3000];
+	int i, l = 0;
+
+	for (i = 0; i < len; i++)
+		l = l + sprintf(buf+l, "%02X", (unsigned char)p[i]);
+	
+	return buf;
+}
+
 int dsr_printk(const char *func, const char *fmt, ...);
 
 void __init dbg_init(void);

@@ -188,19 +188,19 @@ static void __init dsr_dev_setup(struct net_device *dev)
 
 int dsr_dev_deliver(struct dsr_pkt *dp)
 {	
-	struct sk_buff *skb;
+	struct sk_buff *skb = NULL;
 	struct ethhdr *ethh;
 	
 	skb = dsr_skb_create(dp, dsr_dev);
-
+	
 	if (!skb) {
 		DEBUG("Could not allocate skb\n");
+		dsr_pkt_free(dp);
 		return -1;
 	}
 	
 	/* Need to make hardware header visible again since we are going down a
 	 * layer */	
-
 	skb->mac.raw = skb->data - dsr_dev->hard_header_len;
 	skb->ip_summed = CHECKSUM_UNNECESSARY;
 
@@ -215,8 +215,12 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 	dsr_node->stats.rx_bytes += skb->len;
 	dsr_node_unlock(dsr_node);
 
-	netif_rx(skb);
+	/* DEBUG("skb->len=%d skb->dev=%lu\n", skb->len, (unsigned long)skb->dev); */
 	
+/* 	DEBUG("%s\n", print_pkt(skb->data, skb->len)); */
+				
+	netif_rx(skb);
+
 	dsr_pkt_free(dp);
 
 	return 0;
@@ -239,8 +243,8 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 	if (ADD_ACK_REQ && dp->payload_len) {
 		if (!dsr_ack_req_opt_add(dp))
 			goto out_err;
-	
 	}
+
 	dsr_node_lock(dsr_node);
 	skb = dsr_skb_create(dp, dsr_node->slave_dev);
 	dsr_node_unlock(dsr_node);
