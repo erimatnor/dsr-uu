@@ -5,6 +5,7 @@
 #include "kdsr.h"
 #include "dsr-rrep.h"
 #include "dsr-rreq.h"
+#include "dsr-rtc.h"
 
 static unsigned int rreq_seqno = 1;
 
@@ -60,21 +61,19 @@ int dsr_rreq_create(char *buf, int len, struct in_addr target)
 	return 0;
 }
 
-void dsr_rreq_recv(struct in_addr initiator, dsr_rreq_opt_t *rreq)
+void dsr_rreq_recv(dsr_rreq_opt_t *rreq, struct in_addr initiator)
 {
 	if (!rreq)
 		return;
 
-
-	//dsr_parse_source_route(initiator, sr);
-	
-	
 	if (rreq->target == ldev_info.ifaddr.s_addr) {
 		dsr_srt_t *srt;
 		DEBUG("I am RREQ target\n");
 		srt = dsr_srt_new(initiator, ldev_info.ifaddr, 
 				  DSR_RREQ_ADDRS_LEN(rreq), rreq->addrs);
 		
+		dsr_rtc_add(srt, 5000, 0);
+
 		/* send rrep.... */
 		dsr_rrep_send(srt);
 

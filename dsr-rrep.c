@@ -5,6 +5,7 @@
 #include "debug.h"
 #include "dsr-rrep.h"
 #include "dsr-srt.h"
+#include "dsr-rtc.h"
 
 static inline int dsr_rrep_add_srt(dsr_rrep_opt_t *rrep, dsr_srt_t *srt)
 {
@@ -87,4 +88,28 @@ int dsr_rrep_create(char *buf, int len, dsr_srt_t *srt)
 		return -1;
 	}
 	return 0;
+}
+
+void dsr_rrep_recv(dsr_rrep_opt_t *rrep, struct in_addr src, 
+		   struct in_addr dst)
+{
+	
+	if (!rrep)
+		return;
+
+	if (dst.s_addr == ldev_info.ifaddr.s_addr) {
+		dsr_srt_t *srt;
+		/*RREP for this node */
+		
+		DEBUG("RREP for me!\n");
+		
+		srt = dsr_srt_new(dst, src, DSR_RREP_ADDRS_LEN(rrep), 
+				  rrep->addrs);
+
+	/* 	dsr_rtc_add(srt, 5000, 0); */
+
+		kfree(srt);
+	}
+
+
 }

@@ -52,46 +52,55 @@ void dsr_recv(char *buf, int len, struct in_addr src, struct in_addr dst)
 {	
 	dsr_hdr_t *dh;
 	dsr_opt_t *dopt;
-
+	int dsr_len, l;
+	
 	dh = (dsr_hdr_t *)buf;
 
-	if (len < ntohs(dh->length)) {
-		DEBUG("data to short according to DSR header len=%d dh->length=%d!\n", len, ntohs(dh->length));
+	dsr_len = ntohs(dh->length);
+	
+	if (dsr_len > len) {
+		DEBUG("data to short according to DSR header len=%d dh->length=%d!\n", len, dsr_len);
 		return;
 	}
 
+	l = DSR_OPT_HDR_LEN;
 	dopt = DSR_OPT_HDR(dh);
 	
-	switch (dopt->type) {
-	case DSR_OPT_PADN:
-		break;
-	case DSR_OPT_RREQ:
-		DEBUG("Received RREQ\n");
-		dsr_rreq_recv(src, (dsr_rreq_opt_t *)dopt);
-		break;
-	case DSR_OPT_RREP:
-		DEBUG("Received RREP\n");
-		break;
-	case DSR_OPT_ERR:
-		DEBUG("Received RERR\n");
-		break;
-	case DSR_OPT_PREV_HOP:
-		break;
-	case DSR_OPT_ACK:
-		DEBUG("Received ACK\n");
-		break;
-	case DSR_OPT_SRT:
-		DEBUG("Received SRT\n");
-		break;
-	case DSR_OPT_TIMEOUT:	
-		break;
-	case DSR_OPT_FLOWID:
-		break;
-	case DSR_OPT_AREQ:
-		break;
-	case DSR_OPT_PAD1:
-		break;
-	default:
-		DEBUG("Unknown DSR option type=%d\n", dopt->type);
-	}	
+	while (l < len && l < dsr_len) {
+		DEBUG("len=%d dsr_len=%d l=%d\n", len, dsr_len, l);
+		switch (dopt->type) {
+		case DSR_OPT_PADN:
+			break;
+		case DSR_OPT_RREQ:
+			DEBUG("Received RREQ\n");
+			dsr_rreq_recv((dsr_rreq_opt_t *)dopt, src);
+			break;
+		case DSR_OPT_RREP:
+			DEBUG("Received RREP\n");
+			break;
+		case DSR_OPT_ERR:
+			DEBUG("Received RERR\n");
+			break;
+		case DSR_OPT_PREV_HOP:
+			break;
+		case DSR_OPT_ACK:
+			DEBUG("Received ACK\n");
+			break;
+		case DSR_OPT_SRT:
+			DEBUG("Received SRT\n");
+			break;
+		case DSR_OPT_TIMEOUT:	
+			break;
+		case DSR_OPT_FLOWID:
+			break;
+		case DSR_OPT_AREQ:
+			break;
+		case DSR_OPT_PAD1:
+			break;
+		default:
+			DEBUG("Unknown DSR option type=%d\n", dopt->type);
+		}
+		l = l + dopt->length + 2;
+		dopt = DSR_NEXT_OPT(dopt);
+	}
 }

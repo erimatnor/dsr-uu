@@ -19,6 +19,9 @@ typedef struct dsr_rrep_opt {
 #define DSR_RREP_HDR_LEN sizeof(dsr_rrep_opt_t)
 #define DSR_RREP_TOT_LEN IP_HDR_LEN + sizeof(dsr_rrep_opt_t)
 #define DSR_RREP_OPT_LEN(srt) (DSR_RREP_HDR_LEN + srt->laddrs + sizeof(struct in_addr))
+/* Length of source route is length of option, minus reserved/flags field minus
+ * the last source route hop (which is the destination) */
+#define DSR_RREP_ADDRS_LEN(rrep) (rrep->length - (1 + sizeof(struct in_addr))) 
 
 //dsr_rrep_opt_t *dsr_rrep_opt_add(char *buf, int len, dsr_srt_t *sr);
 int dsr_rrep_create(char *buf, int len, dsr_srt_t *srt);

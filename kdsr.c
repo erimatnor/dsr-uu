@@ -33,10 +33,35 @@ module_param(ifname, charp, 0);
 MODULE_PARM(ifname, "s");
 #endif
 
+
+static int kdsr_arpset(struct in_addr addr, struct sockaddr *hw_addr, 
+		       struct net_device *dev)
+{
+	struct neighbour *neigh;
+	int i;
+
+	DEBUG("%08x ", ntohl(addr.s_addr));
+	for (i = 0; i < ETH_ALEN; i++) {
+		DEBUG("%02x", (unsigned char) hw_addr->sa_data[i]);
+	}
+	DEBUG("\n");
+
+	neigh = __neigh_lookup_errno(&arp_tbl, &(addr.s_addr), dev);
+	//        err = PTR_ERR(neigh);
+        if (!IS_ERR(neigh)) {
+		DEBUG("neighb update\n");
+		neigh->parms->delay_probe_time = 0;
+                neigh_update(neigh, hw_addr->sa_data, NUD_REACHABLE, 1, 0);
+                neigh_release(neigh);
+        }
+	return 0;
+}
+
 static int kdsr_recv(struct sk_buff *skb)
 {
 	struct iphdr *iph;
 	struct in_addr src, dst;
+	struct sockaddr hw_addr;
 
 	DEBUG("received dsr packet\n");
 	
@@ -49,6 +74,11 @@ static int kdsr_recv(struct sk_buff *skb)
 	
 	src.s_addr = iph->saddr;
 	dst.s_addr = iph->daddr;
+
+	if (skb->mac.ethernet) {
+		memcpy(hw_addr.sa_data, skb->mac.ethernet->h_source, ETH_ALEN);
+		kdsr_arpset(src, &hw_addr, skb->dev);
+	}
 
 	/* Process packet */
 	dsr_recv(skb->data, skb->len, src, dst);
@@ -206,11 +236,11 @@ int dsr_rrep_send(dsr_srt_t *srt)
 		goto out_err;
 	}
 
-	if (srt->laddrs == 0)
+	if (srt->laddrs == 0) {
+		DEBUG("source route is one hop\n");
 		addr.s_addr = srt->src.s_addr;
-	else
-		
-		addr.s_addr = srt->addrs[0].s_addr;
+	} else		
+		addr.s_addr = srt->addrs->s_addr;
 	
 	if (get_hwaddr(addr, &dest, dev) < 0) {
 		DEBUG("Could not get hardware address for %s\n", 

@@ -46,6 +46,7 @@ typedef struct dsr_hdr {
 
 #define DSR_FIXED_HDR(iph) (dsr_hdr_t *)((char *)iph + (iph->ihl << 2))
 #define DSR_OPT_HDR(dh) (dh->option)
+#define DSR_NEXT_OPT(dopt) ((dsr_opt_t *)((char *)dopt + dopt->length + 2))
 
 struct netdev_info {
     struct in_addr ifaddr;

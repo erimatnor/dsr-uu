@@ -16,10 +16,10 @@ typedef struct dsr_rreq_opt {
 
 #define DSR_RREQ_HDR_LEN sizeof(dsr_rreq_opt_t)
 #define DSR_RREQ_TOT_LEN IP_HDR_LEN + sizeof(dsr_hdr_t) + sizeof(dsr_rreq_opt_t)
-#define DSR_RREQ_ADDRS_LEN(rreq) (rreq->length - 2)
+#define DSR_RREQ_ADDRS_LEN(rreq) (rreq->length - 6)
 
 //dsr_rreq_opt_t *dsr_rreq_opt_add(char *buf, int buflen, struct in_addr target);
 int dsr_rreq_create(char *buf, int len, struct in_addr target);
-void dsr_rreq_recv(struct in_addr initiator, dsr_rreq_opt_t *rreq);
+void dsr_rreq_recv(dsr_rreq_opt_t *rreq, struct in_addr initiator);
 
 #endif  /* _DSR_RREQ */
