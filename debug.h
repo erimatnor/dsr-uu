@@ -2,6 +2,9 @@
 #define _DEBUG_H
 
 #include <stdarg.h>
+#include <linux/types.h>
+#include <linux/string.h>
+#include <linux/kernel.h>
 
 #ifdef DEBUG
 #undef DEBUG
@@ -10,10 +13,9 @@
 #define DEBUG(f, args...)
 #endif
 
-
 #define DEBUG_BUFLEN 256
 
-char inline *print_ip(__u32 addr)
+static inline char *print_ip(__u32 addr)
 {
    static char buf[16];
    
@@ -26,7 +28,7 @@ char inline *print_ip(__u32 addr)
    return buf;
 }
 
-void inline dsr_print(char *fmt, ...)
+static inline void dsr_print(char *fmt, ...)
 {
     char buf[DEBUG_BUFLEN];
     

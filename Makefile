@@ -2,11 +2,12 @@ ifneq (,$(findstring 2.6,$(KERNELRELEASE)))
 
 EXTRA_CFLAGS += -DKERNEL26 -DDEBUG
 obj-m += kdsr.o
-kdsr-objs := dsr-dev.o
+kdsr-objs := dsr-dev.o dsr-opt.o dsr-rreq.o p-queue.o
+
 
 else
 
-SRC := dsr-dev.c
+SRC := dsr-dev.c dsr-opt.c dsr-rreq.c p-queue.c
 
 CC=gcc
 KERNEL=$(shell uname -r)

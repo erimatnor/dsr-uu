@@ -3,6 +3,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/netdevice.h>
+#include <linux/inetdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/init.h>
 #include <linux/if_ether.h>
@@ -12,8 +13,13 @@
 #endif
 
 #include "debug.h"
+#include "dsr.h"
+#include "dsr-rreq.h"
+#include "p-queue.h"
 
 static struct net_device *basedev;
+
+struct netdev_info ldev_info;
 
 static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev);
 static struct net_device_stats *dsr_dev_get_stats(struct net_device *dev);
@@ -66,6 +72,8 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 	struct net_device_stats *stats = dev->priv;
 	struct ethhdr *ethh;
 	struct iphdr *iph;
+	struct sk_buff *skb_rreq;
+	int res = 0;
 
 	ethh = (struct ethhdr *)skb->data;
 	
@@ -73,6 +81,21 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 	case ETH_P_IP:
 		iph = (struct iphdr *)(skb->data + sizeof(struct ethhdr));
 		DEBUG("IP packet src=%s\n", print_ip(iph->saddr));
+
+		
+		p_queue_enqueue_packet(skb, dev_queue_xmit);
+		
+		skb_rreq = dsr_rreq_create(iph->daddr);
+		
+		if (!skb_rreq) {
+			DEBUG("RREQ creation failed!\n");
+			return -1;
+		}
+
+		res = dev_queue_xmit(skb_rreq);
+		
+		if (res < 0)
+			DEBUG("RREQ transmission failed... Free skb?\n");
 		break;
 	default:
 		DEBUG("Unkown packet type\n");
@@ -103,6 +126,9 @@ static int __init dsr_dev_init(void)
 { 
 	int err = 0;
 	struct net_device *dev = NULL;
+	struct in_device *indev = NULL;
+	struct in_ifaddr **ifap = NULL;
+	struct in_ifaddr *ifa = NULL;
 
 	dsr_dev = alloc_netdev(sizeof(struct net_device_stats),
 			       "dsr%d", dsr_dev_setup);
@@ -143,7 +169,22 @@ static int __init dsr_dev_init(void)
 		}
 		read_unlock(&dev_base_lock);
 	}
-
+	
+	indev = in_dev_get(dev);
+	
+	if (indev) {
+		for (ifap = &indev->ifa_list; (ifa = *ifap) != NULL;
+		     ifap = &ifa->ifa_next)
+			if (!strcmp(dev->name, ifa->ifa_label))
+				break;
+		
+		if (ifa) {
+			ldev_info.ifindex = dev->ifindex;
+			ldev_info.ip_addr = ifa->ifa_address;
+			ldev_info.bc_addr = ifa->ifa_broadcast;
+		}
+		in_dev_put(indev);
+	}
 	return err;
 } 
 
