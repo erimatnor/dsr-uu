@@ -71,6 +71,25 @@ static inline int __tbl_add(struct tbl *t, struct list_head *l, criteria_t crit)
 	return len;
 }
 
+static inline int tbl_add_tail(struct tbl *t, struct list_head *l)
+{
+	int len;
+
+	write_lock_bh(&t->lock);
+
+	if (t->len >= t->max_len) {
+		printk(KERN_WARNING "Max list len reached\n");
+		return -ENOSPC;
+	}
+    
+	list_add_tail(l, &t->head);
+
+	len = ++t->len;
+	
+	write_unlock_bh(&t->lock);
+	
+	return len;
+}
 
 static inline void *__tbl_find(struct tbl *t, void *id, criteria_t crit)
 {

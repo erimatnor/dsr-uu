@@ -195,9 +195,7 @@ static int dsr_ip_recv(struct sk_buff *skb)
 		}
 	}
 	if (action & DSR_PKT_FORWARD_RREQ) {
-
 		dsr_dev_xmit(dp);
-		
 		return 0;
 
 	}
@@ -513,11 +511,16 @@ static int __init dsr_module_init(void)
 	
 	if (res < 0)
 		goto cleanup_nf_hook2;
+	
+	res = maint_buf_init();
+
+	if (res < 0)
+		goto cleanup_nf_hook1;
 
 	proc = create_proc_entry(CONFIG_PROC_NAME, S_IRUGO | S_IWUSR, proc_net);
 	
 	if (!proc)
-		goto cleanup_nf_hook1;
+		goto cleanup_maint_buf;
 	
 	proc->owner = THIS_MODULE;
 	proc->read_proc = dsr_config_proc_read;
@@ -541,6 +544,9 @@ static int __init dsr_module_init(void)
  cleanup_proc:
 	proc_net_remove(CONFIG_PROC_NAME);
 #endif
+
+ cleanup_maint_buf:
+	maint_buf_cleanup();
  cleanup_nf_hook1:
 	nf_unregister_hook(&dsr_ip_forward_hook);
  cleanup_nf_hook2:

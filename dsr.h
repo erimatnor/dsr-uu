@@ -150,15 +150,17 @@ static inline struct in_addr my_addr(void)
 	}
 	return my_addr;
 }
+#define USECS_TO_JIFFIES(usec) usecs_to_jiffies(usec)
+#define MSECS_TO_JIFFIES(msec) msecs_to_jiffies(msec)
+#define JIFFIES_TO_MSECS(j) jiffies_to_msecs(j)
+#define JIFFIES_TO_USECS(j) jiffies_to_usecs(j)
+
 static inline unsigned long time_add_msec(unsigned long msecs)
 {
-	unsigned long long t = msecs * HZ / 1000;
+	unsigned long long t = MSECS_TO_JIFFIES(msecs);
 
 	return jiffies + t;
 }
-
-#define MSEC_TO_JIFFIES(msec) ((msec) * HZ / 1000)
-#define JIFFIES_TO_MSEC(j) ((j) * 1000 / HZ)
 
 /* struct dsr_pkt *dsr_pkt_alloc(int size); */
 /* void dsr_pkt_free(struct dsr_pkt *dp); */

@@ -226,8 +226,6 @@ int dsr_ack_req_send(struct in_addr neigh_addr, unsigned short id)
 	
 	DEBUG("Sending ACK REQ for %s id=%u\n", print_ip(neigh_addr.s_addr), id);
 	
-	neigh_tbl_set_ack_req_timer(neigh_addr);
-
 	dsr_dev_xmit(dp);
 	
 	return 1;
@@ -277,10 +275,8 @@ int dsr_ack_opt_recv(struct dsr_ack_opt *ack)
 	if (dst.s_addr != myaddr.s_addr)
 		return DSR_PKT_ERROR;
 
-	neigh_tbl_reset_ack_req_timer(src, id);
-
 	/* Purge packets buffered for this next hop */
-	maint_buf_del(src);
+	maint_buf_del(src, id);
 
 	return DSR_PKT_NONE;
 }
