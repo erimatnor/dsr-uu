@@ -45,7 +45,7 @@ $(KOBJS): %.o: %.c Makefile
 	$(KCC) $(KCFLAGS) -c -o $@ $<
 
 k-dsr.o: $(KOBJS)
-	$(LD) -r $< -o $@
+	$(LD) -r $^ -o $@
 
 depend:
 	@echo "Updating Makefile dependencies..."

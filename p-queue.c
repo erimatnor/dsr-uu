@@ -291,8 +291,7 @@ p_queue_get_info(char *buffer, char **start, off_t offset, int length)
 	return len;
 }
 
-static int
-init_or_cleanup(int init)
+static int init_or_cleanup(int init)
 {
 	int status = -ENOMEM;
 	struct proc_dir_entry *proc;
@@ -321,13 +320,13 @@ cleanup:
 	return status;
 }
 
-int p_queue_init(void)
+int __init p_queue_init(void)
 {
 	
 	return init_or_cleanup(1);
 }
 
-void p_queue_cleanup(void)
+void __exit p_queue_cleanup(void)
 {
 	init_or_cleanup(0);
 }

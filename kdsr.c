@@ -91,15 +91,19 @@ static int __init kdsr_init(void)
 		DEBUG("dsr-dev init failed\n");
 		return -1;
 	}
-
+	
+	DEBUG("Creating packet queue\n"),
 	res = p_queue_init();
 
-	if (res < 0)
+	if (res < 0) {
+		DEBUG("Could not create packet queue\n");
 		goto cleanup_dsr_dev;
+	}
 
 #ifndef KERNEL26
 	inet_add_protocol(&dsr_inet_prot);
-	return res;
+	DEBUG("Setup finished\n");
+	return 0;
 #else
 	res = inet_add_protocol(&dsr_inet_prot, IPPROTO_DSR);
 	
@@ -112,7 +116,6 @@ static int __init kdsr_init(void)
  cleanup_p_queue:
 	p_queue_cleanup();
 #endif
-	
 
  cleanup_dsr_dev:
 	dsr_dev_cleanup();
@@ -127,8 +130,8 @@ static void __exit kdsr_cleanup(void)
 #else
 	inet_del_protocol(&dsr_inet_prot);
 #endif
-	dsr_dev_cleanup();
 	p_queue_cleanup();
+	dsr_dev_cleanup();
 }
 
 module_init(kdsr_init);

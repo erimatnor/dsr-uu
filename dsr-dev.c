@@ -150,6 +150,10 @@ static int dsr_dev_stop(struct net_device *dev)
 
 static void __init dsr_dev_setup(struct net_device *dev)
 {
+
+	
+	/* Fill in device structure with ethernet-generic values. */
+	ether_setup(dev);
 	/* Initialize the device structure. */
 	dev->get_stats = dsr_dev_get_stats;
 	dev->open = dsr_dev_open;
@@ -161,8 +165,6 @@ static void __init dsr_dev_setup(struct net_device *dev)
 	dev->accept_fastpath = dsr_dev_accept_fastpath;
 #endif
 
-	/* Fill in device structure with ethernet-generic values. */
-	ether_setup(dev);
 	dev->tx_queue_len = 0;
 	dev->flags |= IFF_NOARP;
 	dev->flags &= ~IFF_MULTICAST;
@@ -247,33 +249,25 @@ int __init dsr_dev_init(char *ifname)
 	if (!dsr_dev)
 		return -ENOMEM;
 
-	res = register_netdev(dsr_dev);
-
-	if (res < 0)
-		goto cleanup_netdev;
-
-	res = register_netdevice_notifier(&dsr_dev_notifier);
-
-	if (res < 0)
-		goto cleanup_netdev_register;
-	
 	if (basedevname) {
 		dev = dev_get_by_name(basedevname);
 		if (!dev) {
 			DEBUG("device %s not found\n", basedevname);
 			res = -1;
-			goto cleanup_notifier;
+			goto cleanup_netdev;
 		} 
 		
 		if (dev == dsr_dev) {
 			DEBUG("invalid base device %s\n", basedevname);
 			res = -1;
-			goto cleanup_dev;
-		}
-		
+			dev_put(dev);
+			goto cleanup_netdev;
+		}		
 		basedev = dev;
-		/* if (dev) */
-/* 			netbox_addL2if(dev->ifindex, mysapfhandle); */
+
+		if (dev)
+			dev_put(dev);
+	
 	} else {
 		read_lock(&dev_base_lock);
 		for (dev = dev_base; dev != NULL; dev = dev->next) {
@@ -284,27 +278,27 @@ int __init dsr_dev_init(char *ifname)
 			basedev = dev;
 			basedevname = dev->name;
 			DEBUG("wireless interface is %s\n", dev->name);
-			/* netbox_addL2if(dev->ifindex, mysapfhandle); */
 		}
 		read_unlock(&dev_base_lock);
 	}
 	
-	if (dev)
-		dev_put(dev);
-		
+	
+	res = register_netdev(dsr_dev);
+
+	if (res < 0)
+		goto cleanup_netdev;
+
+	res = register_netdevice_notifier(&dsr_dev_notifier);
+
+	if (res < 0)
+		goto cleanup_netdev_register;
+	
 	return res;
 	
- cleanup_dev:
-	if (dev)
-		dev_put(dev);
- cleanup_notifier:
-	unregister_netdevice_notifier(&dsr_dev_notifier);
  cleanup_netdev_register:
 	unregister_netdev(dsr_dev);
  cleanup_netdev:
 	free_netdev(dsr_dev);
-	dsr_dev = NULL;
-	
 	return res;
 } 
 
