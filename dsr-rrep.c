@@ -3,7 +3,6 @@
 #include <linux/string.h>
 #include <linux/if_ether.h>
 #include <net/ip.h>
-#include "kdsr.h"
 #include "dsr-dev.h"
 
 #endif /* __KERNEL__ */

@@ -8,7 +8,6 @@
 #include <net/sock.h>
 #include <linux/icmp.h>
 #include <net/icmp.h>
-#include "kdsr.h"
 #endif
 
 #ifdef NS2

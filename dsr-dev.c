@@ -13,8 +13,8 @@
 
 #include "debug.h"
 #include "dsr.h"
+#include "neigh.h"
 #include "dsr-pkt.h"
-#include "kdsr.h"
 #include "dsr-opt.h"
 #include "dsr-rreq.h"
 #include "link-cache.h"
@@ -43,6 +43,87 @@ static struct packet_type dsr_packet_type = {
 	.func = dsr_dev_llrecv,
 };
 
+struct sk_buff *dsr_skb_create(struct dsr_pkt *dp,
+			       struct net_device *dev)
+{
+	struct sk_buff *skb;
+	char *buf;
+	int ip_len;
+	int tot_len;
+	int dsr_opts_len = dsr_pkt_opts_len(dp);
+	
+	ip_len = dp->nh.iph->ihl << 2;
+	
+	tot_len = ip_len + dsr_opts_len + dp->payload_len;
+	
+	DEBUG("ip_len=%d dsr_opts_len=%d payload_len=%d tot_len=%d\n", 
+	      ip_len, dsr_opts_len, dp->payload_len, tot_len);
+#ifdef KERNEL26
+	skb = alloc_skb(tot_len +  LL_RESERVED_SPACE(dev), GFP_ATOMIC);
+#else
+	skb = alloc_skb(dev->hard_header_len + 15 + tot_len, GFP_ATOMIC);
+#endif
+	if (!skb) {
+		DEBUG("alloc_skb failed\n");
+		return NULL;
+	}
+	
+	/* We align to 16 bytes, for ethernet: 2 bytes + 14 bytes header */
+#ifdef KERNEL26
+	skb_reserve(skb, LL_RESERVED_SPACE(dev));
+#else
+       	skb_reserve(skb, (dev->hard_header_len+15)&~15);
+#endif
+	skb->nh.raw = skb->data;
+	skb->dev = dev;
+	skb->protocol = htons(ETH_P_IP);
+
+	/* Copy in all the headers in the right order */
+	buf = skb_put(skb, tot_len);
+
+	memcpy(buf, dp->nh.raw, ip_len);
+	
+	buf += ip_len;
+	
+	/* Add DSR header if it exists */
+	if (dsr_opts_len) {
+		memcpy(buf, dp->dh.raw, dsr_opts_len);
+		buf += dsr_opts_len;
+	}
+
+	/* Add payload */
+	if (dp->payload_len && dp->payload)
+		memcpy(buf, dp->payload, dp->payload_len);
+	
+	return skb;
+}
+
+int dsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb) 
+{
+
+		
+	struct sockaddr broadcast = {AF_UNSPEC, {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
+	struct neighbor_info neigh_info;
+	
+	if (dp->dst.s_addr == DSR_BROADCAST)
+		memcpy(neigh_info.hw_addr.sa_data , broadcast.sa_data, ETH_ALEN);
+	else {
+		/* Get hardware destination address */
+		if (neigh_tbl_query(dp->nxt_hop, &neigh_info) < 0) {
+			DEBUG("Could not get hardware address for next hop %s\n", print_ip(dp->nxt_hop));
+			return -1;
+		}
+	}
+	
+	if (skb->dev->hard_header) {
+		skb->dev->hard_header(skb, skb->dev, ETH_P_IP,
+				      neigh_info.hw_addr.sa_data, 0, skb->len);
+	} else {
+		DEBUG("Missing hard_header\n");
+		return -1;
+	}
+	return 0;
+}
 
 static int dsr_dev_inetaddr_event(struct notifier_block *this, 
 				  unsigned long event,
@@ -412,6 +493,7 @@ static struct notifier_block netdev_notifier = {
 static struct notifier_block inetaddr_notifier = {
 	.notifier_call = dsr_dev_inetaddr_event,
 };
+
 
 
 int  dsr_dev_init(char *ifname)
