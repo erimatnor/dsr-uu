@@ -11,7 +11,7 @@
 #include "dsr-srt.h"
 #include "dsr-rtc.h"
 #include "dsr-dev.h"
-#include "p-queue.h"
+#include "send-buf.h"
 #include "kdsr.h"
 
 #define GRAT_RREP_TBL_MAX_LEN 64

@@ -11,7 +11,7 @@
 #include "dsr-opt.h"
 #include "dsr-rtc.h"
 #include "dsr-dev.h"
-#include "p-queue.h"
+#include "send-buf.h"
 
 #define RREQ_TBL_MAX_LEN 64 /* Should be enough */
 #define RREQ_TBL_PROC_NAME "dsr_rreq_tbl"
@@ -432,7 +432,7 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp)
 		dsr_rtc_add(srt_rev, 60000, 0);
 		
 		/* Send buffered packets */
-		p_queue_set_verdict(P_QUEUE_SEND, srt_rev->dst.s_addr);
+		send_buf_set_verdict(SEND_BUF_SEND, srt_rev->dst.s_addr);
 
 		kfree(srt_rev);
 		

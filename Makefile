@@ -1,11 +1,11 @@
 
-SRC=kdsr.c dsr-dev.c dsr-opt.c dsr-rreq.c dsr-rrep.c dsr-srt.c dsr-ack.c p-queue.c 
+SRC=dsr-module.c dsr-dev.c dsr-opt.c dsr-rreq.c dsr-rrep.c dsr-srt.c dsr-ack.c send-buf.c 
 
 DEFS=-DDEBUG 
 
-MODNAME=kdsr-m
-RTC_TRG=kdsr-link-cache
-RTC_SRC=dsr-link-cache.c
+MODNAME=kdsr
+RTC_TRG=linkcache
+RTC_SRC=link-cache.c
 
 ifneq (,$(findstring 2.6,$(KERNELRELEASE)))
 
@@ -74,24 +74,28 @@ TAGS: *.c *.h
 	etags.emacs *.c *.h
 
 clean:
-	rm -rf .*ko* .*mod* .*cmd *mod* .tmp_versions *~ *.ko *.o *.ver Makefile.bak .*o.d TAGS TODO
+	rm -rf .*ko* $(RTC_TRG).*mod* $(MODNAME).*mod* .*cmd .tmp_versions *~ *.ko *.o *.ver Makefile.bak .*o.d TAGS TODO
 endif
 # DO NOT DELETE
 
+dsr-ack.o: tbl.h dsr.h debug.h dsr-opt.h dsr-ack.h dsr-dev.h dsr-rtc.h
+dsr-ack.o: dsr-srt.h
 dsr-dev.o: debug.h dsr.h kdsr.h dsr-opt.h dsr-rreq.h dsr-rtc.h dsr-srt.h
-dsr-dev.o: p-queue.h
-dsr-opt.o: debug.h dsr.h dsr-opt.h dsr-rreq.h dsr-rrep.h dsr-srt.h kdsr.h
-dsr-rrep.o: dsr.h debug.h dsr-rrep.h dsr-srt.h dsr-opt.h dsr-rtc.h dsr-dev.h
-dsr-rrep.o: p-queue.h kdsr.h
+dsr-dev.o: send-buf.h
+dsr-module.o: dsr.h dsr-opt.h dsr-dev.h dsr-rreq.h dsr-rrep.h dsr-srt.h
+dsr-module.o: send-buf.h debug.h dsr-rtc.h dsr-ack.h
+dsr-opt.o: debug.h dsr.h dsr-opt.h dsr-rreq.h dsr-rrep.h dsr-srt.h dsr-ack.h
+dsr-opt.o: kdsr.h
+dsr-rrep.o: dsr.h debug.h tbl.h dsr-rrep.h dsr-srt.h dsr-opt.h dsr-rtc.h
+dsr-rrep.o: dsr-dev.h send-buf.h kdsr.h
 dsr-rreq.o: debug.h dsr.h tbl.h kdsr.h dsr-rrep.h dsr-srt.h dsr-rreq.h
-dsr-rreq.o: dsr-opt.h dsr-rtc.h dsr-dev.h p-queue.h
+dsr-rreq.o: dsr-opt.h dsr-rtc.h dsr-dev.h send-buf.h
 dsr-rtc-simple.o: tbl.h dsr-rtc.h dsr-srt.h dsr.h debug.h
-dsr-srt.o: dsr.h dsr-srt.h dsr-opt.h debug.h
-kdsr.o: dsr.h dsr-opt.h dsr-dev.h dsr-rreq.h dsr-rrep.h dsr-srt.h p-queue.h
-kdsr.o: debug.h
-p-queue.o: p-queue.h dsr.h debug.h dsr-rtc.h dsr-srt.h kdsr.h
+dsr-srt.o: dsr.h dsr-srt.h dsr-opt.h dsr-ack.h debug.h
+link-cache.o: dsr-rtc.h dsr-srt.h dsr.h tbl.h debug.h
+send-buf.o: send-buf.h dsr.h debug.h dsr-rtc.h dsr-srt.h kdsr.h
 dsr-rrep.o: dsr.h dsr-srt.h
 dsr-rreq.o: dsr.h
 dsr-rtc.o: dsr-srt.h dsr.h
 dsr-srt.o: dsr.h
-p-queue.o: dsr.h
+send-buf.o: dsr.h

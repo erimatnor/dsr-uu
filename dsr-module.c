@@ -25,7 +25,7 @@
 #include "dsr-rreq.h"
 #include "dsr-rrep.h"
 #include "dsr-srt.h"
-#include "p-queue.h"
+#include "send-buf.h"
 #include "debug.h"
 #include "dsr-rtc.h"
 #include "dsr-ack.h"
@@ -159,7 +159,7 @@ static int kdsr_ip_recv(struct sk_buff *skb)
 		/* Send buffered packets */
 		DEBUG("Sending buffered packets\n");
 		if (dp.srt) {
-			p_queue_set_verdict(P_QUEUE_SEND, dp.srt->src.s_addr);
+			send_buf_set_verdict(SEND_BUF_SEND, dp.srt->src.s_addr);
 		}
 	}
 
@@ -348,7 +348,7 @@ static int __init kdsr_init(void)
 	}
 	
 	DEBUG("Creating packet queue\n"),
-	res = p_queue_init();
+	res = send_buf_init();
 
 	if (res < 0) 
 		goto cleanup_dsr_dev;
@@ -356,7 +356,7 @@ static int __init kdsr_init(void)
 	res = rreq_tbl_init();
 
 	if (res < 0) 
-		goto cleanup_p_queue;
+		goto cleanup_send_buf;
 			
 	res = neigh_tbl_init();
 
@@ -389,8 +389,8 @@ static int __init kdsr_init(void)
 	neigh_tbl_cleanup();
  cleanup_rreq_tbl:
 	rreq_tbl_cleanup();
- cleanup_p_queue:
-	p_queue_cleanup();
+ cleanup_send_buf:
+	send_buf_cleanup();
  cleanup_dsr_dev:
 	dsr_dev_cleanup();
 	
@@ -405,7 +405,7 @@ static void __exit kdsr_cleanup(void)
 	inet_del_protocol(&dsr_inet_prot);
 #endif
 	nf_unregister_hook(&dsr_pre_routing_hook);
-	p_queue_cleanup();
+	send_buf_cleanup();
 	dsr_dev_cleanup();
 	rreq_tbl_cleanup();
 	neigh_tbl_cleanup();

@@ -16,7 +16,7 @@
 #include "dsr-rreq.h"
 #include "dsr-rtc.h"
 #include "dsr-srt.h"
-#include "p-queue.h"
+#include "send-buf.h"
 
 /* Our dsr device */
 struct net_device *dsr_dev;
@@ -293,7 +293,7 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 			kfree(dp.srt);
 
 		} else {			
-			res = p_queue_enqueue_packet(&dp, skb, dsr_dev_xmit);
+			res = send_buf_enqueue_packet(&dp, skb, dsr_dev_xmit);
 			
 			if (res < 0) {
 				DEBUG("Queueing failed!\n");
