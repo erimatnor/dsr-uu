@@ -199,8 +199,6 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 	
 	/* Need to make hardware header visible again since we are going down a
 	 * layer */	
-	DEBUG("skb->len=%d headroom=%d tailroom=%d\n", 
-	      skb->len, skb_headroom(skb), skb_tailroom(skb));
 
 	skb->mac.raw = skb->data - dsr_dev->hard_header_len;
 	skb->ip_summed = CHECKSUM_UNNECESSARY;
@@ -210,8 +208,6 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 	memcpy(ethh->h_dest, dsr_dev->dev_addr, ETH_ALEN);
 	memset(ethh->h_source, 0, ETH_ALEN);
 	ethh->h_proto = htons(ETH_P_IP);
-
-	DEBUG("ethh dest=%s\n", print_eth(ethh->h_dest));
 
 	dsr_node_lock(dsr_node);
 	dsr_node->stats.rx_packets++;
@@ -237,8 +233,7 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 	}
        
 	/* Create hardware header */
-
-	if (kdsr_hw_header_create(dp, skb, NULL) < 0) {
+	if (kdsr_hw_header_create(dp, skb) < 0) {
 		DEBUG("Could not create harware header\n");
 		kfree_skb(skb);
 		return -1;

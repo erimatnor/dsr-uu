@@ -121,6 +121,9 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp)
 
 		DEBUG("RREQ OPT for me\n");
 		
+		/* According to the draft, the dest addr in the IP header must
+		 * be updated with the target address */
+		dp->iph->daddr = dp->rreq_opt->target;
 	
 		DEBUG("srt: %s\n", print_srt(dp->srt));
 
@@ -147,8 +150,11 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp)
 			if (dp->srt->addrs[i].s_addr == my_addr.s_addr) {
 				return DSR_PKT_DROP;
 			}
+		
+		/* TODO: Reply if I have a route */
 
-		/* FIXME: Add myself to source route.... */
+		
+		/* TODO: Add myself to source route.... */
 		
 		/* Forward RREQ */
 		return DSR_PKT_FORWARD;

@@ -40,10 +40,10 @@ KCFLAGS=-Wall -fno-strict-aliasing -O2 $(KDEFS) $(KINC)
 
 # Check for kernel version
 ifeq ($(PATCHLEVEL),6)
-default: $(MODNAME).ko $(RTCNAME).ko
+default: $(MODNAME).ko $(RTCNAME).ko TODO
 else 
 # Assume kernel 2.4
-default: $(MODNAME).o $(RTCNAME).o
+default: $(MODNAME).o $(RTCNAME).o TODO
 endif
 
 $(MODNAME).ko: $(SRC) Makefile
@@ -65,11 +65,15 @@ depend:
 	@echo "Updating Makefile dependencies..."
 	@makedepend -Y./ -- $(DEFS) -- $(SRC) &>/dev/null
 
+TODO:
+	grep -n "TODO:" *.c *.h > TODO
+	cat TODO
+
 TAGS: *.c *.h
 	etags.emacs *.c *.h
 
 clean:
-	rm -rf .*ko* .*mod* .*cmd *mod* .tmp_versions *~ *.ko *.o *.ver Makefile.bak .*o.d TAGS
+	rm -rf .*ko* .*mod* .*cmd *mod* .tmp_versions *~ *.ko *.o *.ver Makefile.bak .*o.d TAGS TODO
 endif
 # DO NOT DELETE
 

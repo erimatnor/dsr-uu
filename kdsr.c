@@ -117,28 +117,21 @@ static int kdsr_ip_recv(struct sk_buff *skb)
 	/* Check action... */
 
 	if (action & DSR_PKT_SRT_REMOVE) {
-		int removed;
-		
 		DEBUG("DSR options remove!\n");
+		dsr_opts_remove(&dp);
 		
-		removed = dsr_opts_remove(&dp);
-		
-/* 		if (removed) */
-/* 			skb_trim(skb, skb->len - removed); */
-/* 		else */
-/* 			action = DSR_PKT_ERROR; */
 	}
 	if (action & DSR_PKT_FORWARD) {
 		DEBUG("Forwarding %s", print_ip(dp.src.s_addr));
 		printk(" %s", print_ip(dp.dst.s_addr));		
-		printk("nh %s\n", print_ip(dp.nxt_hop.s_addr));
+		printk(" nh %s\n", print_ip(dp.nxt_hop.s_addr));
 
 		if (dp.iph->ttl < 1) {
 			DEBUG("ttl=0, dropping!\n");
 			action = DSR_PKT_DROP;
 		} else {
 			DEBUG("Forwarding (dev_queue_xmit)\n");
-			/* dev_queue_xmit(dp.skb); */
+			dsr_dev_xmit(&dp);
 		}
 	}
 	if (action & DSR_PKT_SEND_RREP) {
@@ -263,32 +256,26 @@ struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp,
 	return skb;
 }
 
-int kdsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb, 
-			  struct sockaddr *dest) 
+int kdsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb) 
 {
 
 		
 	struct sockaddr broadcast = {AF_UNSPEC, {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
-	struct sockaddr dest2;
+	struct sockaddr dest;
 	
-	if (!dest && dp->nxt_hop.s_addr == DSR_BROADCAST)
-	       dest = &broadcast;
-	
-	/* Get hardware destination address */
- 	if (!dest) {
-		dest = &dest2;
-		
-		if (kdsr_get_hwaddr(dp->nxt_hop, dest, skb->dev) < 0) {
+	if (dp->dst.s_addr == DSR_BROADCAST)
+		memcpy(dest.sa_data , broadcast.sa_data, ETH_ALEN);
+	else {
+		/* Get hardware destination address */
+		if (kdsr_get_hwaddr(dp->nxt_hop, &dest, skb->dev) < 0) {
 			DEBUG("Could not get hardware address for next hop %s\n", print_ip(dp->nxt_hop.s_addr));
 			return -1;
 		}
 	}
-
-	DEBUG("dest=%s\n", print_eth(dest->sa_data));
-
+	
 	if (skb->dev->hard_header) {
 		skb->dev->hard_header(skb, skb->dev, ETH_P_IP,
-				      dest->sa_data, 0, skb->len);
+				      dest.sa_data, 0, skb->len);
 	} else {
 		DEBUG("Missing hard_header\n");
 		return -1;
