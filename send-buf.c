@@ -11,7 +11,7 @@
 #include "dsr-rtc.h"
 #include "kdsr.h"
 
-#define SEND_BUF_MAX_LEN 1024
+#define SEND_BUF_MAX_LEN 10
 #define SEND_BUF_PROC_FS_NAME "send_buf"
 
 TBL(send_buf, SEND_BUF_MAX_LEN);
@@ -40,7 +40,7 @@ static inline int crit_garbage(void *pos, void *n)
 	unsigned long *now = n; 
 	struct send_buf_entry *e = pos;
 	
-	if (e->qtime + (PARAM(SendBufferTimeout) * HZ) > *now) {
+	if (e->qtime + (PARAM(SendBufferTimeout) * HZ) < *now) {
 		if (e->dp)
 			dsr_pkt_free(e->dp);
 		return 1;
@@ -108,6 +108,25 @@ int send_buf_enqueue_packet(struct dsr_pkt *dp, int (*okfn)(struct dsr_pkt *))
 	
 	res = tbl_add_tail(&send_buf, &e->l);
 	
+	if (res < 0) {
+		struct send_buf_entry *f;
+		
+		DEBUG("buffer full, removing first\n");
+		f = tbl_detach_first(&send_buf);
+		
+		dsr_pkt_free(f->dp);
+		kfree(f);
+
+		res = tbl_add_tail(&send_buf, &e->l);
+		
+		if (res < 0) {
+			DEBUG("Could not buffer packet\n");
+			dsr_pkt_free(e->dp);
+			kfree (e);
+			return -1;
+		}
+	}
+		
 	if (empty) {
 		send_buf_timer.expires = jiffies + (PARAM(SendBufferTimeout) * HZ);
 		add_timer(&send_buf_timer);
