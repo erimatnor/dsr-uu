@@ -14,13 +14,11 @@
 #include <net/dst.h>
 #include <net/neighbour.h>
 #include <asm/uaccess.h>
-/* #include <linux/parser.h> */
 #include <linux/netfilter_ipv4.h>
 #ifdef KERNEL26
 #include <linux/moduleparam.h>
 #endif
 #include <net/icmp.h>
-//#include <net/xfrm.h>
 
 #include "dsr.h"
 #include "dsr-opt.h"
@@ -34,6 +32,7 @@
 #include "dsr-ack.h"
 
 static char *ifname = NULL;
+static char *mackill = NULL;
 
 MODULE_AUTHOR("erik.nordstrom@it.uu.se");
 MODULE_DESCRIPTION("Dynamic Source Routing (DSR) protocol stack");
@@ -41,11 +40,66 @@ MODULE_LICENSE("GPL");
 
 #ifdef KERNEL26
 module_param(ifname, charp, 0);
+module_param(mackill, charp, 0);
 #else
 MODULE_PARM(ifname, "s");
+MODULE_PARM(mackill, "s");
 #endif
 
 #define CONFIG_PROC_NAME "dsr_config"
+
+#define MAX_MACKILL 10
+
+static unsigned char mackill_list[MAX_MACKILL][ETH_ALEN];
+static int mackill_len = 0;
+
+/* Stolen from LUNAR <christian.tschudin@unibas.ch> */
+static int parse_mackill(void)
+{
+	char *pa[MAX_MACKILL], *cp;
+	int i, j; // , ia[ETH_ALEN];
+
+	cp = mackill;
+	while (cp && mackill_len < MAX_MACKILL) {
+		pa[mackill_len] = strsep(&cp, ",");
+		if (!pa[mackill_len])
+			break;
+		mackill_len++;
+	}
+	for (i = 0; i < mackill_len; i++) {
+		// lnx kernel bug in 2.4.X: sscanf format "%x" does not work ....
+		cp = pa[i];
+		for (j = 0; j < ETH_ALEN; j++, cp++) {
+			mackill_list[i][j] = 0;
+			for (; isxdigit(*cp); cp++) {
+				mackill_list[i][j] =
+					(mackill_list[i][j] << 4) |
+					(*cp <= '9' ? (*cp - '0') :
+					           ((*cp & 0x07) + 9 ));
+			}
+			if (*cp && *cp != ':') break;
+		}
+		if ( j != ETH_ALEN) {
+			DEBUG("mackill: error in MAC addr %s\n", pa[i]);
+			mackill_len--;
+			return -1;
+		}
+
+		DEBUG("mackill +%s\n", print_eth(mackill_list[i]));
+	}
+	return 0;
+}
+
+static int do_mackill(char *mac)
+{
+	int i;
+
+	for (i = 0; i < mackill_len; i++) {
+		if (memcmp(mac, mackill_list[i], ETH_ALEN) == 0)
+			return 1;
+	}
+	return 0;
+}
 
 static int dsr_arpset(struct in_addr addr, struct sockaddr *hw_addr, 
 		       struct net_device *dev)
@@ -77,20 +131,6 @@ static int dsr_ip_recv(struct sk_buff *skb)
 	DEBUG("Received DSR packet\n");
 		
 	memset(&dp, 0, sizeof(dp));
-	
-	dp.nh.iph = skb->nh.iph;
-		
-	if ((skb->len + (dp.nh.iph->ihl << 2)) < ntohs(dp.nh.iph->tot_len)) {
-		DEBUG("data to short according to IP header len=%d tot_len=%d!\n", skb->len + (dp.nh.iph->ihl << 2), ntohs(dp.nh.iph->tot_len));
-		kfree_skb(skb);
-		return -1;
-	}
-	
-	dp.dh.raw = skb->data;
-	dp.dsr_opts_len = ntohs(dp.dh.opth->p_len) + DSR_OPT_HDR_LEN;
-
-	dp.data = skb->data + dp.dsr_opts_len;
-	dp.data_len = skb->len - dp.dsr_opts_len;
 
 	/* Get IP stuff that we need */
 	dp.src.s_addr = dp.nh.iph->saddr;
@@ -141,6 +181,46 @@ static int dsr_ip_recv(struct sk_buff *skb)
 			dsr_dev_xmit(&dp);
 		}
 	}
+	if (action & DSR_PKT_FORWARD_RREQ) {
+		struct in_addr myaddr = my_addr();
+		int n, dsr_len, len_to_rreq;		
+		char *tmp;
+
+		/* We need to add ourselves to the source route in the RREQ */
+		n = DSR_RREQ_ADDRS_LEN(dp.rreq_opt) / sizeof(struct in_addr);
+	
+		dsr_len = ntohs(dp.dh.opth->p_len) + 2;
+		len_to_rreq = (char *)dp.rreq_opt - dp.dh.raw;
+
+		tmp = kmalloc(dsr_len + sizeof(struct in_addr), GFP_ATOMIC);
+		
+		if ((dp.dh.raw + dsr_len) > 
+		    ((char *)dp.rreq_opt + dp.rreq_opt->length + 2)) {
+			char *tmp2;
+			int len_after_rreq;
+			
+			len_after_rreq = (dp.dh.raw + dsr_len) - ((char *)dp.rreq_opt + dp.rreq_opt->length + 2);
+			
+			/* Copy everything up to and including rreq_opt */
+			memcpy(tmp, dp.dh.raw, len_to_rreq + dp.rreq_opt->length + 2);
+			tmp2 = tmp + len_to_rreq + dp.rreq_opt->length + 2 + sizeof(struct in_addr);
+
+			memcpy(tmp2, dp.dh.raw + len_to_rreq + dp.rreq_opt->length + 2 + sizeof(struct in_addr), len_after_rreq);
+
+			
+		} else {
+			memcpy(tmp, dp.dh.raw, ntohs(dp.dh.opth->p_len) + 2);
+		}
+		dp.dh.raw = tmp;
+		dp.rreq_opt = (struct rreq_opt *)(tmp + len_to_rreq);
+		dp.rreq_opt->addrs[n] = myaddr.s_addr;
+		dp.rreq_opt->length += sizeof(struct in_addr);
+		
+		dsr_dev_xmit(&dp);
+		
+		kfree(dp.dh.raw);
+	}
+
 	if (action & DSR_PKT_SEND_RREP) {
 		struct dsr_srt *srt_rev;
 
@@ -187,7 +267,7 @@ static int dsr_ip_recv(struct sk_buff *skb)
 		kfree_skb(skb);
 		return 0;
 	}
-	
+	kfree_skb(skb);
 	return 0;
 };
 
@@ -255,10 +335,9 @@ struct sk_buff *dsr_skb_create(struct dsr_pkt *dp,
 	
 	buf += ip_len;
 	
-	if (dp->dsr_opts_len && dp->dh.opth) {
+	if (dp->dsr_opts_len && dp->dh.raw) {
 		memcpy(buf, dp->dh.opth, dp->dsr_opts_len);
 		buf += dp->dsr_opts_len;
-		kfree(dp->dh.raw);
 	}
 
 	if (dp->data_len && dp->data)
@@ -360,16 +439,22 @@ static unsigned int dsr_pre_routing_recv(unsigned int hooknum,
 	struct iphdr *iph = (*skb)->nh.iph;
 	struct in_addr myaddr = my_addr();
 	
-	if (in && in->ifindex == get_slave_dev_ifindex() && iph && 
-	    iph->protocol == IPPROTO_DSR && 
-	    iph->daddr != myaddr.s_addr) {
+	if (in && in->ifindex == get_slave_dev_ifindex() && 
+	    (*skb)->protocol == htons(ETH_P_IP)) {
 		
-		DEBUG("Packet for ip_rcv\n");
+		if (do_mackill((*skb)->mac.raw + ETH_ALEN))
+			return NF_DROP;
+
+		if (iph && iph->protocol == IPPROTO_DSR && 
+		    iph->daddr != myaddr.s_addr) {
 		
-		(*skb)->data = (*skb)->nh.raw + (iph->ihl << 2);
-		dsr_ip_recv(*skb);
+			DEBUG("Packet for ip_rcv\n");
+			
+			(*skb)->data = (*skb)->nh.raw + (iph->ihl << 2);
+			dsr_ip_recv(*skb);
 		
-		return NF_STOLEN;
+			return NF_STOLEN;
+		}
 	}
 	return NF_ACCEPT;	
 }
@@ -415,6 +500,8 @@ static int __init dsr_module_init(void)
 #ifdef DEBUG
 	dbg_init();
 #endif
+	parse_mackill();
+
 	res = send_buf_init();
 
 	if (res < 0) 

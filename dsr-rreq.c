@@ -316,6 +316,8 @@ int dsr_rreq_send(struct in_addr target, int ttl, unsigned long timeout)
 	dsr_dev_xmit(&dp);
 
 	rreq_tbl_add(target, dp.src, target, ttl, rreq_seqno, timeout);
+	
+	kfree(dp.dh.raw);
 
 	return 1;
 }
@@ -330,6 +332,7 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp)
 {
 	struct in_addr myaddr;
 	struct in_addr trg;
+	struct dsr_srt *srt_rev;
 
 	if (!dp || !dp->rreq_opt)
 		return DSR_PKT_DROP;
@@ -352,9 +355,22 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp)
 
 	DEBUG("RREQ target=%s\n", print_ip(dp->rreq_opt->target));
 	DEBUG("my addr %s\n", print_ip(myaddr.s_addr));
+	
+        /* Add reversed source route */
+	srt_rev = dsr_srt_new_rev(dp->srt);
+	
+	DEBUG("srt: %s\n", print_srt(dp->srt));
 
+	DEBUG("srt_rev: %s\n", print_srt(srt_rev));
+	
+	dsr_rtc_add(srt_rev, 60000, 0);
+	
+	/* Send buffered packets */
+	send_buf_set_verdict(SEND_BUF_SEND, srt_rev->dst.s_addr);
+
+	kfree(srt_rev);
+		
 	if (dp->rreq_opt->target == myaddr.s_addr) {
-		struct dsr_srt *srt_rev;
 
 		DEBUG("RREQ OPT for me\n");
 		
@@ -362,39 +378,22 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp)
 		 * be updated with the target address */
 		dp->nh.iph->daddr = dp->rreq_opt->target;
 	
-		DEBUG("srt: %s\n", print_srt(dp->srt));
-
-		/* Add reversed source route */
-		srt_rev = dsr_srt_new_rev(dp->srt);
-		
-		DEBUG("srt_rev: %s\n", print_srt(srt_rev));
-
-		dsr_rtc_add(srt_rev, 60000, 0);
-		
-		/* Send buffered packets */
-		send_buf_set_verdict(SEND_BUF_SEND, srt_rev->dst.s_addr);
-
-		kfree(srt_rev);
 		
 		return DSR_PKT_SEND_RREP | DSR_PKT_DROP;
 	} else {
 		int i, n;
+		/* TODO: Reply if I have a route */
 		
 		n = DSR_RREQ_ADDRS_LEN(dp->rreq_opt) / sizeof(struct in_addr);
 		
 		/* Examine source route if this node already exists in it */
 		for (i = 0; i < n; i++)
-			if (dp->srt->addrs[i].s_addr == myaddr.s_addr) {
+			if (dp->srt->addrs[i].s_addr == myaddr.s_addr)
 				return DSR_PKT_DROP;
-			}
 		
-		/* TODO: Reply if I have a route */
-
-		
-		/* TODO: Add myself to source route.... */
-		
+	      
 		/* Forward RREQ */
-		return DSR_PKT_FORWARD;
+		return DSR_PKT_FORWARD_RREQ;
 	}
 
 	return DSR_PKT_DROP;

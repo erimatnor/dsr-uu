@@ -275,6 +275,8 @@ static int dsr_ack_send(struct neighbor *neigh)
 	neigh->last_ack_tx_time = jiffies;
 
 	dsr_dev_xmit(&dp);
+	
+	kfree(dp.dh.raw);
 
 	return 1;
 }
@@ -375,6 +377,8 @@ static int dsr_ack_req_send(struct neighbor *neigh)
 	DEBUG("Sending ACK REQ for %s id=%u\n", print_ip(neigh->addr.s_addr), neigh->id_req);
 
 	dsr_dev_xmit(&dp);
+	
+	kfree(dp.dh.raw);
 
 	return 1;
 }

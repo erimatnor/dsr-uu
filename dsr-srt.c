@@ -5,6 +5,7 @@
 #include "dsr-srt.h"
 #include "dsr-opt.h"
 #include "dsr-ack.h"
+#include "dsr-rtc.h"
 #include "debug.h"
 
 
@@ -199,9 +200,16 @@ int dsr_srt_opt_recv(struct dsr_pkt *dp)
 	dp->srt = dsr_srt_new(dp->src, dp->dst, dp->srt_opt->length, 
 			      (char *)dp->srt_opt->addrs);
 	
+	if (!dp->srt) {
+		DEBUG("Create source route failed\n");
+		return DSR_PKT_ERROR;
+	}
+	
 	/* We should add this source route info to the cache... */
 	n = (dp->srt_opt->length - 2) / sizeof(struct in_addr);
 
+	dsr_rtc_add(dp->srt, 60000, 0);
+	
 	if (dp->srt_opt->sleft == 0) {
 	/* 	DEBUG("Remove source route...\n"); */
 		return DSR_PKT_SRT_REMOVE;

@@ -26,7 +26,8 @@ KERNEL_DIR=/lib/modules/$(KERNEL)/build
 KERNEL_INC=$(KERNEL_DIR)/include
 
 CC=gcc
-KCC=gcc
+MIPS_CC=mipsel-linux-gcc
+MIPS_LD=mipsel-linux-ld
 
 #######
 VERSION=$(shell if [ ! -d $(KERNEL_DIR) ]; then echo "No linux source found!!! Check your setup..."; exit; fi; grep ^VERSION $(KERNEL_DIR)/Makefile | cut -d' ' -f 3)
@@ -34,10 +35,12 @@ PATCHLEVEL=$(shell grep ^PATCHLEVEL $(KERNEL_DIR)/Makefile | cut -d' ' -f 3)
 SUBLEVEL=$(shell grep ^SUBLEVEL $(KERNEL_DIR)/Makefile | cut -d' ' -f 3)
 #######
 
-KDEFS=-D__KERNEL__ -DMODULE -DEXPORT_SYMTAB -DCONFIG_MODVERSIONS $(DEFS)
+KDEFS=-D__KERNEL__ -DMODULE -DEXPORT_SYMTAB $(DEFS) #-DCONFIG_MODVERSIONS -DMODVERSIONS -include $(KERNEL_INC)/linux/modversions.h 
 
-KINC=-nostdinc -DMODVERSIONS -include $(KERNEL_INC)/linux/modversions.h $(shell $(CC) -print-search-dirs | sed -ne 's/install: \(.*\)/-I \1include/gp') -I$(KERNEL_INC)
+KINC=-nostdinc $(shell $(CC) -print-search-dirs | sed -ne 's/install: \(.*\)/-I \1include/gp') -I$(KERNEL_INC)
 KCFLAGS=-Wall -fno-strict-aliasing -O2 $(KDEFS) $(KINC)
+
+.PHONY: mips default depend
 
 # Check for kernel version
 ifeq ($(PATCHLEVEL),6)
@@ -47,6 +50,9 @@ else
 default: $(MODNAME).o $(RTC_TRG).o TODO
 endif
 
+mips: 
+	$(MAKE) default CC=$(MIPS_CC) LD=$(MIPS_LD)
+
 $(MODNAME).ko: $(SRC) Makefile
 	$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) MODVERDIR=$(PWD) modules
 
@@ -54,13 +60,13 @@ $(RTC_TRG).ko: $(RTC_SRC) Makefile
 	$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) MODVERDIR=$(PWD) modules
 
 $(KOBJS): %.o: %.c Makefile
-	$(KCC) $(KCFLAGS) -c -o $@ $<
+	$(CC) $(KCFLAGS) -c -o $@ $<
 
 $(MODNAME).o: $(KOBJS)
 	$(LD) -r $^ -o $@
 
 $(RTC_TRG).o: $(RTC_SRC) Makefile
-	$(KCC) $(KCFLAGS) -c -o $@ $<
+	$(CC) $(KCFLAGS) -c -o $@ $<
 
 depend:
 	@echo "Updating Makefile dependencies..."

@@ -275,6 +275,8 @@ int dsr_rrep_send(struct dsr_srt *srt)
 	
 	dsr_dev_xmit(&dp);
 	
+	kfree(dp.dh.raw);
+
 	return 0;
 }
 
