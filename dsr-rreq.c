@@ -138,13 +138,10 @@ void NSCLASS rreq_tbl_timeout(unsigned long data)
 {
 	struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)data;
 	struct timeval expires;
-/* 	int ttl; */
 	
 	if (!e)
 		return;
        
-	/* DSR_WRITE_LOCK(&rreq_tbl); */
-	
 	tbl_detach(&rreq_tbl, &e->l);
 
 	DEBUG("RREQ Timeout dst=%s timeout=%lu rexmts=%d \n", 
@@ -163,21 +160,21 @@ void NSCLASS rreq_tbl_timeout(unsigned long data)
 	
 	e->num_rexmts++;
 	
-	if (e->ttl == 1)
-		e->timeout = ConfValToUsecs(RequestPeriod); 
-	else
-		e->timeout *= 2; /* Double timeout */	
-
+	/* if (e->ttl == 1) */
+/* 		e->timeout = ConfValToUsecs(RequestPeriod);  */
+/* 	else */
+	e->timeout *= 2; /* Double timeout */	
+	
 	e->ttl *= 2; /* Double TTL */
 	
+	if (e->ttl > MAXTTL)
+		e->ttl = MAXTTL;
+
 	if (e->timeout > ConfValToUsecs(MaxRequestPeriod))
 		e->timeout = ConfValToUsecs(MaxRequestPeriod);
 	
 	gettime(&e->last_used);
 
-/* 	target = e->node_addr; */
-/* 	ttl = e->ttl; */
-	
 	dsr_rreq_send(e->node_addr, e->ttl);
 
 	expires = e->last_used;
@@ -186,10 +183,7 @@ void NSCLASS rreq_tbl_timeout(unsigned long data)
 	/* Put at end of list */
 	tbl_add_tail(&rreq_tbl, &e->l);
 
-	set_timer(e->timer, &expires);
-	
-/* 	DSR_WRITE_UNLOCK(&rreq_tbl); */
-	
+	set_timer(e->timer, &expires);	
 }
 
 struct rreq_tbl_entry *NSCLASS __rreq_tbl_entry_create(struct in_addr node_addr)
@@ -495,7 +489,6 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 	struct in_addr trg;
 	struct dsr_srt *srt_rev;
 	int action = DSR_PKT_NONE;
-/* 	char buf[2048]; */
 
 	if (!dp || !rreq_opt || dp->flags & PKT_PROMISC_RECV)
 		return DSR_PKT_DROP;
@@ -599,8 +592,6 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		action = DSR_PKT_FORWARD_RREQ;
 	}
  out:
-/* 	rreq_tbl_print(&rreq_tbl, buf); */
-/* 	DEBUG("\n%s\n", buf); */
 	FREE(srt_rev);
 	return action;
 }
