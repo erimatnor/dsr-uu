@@ -216,12 +216,10 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 		break;
         case NETDEV_UP:
 		DEBUG("Netdev up %s\n", dev->name);
-		dsr_node_lock(dnode);
-		if (dev == dsr_dev && dnode->slave_dev) {
-			if (ConfVal(PromiscOperation)) 
+		if (ConfVal(PromiscOperation) && 
+		    dev == dsr_dev && 
+		    dnode->slave_dev) 
 				dev_set_promiscuity(dnode->slave_dev, +1);
-		}
-		dsr_node_unlock(dnode);
 		break;
         case NETDEV_UNREGISTER:
 		DEBUG("Netdev unregister %s\n", dev->name); 
@@ -240,20 +238,20 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 		break;
         case NETDEV_DOWN:
 		DEBUG("Netdev down %s\n", dev->name);
-		dsr_node_lock(dnode);
 		if (dev == dsr_dev && dnode->slave_dev) {
 
 			if (ConfVal(PromiscOperation))
 				dev_set_promiscuity(dnode->slave_dev, -1);
 			
+			dsr_node_lock(dnode);
 			if (dnode->slave_indev) {
 				dnode->slave_indev->cnf.rp_filter = rp_filter; 
 				dnode->slave_indev->cnf.forwarding = forwarding; 
 				in_dev_put(dnode->slave_indev);
 				dnode->slave_indev = NULL;	
 			}
+			dsr_node_unlock(dnode);
 		}
-		dsr_node_unlock(dnode);
                 break;
         default:
                 break;
