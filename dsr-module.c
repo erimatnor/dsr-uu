@@ -32,7 +32,7 @@
 
 static char *ifname = NULL;
 
-MODULE_AUTHOR("Erik Nordstroem <erikn@it.uu.se>");
+MODULE_AUTHOR("erik.nordstrom@it.uu.se");
 MODULE_DESCRIPTION("Dynamic Source Routing (DSR) protocol stack");
 MODULE_LICENSE("GPL");
 
@@ -65,7 +65,7 @@ static int kdsr_arpset(struct in_addr addr, struct sockaddr *hw_addr,
 	return 0;
 }
 
-static int kdsr_ip_recv(struct sk_buff *skb)
+static int dsr_ip_recv(struct sk_buff *skb)
 {
 	struct dsr_pkt dp;
 	int action;
@@ -187,7 +187,7 @@ static int kdsr_ip_recv(struct sk_buff *skb)
 	return 0;
 };
 
-static void kdsr_ip_recv_err(struct sk_buff *skb, u32 info)
+static void dsr_ip_recv_err(struct sk_buff *skb, u32 info)
 {
 	DEBUG("received error, info=%u\n", info);
 	
@@ -288,10 +288,11 @@ int kdsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb)
 	}
 	return 0;
 }
+
 /* We hook in before IP's routing so that IP doesn't get a chance to drop it
  * before we can look at it... Packet to this node can go through since it will
  * be routed to us anyway */
-static unsigned int kdsr_pre_routing_recv(unsigned int hooknum,
+static unsigned int dsr_pre_routing_recv(unsigned int hooknum,
 					 struct sk_buff **skb,
 					 const struct net_device *in,
 					 const struct net_device *out,
@@ -300,18 +301,18 @@ static unsigned int kdsr_pre_routing_recv(unsigned int hooknum,
 	struct iphdr *iph = (*skb)->nh.iph;
 	struct in_addr myaddr = my_addr();
 	
-	if (!in || in->ifindex != get_slave_dev_ifindex() || 
-	    !iph || iph->protocol != IPPROTO_DSR || iph->daddr == myaddr.s_addr)
+	if (in == NULL || in->ifindex != get_slave_dev_ifindex() ||
+	    iph == NULL || iph->protocol != IPPROTO_DSR || iph->daddr == myaddr.s_addr)
 		return NF_ACCEPT;
 
-	kdsr_ip_recv(*skb);
+	dsr_ip_recv(*skb);
 
 	return NF_STOLEN;
 }
 
 static struct nf_hook_ops dsr_pre_routing_hook = {
 	
-	.hook		= kdsr_pre_routing_recv,
+	.hook		= dsr_pre_routing_recv,
 #ifdef KERNEL26
 	.owner		= THIS_MODULE,
 #endif
@@ -326,8 +327,8 @@ static struct inet_protocol dsr_inet_prot = {
 #else
 static struct net_protocol dsr_inet_prot = {
 #endif
-	.handler = kdsr_ip_recv,
-	.err_handler = kdsr_ip_recv_err,
+	.handler = dsr_ip_recv,
+	.err_handler = dsr_ip_recv_err,
 #ifdef KERNEL26
 	.no_policy = 1,
 #else
@@ -336,7 +337,7 @@ static struct net_protocol dsr_inet_prot = {
 #endif
 };
 
-static int __init kdsr_init(void)
+static int __init dsr_module_init(void)
 {
 	int res = -EAGAIN;;
 
@@ -346,8 +347,9 @@ static int __init kdsr_init(void)
 		DEBUG("dsr-dev init failed\n");
 		return -EAGAIN;
 	}
-	
-	DEBUG("Creating packet queue\n"),
+#ifdef DEBUG
+	dbg_init();
+#endif
 	res = send_buf_init();
 
 	if (res < 0) 
@@ -393,11 +395,13 @@ static int __init kdsr_init(void)
 	send_buf_cleanup();
  cleanup_dsr_dev:
 	dsr_dev_cleanup();
-	
+#ifdef DEBUG
+	dbg_cleanup();
+#endif
 	return res;
 }
 
-static void __exit kdsr_cleanup(void)
+static void __exit dsr_module_cleanup(void)
 {
 #ifdef KERNEL26
 	inet_del_protocol(&dsr_inet_prot, IPPROTO_DSR);
@@ -409,7 +413,10 @@ static void __exit kdsr_cleanup(void)
 	dsr_dev_cleanup();
 	rreq_tbl_cleanup();
 	neigh_tbl_cleanup();
+#ifdef DEBUG
+	dbg_cleanup();
+#endif
 }
 
-module_init(kdsr_init);
-module_exit(kdsr_cleanup);
+module_init(dsr_module_init);
+module_exit(dsr_module_cleanup);

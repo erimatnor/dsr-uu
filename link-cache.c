@@ -2,10 +2,14 @@
 #include <linux/timer.h>
 #include <linux/module.h>
 
+#undef DEBUG
 #include "dsr-rtc.h"
 #include "dsr-srt.h"
 #include "tbl.h"
 #include "debug.h"
+
+
+#define DEBUG(f, args...)
 
 #define LC_NODES_MAX 500
 #define LC_LINKS_MAX 100 /* TODO: Max links should be calculated from Max
@@ -304,44 +308,6 @@ int lc_link_del(struct in_addr src, struct in_addr dst)
 	
 	return 1;
 }
-static int lc_print(char *buf)
-{
-	struct list_head *pos;
-	int len = 0;
-	
-	read_lock_bh(&LC.lock);
-    
-	len += sprintf(buf, "# %-15s %-15s %-4s Timeout\n", "Src Addr", "Dst Addr", "Cost");
-
-	list_for_each(pos, &LC.links.head) {
-		struct lc_link *link = (struct lc_link *)pos;
-		
-		len += sprintf(buf+len, "  %-15s %-15s %-4u %lu\n", 
-			       print_ip(link->src->addr.s_addr),
-			       print_ip(link->dst->addr.s_addr),
-			       link->cost,
-			       (link->expire - jiffies) / HZ);
-	}
-    
-	read_unlock_bh(&LC.lock);
-	return len;
-
-}
-
-static int lc_proc_info(char *buffer, char **start, off_t offset, int length)
-{
-	int len;
-
-	len = lc_print(buffer);
-    
-	*start = buffer + offset;
-	len -= offset;
-	if (len > length)
-		len = length;
-	else if (len < 0)
-		len = 0;
-	return len;    
-}
 
 static inline void __dijkstra_init_single_source(struct in_addr src)
 {
@@ -382,9 +348,7 @@ static void __dijkstra(struct in_addr src)
 	TBL(S, LC_NODES_MAX);
 	struct lc_node *src_node;
 	int i = 0;
-	
-	DEBUG("Attempting Dijkstras\n");
-	
+		
 	if (TBL_EMPTY(&LC.nodes)) {
 		DEBUG("No nodes in Link Cache\n");
 		return;
@@ -579,6 +543,44 @@ void lc_flush(void)
 void dsr_rtc_flush(void)
 {
 	lc_flush();
+}
+static int lc_print(char *buf)
+{
+	struct list_head *pos;
+	int len = 0;
+	
+	read_lock_bh(&LC.lock);
+    
+	len += sprintf(buf, "# %-15s %-15s %-4s Timeout\n", "Src Addr", "Dst Addr", "Cost");
+
+	list_for_each(pos, &LC.links.head) {
+		struct lc_link *link = (struct lc_link *)pos;
+		
+		len += sprintf(buf+len, "  %-15s %-15s %-4u %lu\n", 
+			       print_ip(link->src->addr.s_addr),
+			       print_ip(link->dst->addr.s_addr),
+			       link->cost,
+			       (link->expire - jiffies) / HZ);
+	}
+    
+	read_unlock_bh(&LC.lock);
+	return len;
+
+}
+
+static int lc_proc_info(char *buffer, char **start, off_t offset, int length)
+{
+	int len;
+
+	len = lc_print(buffer);
+    
+	*start = buffer + offset;
+	len -= offset;
+	if (len > length)
+		len = length;
+	else if (len < 0)
+		len = 0;
+	return len;    
 }
 
 int __init lc_init(void)

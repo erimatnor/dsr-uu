@@ -10,7 +10,8 @@
 
 #ifdef DEBUG
 #undef DEBUG
-#define DEBUG(f, args...) dsr_print(__FUNCTION__, f, ## args) 
+#define DEBUG_PROC
+#define DEBUG(f, args...) dsr_printk(__FUNCTION__, f, ## args) 
 #else 
 #define DEBUG(f, args...)
 #endif
@@ -46,20 +47,22 @@ static inline char *print_eth(char *addr)
 
 	return buf;
 }
+int dsr_printk(const char *fmt, ...);
 
-static inline void dsr_print(const char *func, char *fmt, ...)
-{
-    char buf[DEBUG_BUFLEN];
-    va_list args;
+/* static inline void dsr_print(const char *func, char *fmt, ...) */
+/* { */
+/*     char buf[DEBUG_BUFLEN]; */
+/*     va_list args; */
     
-    va_start(args, fmt);
+/*     va_start(args, fmt); */
 
-    vsnprintf(buf, DEBUG_BUFLEN, fmt, args);
+/*     vsnprintf(buf, DEBUG_BUFLEN, fmt, args); */
 
-    va_end(args);
+/*     va_end(args); */
 
-    printk("k-dsr::%s: %s", func, buf);
-}
-
+/*     printk(KERN_DEBUG "DSR: %s: %s", func, buf); */
+/* } */
+void __init dbg_init(void);
+void __exit dbg_cleanup(void);
 
 #endif /* _DEBUG_H */
