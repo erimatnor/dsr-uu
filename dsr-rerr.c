@@ -126,7 +126,7 @@ int NSCLASS dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 		goto out_err;
 	}
 
-	dp->dh.opth = dsr_opt_hdr_add(buf, len, 0);
+	dp->dh.opth = dsr_opt_hdr_add(buf, len, DSR_NO_NEXT_HDR_TYPE);
 	
 	if (!dp->dh.opth) {
 		DEBUG("Could not create DSR options header\n");

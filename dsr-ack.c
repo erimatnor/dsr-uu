@@ -70,7 +70,7 @@ int NSCLASS dsr_ack_send(struct in_addr dst, unsigned short id)
 		goto out_err;
 	}
 
-	dp->dh.opth = dsr_opt_hdr_add(buf, len, 0);
+	dp->dh.opth = dsr_opt_hdr_add(buf, len, DSR_NO_NEXT_HDR_TYPE);
 	
 	if (!dp->dh.opth) {
 		DEBUG("Could not create DSR opt header\n");
@@ -138,7 +138,15 @@ struct dsr_ack_req_opt *NSCLASS dsr_ack_req_opt_add(struct dsr_pkt *dp, unsigned
 		buf = (char *)dp->ack_req_opt;
 		goto end;
 	}
-#ifdef __KERNEL__
+#ifdef NS2
+	if (dp->p) {
+		hdr_cmn *cmh = HDR_CMN(dp->p);
+		prot = cmh->ptype();
+	} else 
+		prot = DSR_NO_NEXT_HDR_TYPE;
+	
+	ttl = dp->nh.iph->ttl();
+#else
 	if (dp->nh.raw) {
 			tot_len = ntohs(dp->nh.iph->tot_len);
 			prot = dp->nh.iph->protocol;
@@ -164,7 +172,7 @@ struct dsr_ack_req_opt *NSCLASS dsr_ack_req_opt_add(struct dsr_pkt *dp, unsigned
 		buf += DSR_OPT_HDR_LEN;
 	
 	} else {
-		
+		DEBUG("Expanding DSR options \n");
 		buf = dsr_pkt_alloc_opts_expand(dp, DSR_ACK_REQ_HDR_LEN);
 	
 		if (!buf)
@@ -173,10 +181,10 @@ struct dsr_ack_req_opt *NSCLASS dsr_ack_req_opt_add(struct dsr_pkt *dp, unsigned
 		dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN,
 			     tot_len + DSR_ACK_REQ_HDR_LEN, IPPROTO_DSR, ttl);
 
-		dp->dh.raw = dp->dsr_opts;
-
-		dp->dh.opth->p_len = htons(ntohs(dp->dh.opth->p_len) + DSR_ACK_REQ_HDR_LEN);
+		
+		dp->dh.opth = dsr_opt_hdr_add(dp->dsr_opts, DSR_OPT_HDR_LEN + ntohs(dp->dh.opth->p_len) + DSR_ACK_REQ_HDR_LEN, dp->dh.opth->nh);
 	}
+	DEBUG("Added ACK REQ option id=%u\n", id);
  end:		
 	return dsr_ack_req_opt_create(buf, DSR_ACK_REQ_HDR_LEN, id);
 }
@@ -207,7 +215,7 @@ int NSCLASS dsr_ack_req_send(struct in_addr neigh_addr, unsigned short id)
 		goto out_err;
 	}
 
-	dp->dh.opth = dsr_opt_hdr_add(buf, len, 0);
+	dp->dh.opth = dsr_opt_hdr_add(buf, len, DSR_NO_NEXT_HDR_TYPE);
 	
 	if (!dp->dh.opth) {
 		DEBUG("Could not create DSR opt header\n");

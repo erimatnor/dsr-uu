@@ -16,9 +16,9 @@ class DSRUU;
 #include <packet.h>
 #include <dsr-priqueue.h>
 #include <mac.h>
+#include <mac-802_11.h>
 #include <mobilenode.h>
 #include <linux/if_ether.h>
-
 #include "tbl.h"
 #include "endian.h"
 #include "dsr.h"
@@ -51,7 +51,7 @@ typedef dsr_opt_hdr hdr_dsr;
 #define MALLOC(s, p)        malloc(s)
 #define FREE(p)             free(p)
 #define XMIT(pkt) xmit(pkt)
-#define DELIVER(pkt) /* What here ??? */
+#define DELIVER(pkt) deliver(pkt)
 #define __init
 #define __exit
 #define PARAM(name) DSRUU::get_param(name)
@@ -88,6 +88,7 @@ class DSRUU : public Agent {
 	void recv(Packet*, Handler* callback = 0);
 	Packet *ns_packet_create(struct dsr_pkt *dp);
 	void xmit(struct dsr_pkt *dp);
+	void deliver(struct dsr_pkt *dp);
 
 /* 	void tap(const Packet *p); */
 	// tap out all data packets received at this host and promiscously snoop
@@ -142,7 +143,7 @@ class DSRUU : public Agent {
 #undef NO_GLOBALS
 	
 	struct in_addr my_addr() { return myaddr; }
-	int arpset(struct in_addr addr, struct sockaddr *hw_addr);
+	int arpset(struct in_addr addr, unsigned int mac_addr);
 	inline void ethtoint(char * eth, int *num)
 		{
 			memcpy((char*)num, eth, ETH_ALEN);

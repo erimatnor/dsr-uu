@@ -4,8 +4,6 @@
 #ifdef NS2
 #include <packet.h>
 #include "endian.h"
-
-#define DSR_MAX_OPT_LEN 100
 #endif
 
 #include "dsr.h"
@@ -43,17 +41,23 @@ struct dsr_opt_hdr {
 	}
 	
 	int size() { return p_len + sizeof(struct dsr_opt_hdr); }
-	struct dsr_opt option[DSR_MAX_OPT_LEN];
-#else
-	struct dsr_opt option[0];
 #endif /* NS2 */
+	struct dsr_opt option[0];
 };
 
 struct dsr_pad1_opt {
 	u_int8_t type;
 };
 
+#ifdef NS2
+#define DSR_NO_NEXT_HDR_TYPE PT_NTYPE
+#else
+#define DSR_NO_NEXT_HDR_TYPE 0
+#endif
+
 /* Header lengths */
+#define DSR_FIXED_HDR_LEN 4 /* Should be the same as DSR_OPT_HDR_LEN, but that
+			     * is not the case in ns-2 */
 #define DSR_OPT_HDR_LEN sizeof(struct dsr_opt_hdr)
 #define DSR_OPT_PAD1_LEN 1
 #define DSR_PKT_MIN_LEN 24 /* IP header + DSR header =  20 + 4 */
@@ -79,7 +83,6 @@ struct dsr_pad1_opt {
 
 struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, int len, unsigned int protocol);
 struct dsr_opt *dsr_opt_find_opt(struct dsr_pkt *dp, int type);
-int dsr_opts_remove(struct dsr_pkt *dp);
 
 #ifdef __KERNEL__
 struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, struct in_addr dst, int ip_len, int totlen, int protocol, int ttl);
@@ -90,6 +93,7 @@ struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, struct in_add
 
 #ifndef NO_DECLS
 
+int dsr_opts_remove(struct dsr_pkt *dp);
 int dsr_opt_recv(struct dsr_pkt *dp);
 
 #endif /* NO_DECLS */

@@ -198,6 +198,10 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 {	
 	struct sk_buff *skb = NULL;
 	struct ethhdr *ethh;
+	int len;
+	
+	if (dp->dh.raw)
+		len = dsr_opts_remove(dp);
 	
 	skb = dsr_skb_create(dp, dsr_dev);
 	

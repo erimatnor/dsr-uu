@@ -9,11 +9,6 @@
 #include <linux/icmp.h>
 #include <net/icmp.h>
 #include "kdsr.h"
-
-#define SEND_BUF_PROC_FS_NAME "send_buf"
-
-TBL(send_buf, SEND_BUF_MAX_LEN);
-static DSRUUTimer send_buf_timer;
 #endif
 
 #ifdef NS2
@@ -26,6 +21,13 @@ static DSRUUTimer send_buf_timer;
 #include "link-cache.h"
 #include "dsr-srt.h"
 #include "timer.h"
+
+#ifdef __KERNEL__
+#define SEND_BUF_PROC_FS_NAME "send_buf"
+
+TBL(send_buf, SEND_BUF_MAX_LEN);
+static DSRUUTimer send_buf_timer;
+#endif
 
 struct send_buf_entry {
 	list_t l;

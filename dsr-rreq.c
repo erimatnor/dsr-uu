@@ -384,7 +384,7 @@ int NSCLASS dsr_rreq_send(struct in_addr target, int ttl)
 	if (!dp->nh.iph) 
 		goto out_err;
 
-	dp->dh.opth = dsr_opt_hdr_add(buf, len, 0);
+	dp->dh.opth = dsr_opt_hdr_add(buf, len, DSR_NO_NEXT_HDR_TYPE);
 	
 	if (!dp->dh.opth) {
 		DEBUG("Could not create DSR opt header\n");
@@ -400,10 +400,10 @@ int NSCLASS dsr_rreq_send(struct in_addr target, int ttl)
 		DEBUG("Could not create RREQ opt\n");
 		goto out_err;
 	}
-	
+#ifdef NS2
 	DEBUG("Sending RREQ src=%s dst=%s target=%s ttl=%d iph->saddr()=%d\n", 
 	      print_ip(dp->src), print_ip(dp->dst), print_ip(target), ttl, dp->nh.iph->saddr());
-
+#endif
 	XMIT(dp);
 
 	return 0;

@@ -2,22 +2,14 @@
 #include <linux/proc_fs.h>
 #endif
 
+#ifdef NS2
+#include "ns-agent.h"
+#endif /* NS2 */
+
 #include "tbl.h"
 #include "neigh.h"
 #include "debug.h"
 #include "timer.h"
-
-#ifdef NS2
-#include "ns-agent.h"
-#else
-
-static TBL(neigh_tbl, NEIGH_TBL_MAX_LEN);
-
-#define NEIGH_TBL_PROC_NAME "dsr_neigh_tbl"
-
-static DSRUUTimer neigh_tbl_timer;
-
-#endif /* NS2 */
 
 #define NEIGH_TBL_MAX_LEN 50
 
@@ -30,6 +22,15 @@ static DSRUUTimer neigh_tbl_timer;
 #define NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT 3000 
 #define NEIGH_TBL_TIMEOUT 2000
 #define RTT_DEF SECONDS(1) /* sec */
+
+
+#ifdef __KERNEL__
+static TBL(neigh_tbl, NEIGH_TBL_MAX_LEN);
+
+#define NEIGH_TBL_PROC_NAME "dsr_neigh_tbl"
+
+static DSRUUTimer neigh_tbl_timer;
+#endif
 
 struct neighbor {
 	list_t l;
@@ -150,14 +151,7 @@ static struct neighbor *neigh_tbl_create(struct in_addr addr,
 int NSCLASS neigh_tbl_add(struct in_addr neigh_addr, struct sockaddr *hw_addr)
 {
 	struct neighbor *neigh;
-	int mac_addr;
 	
-
-	ethtoint((char *)hw_addr, &mac_addr);
-
-	DEBUG("Adding %s with MAC=%d\n", 
-	      print_ip(neigh_addr), mac_addr);
-
 	if (in_tbl(&neigh_tbl, &neigh_addr, crit_addr))
 		return 0;
 

@@ -27,22 +27,32 @@ void NSCLASS dsr_recv(struct dsr_pkt *dp)
 	/* Process DSR Options */
 	action = dsr_opt_recv(dp);
 	
-      	/* Add mac address of previous hop to the arp table */
+      	/* Add mac address of previous hop to the neighbor table */
 	if (dp->srt && dp->mac.raw) {
 		struct sockaddr hw_addr;
 #ifdef NS2
-		inttoeth(&dp->mac.ethh->macSA(), (char *)&hw_addr);
+
+		/* This should probably be changed to lookup the MAC type
+		 * dynamically in case the simulation is run over a non 802.11
+		 * mac layer... Or is there a uniform way to get hold of the mac
+		 * source for all mac headers? */
+		struct hdr_mac802_11 *mh_802_11=(struct hdr_mac802_11 *)dp->mac.ethh;
+		int mac_src = ETHER_ADDR(mh_802_11->dh_ta);
+
+		inttoeth(&mac_src, (char *)&hw_addr);
 #else
-		memcpy(hw_addr.sa_data, dp->mac.ethh->h_source, ETH_A_LEN);
+		memcpy(hw_addr.sa_data, dp->mac.ethh->h_source, ETH_ALEN);
 #endif		
 		dp->prv_hop = dsr_srt_prev_hop(dp->srt, my_addr());
 		
+		DEBUG("prev hop=%s\n", print_ip(dp->prv_hop));
+
 		neigh_tbl_add(dp->prv_hop, &hw_addr);
 	}
 	
-	for (i = 1; i < DSR_PKT_ACTION_LAST; i++) {
+	for (i = 0; i < DSR_PKT_ACTION_LAST; i++) {
 		//DEBUG("i=%d action=0x%08x mask=0x%08x (action & mask)=0x%08x\n", i, action, (mask), (action & mask));
-
+		
 		switch (action & mask) {
 		case DSR_PKT_NONE:
 			DEBUG("DSR_PKT_NONE - Do nothing\n");
@@ -63,6 +73,12 @@ void NSCLASS dsr_recv(struct dsr_pkt *dp)
 			
 				dsr_ack_send(dp->prv_hop, id);
 			}
+			break;
+		case DSR_PKT_SRT_REMOVE:
+			DEBUG("Remove source route\n");
+			// Hmm, we remove the DSR options when we deliver a
+			//packet
+			//dsr_opts_remove(dp);
 			break;
 		case DSR_PKT_FORWARD:
 			DEBUG("Forwarding %s %s nh %s\n", 
@@ -106,7 +122,6 @@ void NSCLASS dsr_recv(struct dsr_pkt *dp)
 						     dp->srt->src);
 			break;
 		case DSR_PKT_DELIVER:
-			dsr_opts_remove(dp);
 			DEBUG("Deliver to DSR device\n");
 			DELIVER(dp);
 			return;

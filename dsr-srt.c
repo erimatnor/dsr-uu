@@ -172,7 +172,12 @@ int NSCLASS dsr_srt_add(struct dsr_pkt *dp)
 	}
 
 #ifdef NS2
-	prot = 0;
+	if (dp->p) {
+		hdr_cmn *cmh = HDR_CMN(dp->p);
+		prot = cmh->ptype();
+	} else 
+		prot = PT_NTYPE;
+	
 	ip_len = IP_HDR_LEN;
 	tot_len = dp->payload_len + ip_len + len;
 	ttl = dp->nh.iph->ttl();

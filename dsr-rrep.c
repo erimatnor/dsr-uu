@@ -6,10 +6,6 @@
 #include "kdsr.h"
 #include "dsr-dev.h"
 
-#define GRAT_RREP_TBL_PROC_NAME "dsr_grat_rrep_tbl"
-static TBL(grat_rrep_tbl, GRAT_RREP_TBL_MAX_LEN);
-DSRUUTimer grat_rrep_tbl_timer;
-
 #endif /* __KERNEL__ */
 
 #ifdef NS2
@@ -29,6 +25,12 @@ DSRUUTimer grat_rrep_tbl_timer;
 
 #define GRAT_RREP_TBL_MAX_LEN 64
 #define GRAT_REPLY_HOLDOFF 1
+
+#ifdef __KERNEL__
+#define GRAT_RREP_TBL_PROC_NAME "dsr_grat_rrep_tbl"
+static TBL(grat_rrep_tbl, GRAT_RREP_TBL_MAX_LEN);
+DSRUUTimer grat_rrep_tbl_timer;
+#endif
 
 struct grat_rrep_entry {
 	list_t l;
@@ -244,7 +246,7 @@ int NSCLASS dsr_rrep_send(struct dsr_srt *srt_to_me)
 		goto out_err;
 	}
 	
-	dp->dh.opth = dsr_opt_hdr_add(buf, len, 0);
+	dp->dh.opth = dsr_opt_hdr_add(buf, len, DSR_NO_NEXT_HDR_TYPE);
 	
 	if (!dp->dh.opth) {
 		DEBUG("Could not create DSR options header\n");

@@ -21,7 +21,7 @@ struct dsr_pkt {
 #ifdef NS2
 	union {
 		struct hdr_mac *ethh;
-		char *raw;
+		unsigned char *raw;
 	} mac;
 	struct hdr_ip ip_data;
 	union {

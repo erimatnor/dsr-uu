@@ -93,8 +93,7 @@ struct dsr_pkt *dsr_pkt_alloc(Packet *p)
 		cmh = hdr_cmn::access(p);	
 
 		dp->p = p;
-		dp->mac.ethh = hdr_mac::access(p);
-
+		dp->mac.raw = p->access(hdr_mac::offset_);
 		dp->nh.iph = hdr_ip::access(p);
 		
 		dp->src.s_addr = Address::instance().get_nodeaddr(dp->nh.iph->saddr());
@@ -111,10 +110,19 @@ struct dsr_pkt *dsr_pkt_alloc(Packet *p)
 			
 			memcpy(dp->dsr_opts, dp->dh.raw, dsr_opts_len);
 			dp->dh.raw = dp->dsr_opts;
+			
+			/* We need to fake the payload since ns-2 actually often
+			 * do not send data */
+			if (DATA_PACKET((packet_t)dp->dh.opth->nh)) {
+				//printf("Setting payload_len\n");
+				//dp->payload_len = 1;
+				
+				//dp->payload;
+				dp->payload_len = cmh->size();
+			}
+		} else {
 
 		}
-		dp->payload = p->userdata();
-		dp->payload_len = p->datalen();
 		
 	}
 	return dp;

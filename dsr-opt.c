@@ -75,27 +75,26 @@ struct dsr_opt *dsr_opt_find_opt(struct dsr_pkt *dp, int type)
 	return NULL;
 }
 
-int dsr_opts_remove(struct dsr_pkt *dp)
+int NSCLASS dsr_opts_remove(struct dsr_pkt *dp)
 {
-	int len, ip_len, prot;
+	int len, ip_len, prot, ttl;
 
-	if (!dp)
+	if (!dp || !dp->dh.raw)
 		return -1;
-
+	
 	prot = dp->dh.opth->nh;
-
 #ifdef NS2
 	ip_len = 20;
+	ttl = dp->nh.iph->ttl();
 #else	
 	ip_len = (dp->nh.iph->ihl << 2);
-
-	dsr_build_ip(dp, dp->src, dp->dst, ip_len, ip_len + dp->payload_len, prot, dp->nh.iph->ttl);
+	ttl = dp->nh.iph->ttl;
 #endif
-			
+	dsr_build_ip(dp, dp->src, dp->dst, ip_len, 
+		     ip_len + dp->payload_len, prot, ttl);	
+	
 	len = dsr_pkt_free_opts(dp);
 	
-	/* DEBUG("Removed %d bytes of DSR options %d payload=%d prot=%02x\n", len, dsr_pkt_opts_len(dp),  dp->payload_len, prot); */
-
 	/* Return bytes removed */
 	return len;
 }
@@ -113,10 +112,19 @@ int NSCLASS dsr_opt_recv(struct dsr_pkt *dp)
 	
 	myaddr = my_addr();
 	
-	/* Packet for us */
-	if (dp->dst.s_addr == myaddr.s_addr && dp->payload_len != 0)
-		action |= DSR_PKT_DELIVER;
+	/* Packet for us ? */
+#ifdef NS2
+	DEBUG("Next header=%s\n", packet_info.name((packet_t)dp->dh.opth->nh));
 	
+	if (dp->dst.s_addr == myaddr.s_addr && 
+	    (DATA_PACKET(dp->dh.opth->nh) || dp->dh.opth->nh == PT_PING)) { 
+		action |= DSR_PKT_DELIVER;
+		DEBUG("Set DELIVER flag!\n");
+	}
+#else
+	if (dp->dst.s_addr == myaddr.s_addr && dp->payload_len != 0) 
+		action |= DSR_PKT_DELIVER;
+#endif
 	dsr_len = dsr_pkt_opts_len(dp);
 	
 	l = DSR_OPT_HDR_LEN;

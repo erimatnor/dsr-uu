@@ -242,7 +242,7 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 	if (++m->rexmt >= PARAM(MaxMaintRexmt)) {
 		DEBUG("MaxMaintRexmt reached, send RERR\n");
 		lc_link_del(my_addr(), m->nxt_hop);
-/* 		dsr_rtc_del(my_addr(), m->nxt_hop); */
+
 /* 		neigh_tbl_del(m->nxt_hop); */
 
 		dsr_rerr_send(m->dp, m->nxt_hop);
@@ -360,12 +360,12 @@ int NSCLASS maint_buf_init(void)
 		return -1;
 	}
 #endif
+	INIT_TBL(&maint_buf, MAINT_BUF_MAX_LEN);
+
 	init_timer(&ack_timer);	
 	
 	ack_timer.function = &NSCLASS maint_buf_timeout;
 	ack_timer.expires = 0;
-
-	INIT_TBL(&maint_buf, MAINT_BUF_MAX_LEN);
  
 	return 1;
 }

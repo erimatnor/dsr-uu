@@ -30,7 +30,7 @@
 			       * adding the dsr header. A better solution should
 			       * probably be found... */
 
-enum {
+enum conf {
 	BroadCastJitter,
 	RouteCacheTimeout,
 	SendBufferTimeout,
@@ -51,6 +51,10 @@ enum {
 	PARAMS_MAX,
 };
 
+enum units {
+	SECONDS,
+	UNITS_MAX,
+};
 #define MAINT_BUF_MAX_LEN 100
 #define RREQ_TBL_MAX_LEN 64 /* Should be enough */
 #define SEND_BUF_MAX_LEN 100
@@ -61,7 +65,7 @@ static struct {
 	const int val; 
 } params_def[PARAMS_MAX] = {
 	{ "BroadCastJitter", 10 },
-	{ "RouteCacheTimeout", 300000 },
+	{ "RouteCacheTimeout", 300 },
 	{ "SendBufferTimeout", 30 },
 	{ "SendBufferSize", SEND_BUF_MAX_LEN },
 	{ "RequestTableSize", RREQ_TBL_MAX_LEN },
