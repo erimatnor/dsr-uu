@@ -26,6 +26,7 @@
 #include "dsr-rreq.h"
 #include "dsr-rrep.h"
 #include "dsr-srt.h"
+#include "dsr-ack.h"
 #include "send-buf.h"
 #include "debug.h"
 #include "dsr-rtc.h"
@@ -195,9 +196,6 @@ static int dsr_ip_recv(struct sk_buff *skb)
 			action = DSR_PKT_NONE;
 		} else {
 			DEBUG("Forwarding (dev_queue_xmit)\n");
-			/* if (dp->data_len) */
-/* 				maint_buf_add(dp); */
-
 			dsr_dev_xmit(dp);
 			return 0;
 		}
@@ -257,6 +255,14 @@ static int dsr_ip_recv(struct sk_buff *skb)
 			/* send rrep.... */
 			dsr_rrep_send(dp->srt);
 		}
+	}
+	if (action & DSR_PKT_SEND_ACK &&
+	    dp->ack_req_opt) {
+		unsigned short id = ntohs(dp->ack_req_opt->id);
+
+		DEBUG("ACK REQ: src=%s id=%u\n", print_ip(dp->src.s_addr), id);
+		
+		dsr_ack_send(dp->src, id);
 	}
 
 	if (action & DSR_PKT_SEND_ICMP) {

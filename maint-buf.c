@@ -79,8 +79,6 @@ int maint_buf_add(struct dsr_pkt *dp)
 		return -1;
 	}
 	
-	dsr_ack_req_send(dp->nxt_hop, neigh_tbl_get_id(dp->nxt_hop));
-
 	return 1;
 }
 

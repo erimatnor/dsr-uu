@@ -16,6 +16,7 @@
 #include "dsr-rreq.h"
 #include "dsr-rtc.h"
 #include "dsr-srt.h"
+#include "dsr-ack.h"
 #include "send-buf.h"
 #include "maint-buf.h"
 
@@ -224,35 +225,52 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 int dsr_dev_xmit(struct dsr_pkt *dp)
 {
 	struct sk_buff *skb;
+	int res = -1;
+	
+#define ADD_ACK_REQ 1
 
+	if (!dp)
+		return -1;
+
+	/* Only buffer packets with data */
+	if (dp->data_len)
+		maint_buf_add(dp);
+
+	if (ADD_ACK_REQ && dp->data_len) {
+		if (!dsr_ack_req_opt_add(dp))
+			goto out_err;
+	
+	}
 	dsr_node_lock(dsr_node);
 	skb = dsr_skb_create(dp, dsr_node->slave_dev);
 	dsr_node_unlock(dsr_node);
 
 	if (!skb) {
-		DEBUG("Could not create skb!\n");
-		return -1;
+		DEBUG("Could not create skb!\n");	
+		goto out_err;
 	}
        
 	/* Create hardware header */
 	if (dsr_hw_header_create(dp, skb) < 0) {
 		DEBUG("Could not create hardware header\n");
 		kfree_skb(skb);
-		return -1;
+		goto out_err;
 	}
 		
-	dev_queue_xmit(skb);
+	res = dev_queue_xmit(skb);
 	
-	DEBUG("Sent %d bytes skb->data_len=%s headroom=%d tailroom=%d %u:%u %d\n", skb->len, skb->data_len, skb_headroom(skb), skb_tailroom(skb), skb->head, skb->tail, skb->tail - skb->head);
-
-	dsr_node_lock(dsr_node);
-	dsr_node->stats.tx_packets++;
-	dsr_node->stats.tx_bytes+=skb->len;
-	dsr_node_unlock(dsr_node);
-	
+	if (res >= 0) {
+		DEBUG("Sent %d bytes skb->data_len=%s headroom=%d tailroom=%d %u:%u %d\n", skb->len, skb->data_len, skb_headroom(skb), skb_tailroom(skb), skb->head, skb->tail, skb->tail - skb->head);
+		
+		dsr_node_lock(dsr_node);
+		dsr_node->stats.tx_packets++;
+		dsr_node->stats.tx_bytes+=skb->len;
+		dsr_node_unlock(dsr_node);
+	}
+ out_err:	
 	dsr_pkt_free(dp);
 
-	return 0;
+	return res;
 }
 
 /* Main receive function for packets originated in user space */
@@ -293,7 +311,6 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 				break;
 			}
 			/* Send packet */
-			maint_buf_add(dp);
 
 			dsr_dev_xmit(dp);
 			

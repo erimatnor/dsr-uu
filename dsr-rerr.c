@@ -130,7 +130,6 @@ int dsr_rerr_send(struct dsr_pkt *dp_trigg)
 
 	buf += DSR_SRT_OPT_LEN(dp->srt);
 	len -= DSR_SRT_OPT_LEN(dp->srt);
-
 	
 	rerr_opt = dsr_rerr_opt_add(buf, len, NODE_UNREACHABLE, dp->dst, dp_trigg->nxt_hop, salv);
 

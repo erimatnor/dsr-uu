@@ -14,6 +14,28 @@ char *dsr_pkt_alloc_data(struct dsr_pkt *dp, int len)
 	return dp->dsr_data;
 }
 
+char *dsr_pkt_alloc_data_expand(struct dsr_pkt *dp, int xlen)
+{
+	char *tmp;
+	int old_len;
+	
+	if (!dp || !dp->dsr_data)
+		return NULL;
+
+	tmp = dp->dsr_data;
+	old_len = dp->dsr_data_len;
+
+	if (!dsr_pkt_alloc_data(dp, dp->dsr_data_len + xlen))
+		return NULL;
+	
+	memcpy(dp->dsr_data, tmp, old_len);
+
+	kfree(tmp);
+
+	return (dp->dsr_data + old_len);
+}
+
+
 struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb, int len)
 {
 	struct dsr_pkt *dp;

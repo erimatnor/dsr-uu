@@ -23,7 +23,8 @@ struct dsr_pkt {
 	struct dsr_rreq_opt *rreq_opt; /* Can only be one */
 	struct dsr_rrep_opt *rrep_opt[MAX_RREP_OPTS];   
 	struct dsr_rerr_opt *rerr_opt[MAX_RERR_OPTS];   
-	struct dsr_ack_opt *ack_opt[MAX_ACK_OPTS];   
+	struct dsr_ack_opt *ack_opt[MAX_ACK_OPTS];
+	struct dsr_ack_req_opt *ack_req_opt;
 	int num_rrep_opts, num_rerr_opts, num_ack_opts;
 	struct dsr_srt *srt; /* Source route */
 	char *data;           /* Packet data (IP not included)*/
@@ -45,9 +46,11 @@ struct dsr_pkt {
 #define DSR_PKT_SEND_RREP      0x40
 #define DSR_PKT_SEND_BUFFERED  0x80
 #define DSR_PKT_FORWARD_RREQ   0x100
+#define DSR_PKT_SEND_ACK       0x200
 
 struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb, int len);
 char *dsr_pkt_alloc_data(struct dsr_pkt *dp, int len);
+char *dsr_pkt_alloc_data_expand(struct dsr_pkt *dp, int new_len);
 void dsr_pkt_free(struct dsr_pkt *dp);
 
 #endif /* _DSR_PKT_H */

@@ -22,13 +22,11 @@ struct dsr_ack_opt {
 #define DSR_ACK_HDR_LEN sizeof(struct dsr_ack_opt)
 #define DSR_ACK_OPT_LEN (DSR_ACK_HDR_LEN - 2)
 
-struct dsr_ack_req_opt *dsr_ack_req_opt_add(char *buf, int len, struct in_addr neigh, unsigned short id);
+struct dsr_ack_req_opt *dsr_ack_req_opt_add(struct dsr_pkt *dp);
 int dsr_ack_add_ack_req(struct in_addr neigh);
 int dsr_ack_opt_recv(struct dsr_ack_opt *ack);
 int dsr_ack_req_opt_recv(struct dsr_pkt *dp, struct dsr_ack_req_opt *areq);
 int dsr_ack_req_send(struct in_addr neigh_addr, unsigned short id);
-
-int neigh_tbl_init(void);
-void neigh_tbl_cleanup(void);
+int dsr_ack_send(struct in_addr dst, unsigned short id);
 
 #endif  /* _DSR_ACK */

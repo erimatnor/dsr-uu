@@ -227,11 +227,8 @@ int send_buf_set_verdict(int verdict, unsigned long daddr)
 					dsr_pkt_free(entry->dp);
 				} else {
 					
-					/* Send packet */
-/* 					maint_buf_add(entry->dp); */
-					
+					/* Send packet */		
 					entry->okfn(entry->dp);
-				    
 				}
 			} else {
 				DEBUG("No source route found for %s!\n", print_ip(daddr));
