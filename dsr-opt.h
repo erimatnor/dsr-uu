@@ -18,30 +18,31 @@ struct dsr_opt {
 
 /* The DSR options header (always comes first) */
 struct dsr_opt_hdr {
-        u_int8_t nh;
+	u_int8_t nh;
 #if defined(__LITTLE_ENDIAN_BITFIELD)
 
 	u_int8_t res:7;
-	u_int8_t f:1;		
+	u_int8_t f:1;
 #elif defined (__BIG_ENDIAN_BITFIELD)
-	u_int8_t f:1;		
+	u_int8_t f:1;
 	u_int8_t res:7;
 #else
 #error  "Please fix <asm/byteorder.h>"
 #endif
-	u_int16_t p_len; /* payload length */
+	u_int16_t p_len;	/* payload length */
 #ifdef NS2
 	static int offset_;
-	
-	inline static int& offset() {
+
+	inline static int &offset() {
 		return offset_;
-	} 
-	inline static dsr_opt_hdr *access(const Packet *p) {
-		return (dsr_opt_hdr *)p->access(offset_);
+	} inline static dsr_opt_hdr *access(const Packet * p) {
+		return (dsr_opt_hdr *) p->access(offset_);
 	}
-	
-	int size() { return p_len + sizeof(struct dsr_opt_hdr); }
-#endif /* NS2 */
+
+	int size() {
+		return p_len + sizeof (struct dsr_opt_hdr);
+	}
+#endif				/* NS2 */
 	struct dsr_opt option[0];
 };
 
@@ -56,11 +57,11 @@ struct dsr_pad1_opt {
 #endif
 
 /* Header lengths */
-#define DSR_FIXED_HDR_LEN 4 /* Should be the same as DSR_OPT_HDR_LEN, but that
-			     * is not the case in ns-2 */
+#define DSR_FIXED_HDR_LEN 4	/* Should be the same as DSR_OPT_HDR_LEN, but that
+				 * is not the case in ns-2 */
 #define DSR_OPT_HDR_LEN sizeof(struct dsr_opt_hdr)
 #define DSR_OPT_PAD1_LEN 1
-#define DSR_PKT_MIN_LEN 24 /* IP header + DSR header =  20 + 4 */
+#define DSR_PKT_MIN_LEN 24	/* IP header + DSR header =  20 + 4 */
 
 /* Header types */
 #define DSR_OPT_PADN       0
@@ -80,22 +81,22 @@ struct dsr_pad1_opt {
 #define DSR_GET_NEXT_OPT(dopt) ((struct dsr_opt *)((char *)dopt + dopt->length + 2))
 #define DSR_LAST_OPT(dp, opt) ((dp->dh.raw + ntohs(dp->dh.opth->p_len) + 4) == ((char *)opt + opt->length + 2))
 
-
 struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, int len, unsigned int protocol);
 struct dsr_opt *dsr_opt_find_opt(struct dsr_pkt *dp, int type);
 
 #ifdef __KERNEL__
-struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, struct in_addr dst, int ip_len, int totlen, int protocol, int ttl);
+struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src,
+			   struct in_addr dst, int ip_len, int totlen,
+			   int protocol, int ttl);
 #endif
 
-
-#endif /* NO_GLOBALS */
+#endif				/* NO_GLOBALS */
 
 #ifndef NO_DECLS
 
 int dsr_opts_remove(struct dsr_pkt *dp);
 int dsr_opt_recv(struct dsr_pkt *dp);
 
-#endif /* NO_DECLS */
+#endif				/* NO_DECLS */
 
 #endif

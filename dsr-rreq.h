@@ -22,7 +22,7 @@ struct dsr_rreq_opt {
 #define DSR_RREQ_TOT_LEN IP_HDR_LEN + sizeof(struct dsr_opt_hdr) + sizeof(struct dsr_rreq_opt)
 #define DSR_RREQ_ADDRS_LEN(rreq_opt) (rreq_opt->length - 6)
 
-#endif /* NO_GLOBALS */
+#endif				/* NO_GLOBALS */
 
 #ifndef NO_DECLS
 void rreq_tbl_set_max_len(unsigned int max_len);
@@ -33,13 +33,14 @@ int dsr_rreq_send(struct in_addr target, int ttl);
 void rreq_tbl_timeout(unsigned long data);
 struct rreq_tbl_entry *__rreq_tbl_entry_create(struct in_addr node_addr);
 struct rreq_tbl_entry *__rreq_tbl_add(struct in_addr node_addr);
-int rreq_tbl_add_id(struct in_addr initiator, struct in_addr target, 
+int rreq_tbl_add_id(struct in_addr initiator, struct in_addr target,
 		    unsigned short id);
-int dsr_rreq_duplicate(struct in_addr initiator, struct in_addr target, unsigned int id);
+int dsr_rreq_duplicate(struct in_addr initiator, struct in_addr target,
+		       unsigned int id);
 
 int rreq_tbl_init(void);
 void rreq_tbl_cleanup(void);
 
-#endif /* NO_DECLS */
+#endif				/* NO_DECLS */
 
-#endif  /* _DSR_RREQ */
+#endif				/* _DSR_RREQ */

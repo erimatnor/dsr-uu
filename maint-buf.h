@@ -13,6 +13,6 @@ int maint_buf_del_all_id(struct in_addr nxt_hop, unsigned short id);
 void maint_buf_set_timeout(void);
 void maint_buf_timeout(unsigned long data);
 
-#endif /* NO_DECLS */
+#endif				/* NO_DECLS */
 
-#endif /* _MAINT_BUF_H */
+#endif				/* _MAINT_BUF_H */

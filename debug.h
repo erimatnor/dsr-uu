@@ -18,33 +18,33 @@ extern atomic_t num_pkts;
 #include <string.h>
 #include <sys/types.h>
 #include <netinet/in.h>
-#endif /* __KERNEL__ */
+#endif				/* __KERNEL__ */
 
 #ifdef DEBUG
 #undef DEBUG
 #define DEBUG_PROC
 #define DEBUG(f, args...) do { if (get_confval(PrintDebug)) trace(__FUNCTION__, f, ## args); } while (0)
 //#define DEBUG(f, args...) trace(__FUNCTION__, f, ## args)
-#else 
+#else
 #define DEBUG(f, args...)
 #endif
 
-#ifndef NO_GLOBALS 
+#ifndef NO_GLOBALS
 
 #define DEBUG_BUFLEN 256
 
-static inline char *print_ip(struct in_addr addr)
+static inline char *
+print_ip(struct in_addr addr)
 {
 	static char buf[16 * 4];
 	static int index = 0;
 	char *str;
-	
+
 	sprintf(&buf[index], "%d.%d.%d.%d",
 		0x0ff & addr.s_addr,
 		0x0ff & (addr.s_addr >> 8),
-		0x0ff & (addr.s_addr >> 16),
-		0x0ff & (addr.s_addr >> 24));
-	
+		0x0ff & (addr.s_addr >> 16), 0x0ff & (addr.s_addr >> 24));
+
 	str = &buf[index];
 	index += 16;
 	index %= 64;
@@ -52,40 +52,42 @@ static inline char *print_ip(struct in_addr addr)
 	return str;
 }
 
-static inline char *print_eth(char *addr)
+static inline char *
+print_eth(char *addr)
 {
 	static char buf[30];
 
 	sprintf(buf, "%02x:%02x:%02x:%02x:%02x:%02x",
-		 (unsigned char) addr[0], (unsigned char) addr[1],
-		 (unsigned char) addr[2], (unsigned char) addr[3],
-		 (unsigned char) addr[4], (unsigned char) addr[5]);
+		(unsigned char) addr[0], (unsigned char) addr[1],
+		(unsigned char) addr[2], (unsigned char) addr[3],
+		(unsigned char) addr[4], (unsigned char) addr[5]);
 
 	return buf;
 }
 
-static inline char *print_pkt(char *p, int len)
+static inline char *
+print_pkt(char *p, int len)
 {
 	static char buf[3000];
 	int i, l = 0;
 
 	for (i = 0; i < len; i++)
-		l += sprintf(buf+l, "%02X", (unsigned char)p[i]);
-	
+		l += sprintf(buf + l, "%02X", (unsigned char) p[i]);
+
 	return buf;
 }
 
-#endif /* NO_GLOBALS */
+#endif				/* NO_GLOBALS */
 
 #ifndef NO_DECLS
 
 int trace(const char *func, const char *fmt, ...);
 
-#endif /* NO_DECLS */
+#endif				/* NO_DECLS */
 
 #ifdef __KERNEL__
 int __init dbg_init(void);
 void __exit dbg_cleanup(void);
 #endif
 
-#endif /* _DEBUG_H */
+#endif				/* _DEBUG_H */

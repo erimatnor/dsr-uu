@@ -8,7 +8,6 @@
 #include <linux/in.h>
 #endif
 
-
 #define MAX_RREP_OPTS 10
 #define MAX_RERR_OPTS 10
 #define MAX_ACK_OPTS  10
@@ -17,10 +16,10 @@
 
 /* Internal representation of a packet. For portability */
 struct dsr_pkt {
-	struct in_addr src;   /* IP level data */
+	struct in_addr src;	/* IP level data */
 	struct in_addr dst;
-       	struct in_addr nxt_hop;
-       	struct in_addr prv_hop;
+	struct in_addr nxt_hop;
+	struct in_addr prv_hop;
 	int flags;
 #ifdef NS2
 	union {
@@ -32,7 +31,7 @@ struct dsr_pkt {
 		struct hdr_ip *iph;
 		char *raw;
 	} nh;
-#else	
+#else
 	union {
 		struct ethhdr *ethh;
 		char *raw;
@@ -46,19 +45,19 @@ struct dsr_pkt {
 	union {
 		struct dsr_opt_hdr *opth;
 		char *raw;
-	} dh;   
+	} dh;
 
 	int num_rrep_opts, num_rerr_opts, num_ack_opts;
 	struct dsr_srt_opt *srt_opt;
-	struct dsr_rreq_opt *rreq_opt; /* Can only be one */
-	struct dsr_rrep_opt *rrep_opt[MAX_RREP_OPTS];   
-	struct dsr_rerr_opt *rerr_opt[MAX_RERR_OPTS];   
+	struct dsr_rreq_opt *rreq_opt;	/* Can only be one */
+	struct dsr_rrep_opt *rrep_opt[MAX_RREP_OPTS];
+	struct dsr_rerr_opt *rerr_opt[MAX_RERR_OPTS];
 	struct dsr_ack_opt *ack_opt[MAX_ACK_OPTS];
 	struct dsr_ack_req_opt *ack_req_opt;
-	struct dsr_srt *srt; /* Source route */
-	
-	char *dsr_opts, *tail, *end;   /* Data we can allocate for DSR opts */
-	
+	struct dsr_srt *srt;	/* Source route */
+
+	char *dsr_opts, *tail, *end;	/* Data we can allocate for DSR opts */
+
 	int payload_len;
 #ifdef NS2
 	AppData *payload;
@@ -67,7 +66,7 @@ struct dsr_pkt {
 	char *payload;
 	struct sk_buff *skb;
 #endif
-	
+
 };
 
 /* Flags: */
@@ -90,17 +89,20 @@ struct dsr_pkt {
 #define DSR_PKT_DELIVER        (DSR_PKT_NONE << 11)
 #define DSR_PKT_ACTION_LAST    (12)
 
-static inline int dsr_pkt_opts_len(struct dsr_pkt *dp)
+static inline int
+dsr_pkt_opts_len(struct dsr_pkt *dp)
 {
 	return dp->tail - dp->dsr_opts;
 }
 
-static inline int dsr_pkt_tailroom(struct dsr_pkt *dp)
+static inline int
+dsr_pkt_tailroom(struct dsr_pkt *dp)
 {
 	return dp->end - dp->tail;
 }
+
 #ifdef NS2
-struct dsr_pkt *dsr_pkt_alloc(Packet *p);
+struct dsr_pkt *dsr_pkt_alloc(Packet * p);
 #else
 struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb);
 #endif
@@ -109,4 +111,4 @@ char *dsr_pkt_alloc_opts_expand(struct dsr_pkt *dp, int len);
 void dsr_pkt_free(struct dsr_pkt *dp);
 int dsr_pkt_free_opts(struct dsr_pkt *dp);
 
-#endif /* _DSR_PKT_H */
+#endif				/* _DSR_PKT_H */

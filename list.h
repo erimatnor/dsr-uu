@@ -21,7 +21,8 @@ typedef struct list {
 	(le)->next = NULL; (le)->prev = NULL; \
 } while (0)
 
-static inline int listelm_detach(list_t * prev, list_t * next)
+static inline int
+listelm_detach(list_t * prev, list_t * next)
 {
 	next->prev = prev;
 	prev->next = next;
@@ -29,28 +30,31 @@ static inline int listelm_detach(list_t * prev, list_t * next)
 	return LIST_SUCCESS;
 }
 
-static inline int listelm_add(list_t * le, list_t * prev, list_t * next)
+static inline int
+listelm_add(list_t * le, list_t * prev, list_t * next)
 {
 	prev->next = le;
 	le->prev = prev;
 	le->next = next;
 	next->prev = le;
-	
+
 	return LIST_SUCCESS;
 }
 
-static inline int list_add(list_t * le, list_t * head)
+static inline int
+list_add(list_t * le, list_t * head)
 {
-	
+
 	if (!head || !le)
 		return LIST_NULL;
 
 	listelm_add(le, head, head->next);
-	
+
 	return LIST_SUCCESS;
 }
 
-static inline int list_add_tail(list_t * le, list_t * head)
+static inline int
+list_add_tail(list_t * le, list_t * head)
 {
 
 	if (!head || !le)
@@ -61,7 +65,8 @@ static inline int list_add_tail(list_t * le, list_t * head)
 	return LIST_SUCCESS;
 }
 
-static inline int list_detach(list_t * le)
+static inline int
+list_detach(list_t * le)
 {
 	if (!le)
 		return LIST_NULL;
@@ -88,4 +93,4 @@ static inline int list_detach(list_t * le)
 
 #define list_del(le) list_detach(le)
 
-#endif /* _LIST_H */
+#endif				/* _LIST_H */

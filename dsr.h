@@ -18,7 +18,7 @@
 #include <sys/types.h>
 #include <endian.h>
 #include <netinet/in.h>
-#endif /* __KERNEL__ */
+#endif				/* __KERNEL__ */
 
 #include "dsr-pkt.h"
 #include "timer.h"
@@ -29,13 +29,13 @@
 #ifdef NS2
 #define IPPROTO_DSR PT_DSR
 #else
-#define IPPROTO_DSR 168 /* Is this correct? */
+#define IPPROTO_DSR 168		/* Is this correct? */
 #endif
 #define IP_HDR_LEN 20
-#define DSR_OPTS_MAX_SIZE 100 /* This is used to reduce the MTU of the dsr
-			       * device so that packets are not too big after
-			       * adding the dsr header. A better solution should
-			       * probably be found... */
+#define DSR_OPTS_MAX_SIZE 100	/* This is used to reduce the MTU of the dsr
+				 * device so that packets are not too big after
+				 * adding the dsr header. A better solution should
+				 * probably be found... */
 
 enum confval {
 #ifdef DEBUG
@@ -76,40 +76,41 @@ enum confval_type {
 };
 
 #define MAINT_BUF_MAX_LEN 50
-#define RREQ_TBL_MAX_LEN 64 /* Should be enough */
+#define RREQ_TBL_MAX_LEN 64	/* Should be enough */
 #define SEND_BUF_MAX_LEN 100
 #define RREQ_TLB_MAX_ID 16
 
-static struct { 
-	const char *name; 
-	const unsigned int val; 
+static struct {
+	const char *name;
+	const unsigned int val;
 	enum confval_type type;
 } confvals_def[CONFVAL_MAX] = {
 #ifdef DEBUG
-	{ "PrintDebug", 1, BIN },
+	{
+	"PrintDebug", 1, BIN},
 #endif
-	{ "FlushLinkCache", 1, COMMAND },
-	{ "PromiscOperation", 1, BIN },
-	{ "BroadCastJitter", 20, MILLISECONDS },
-	{ "RouteCacheTimeout", 300, SECONDS },
-	{ "SendBufferTimeout", 30, SECONDS },
-	{ "SendBufferSize", SEND_BUF_MAX_LEN, QUANTA },
-	{ "RequestTableSize", RREQ_TBL_MAX_LEN, QUANTA },
-	{ "RequestTableIds", RREQ_TLB_MAX_ID, QUANTA },
-	{ "MaxRequestRexmt", 16, QUANTA  },
-	{ "MaxRequestPeriod", 10, SECONDS },
-	{ "RequestPeriod", 500, MILLISECONDS },
-	{ "NonpropRequestTimeout", 30, MILLISECONDS },
-	{ "RexmtBufferSize", MAINT_BUF_MAX_LEN },
-	{ "MaintHoldoffTime", 250, MILLISECONDS },
-	{ "MaxMaintRexmt", 2, QUANTA },
-	{ "UseNetworkLayerAck", 1, BIN },
-	{ "TryPassiveAcks", 1, QUANTA },
-	{ "PassiveAckTimeout", 100, MILLISECONDS },
-	{ "GratReplyHoldOff", 1, SECONDS },
-	{ "MAX_SALVAGE_COUNT", 15, QUANTA }
+	{
+	"FlushLinkCache", 1, COMMAND}, {
+	"PromiscOperation", 1, BIN}, {
+	"BroadCastJitter", 20, MILLISECONDS}, {
+	"RouteCacheTimeout", 300, SECONDS}, {
+	"SendBufferTimeout", 30, SECONDS}, {
+	"SendBufferSize", SEND_BUF_MAX_LEN, QUANTA}, {
+	"RequestTableSize", RREQ_TBL_MAX_LEN, QUANTA}, {
+	"RequestTableIds", RREQ_TLB_MAX_ID, QUANTA}, {
+	"MaxRequestRexmt", 16, QUANTA}, {
+	"MaxRequestPeriod", 10, SECONDS}, {
+	"RequestPeriod", 500, MILLISECONDS}, {
+	"NonpropRequestTimeout", 30, MILLISECONDS}, {
+	"RexmtBufferSize", MAINT_BUF_MAX_LEN}, {
+	"MaintHoldoffTime", 250, MILLISECONDS}, {
+	"MaxMaintRexmt", 2, QUANTA}, {
+	"UseNetworkLayerAck", 1, BIN}, {
+	"TryPassiveAcks", 1, QUANTA}, {
+	"PassiveAckTimeout", 100, MILLISECONDS}, {
+	"GratReplyHoldOff", 1, SECONDS}, {
+	"MAX_SALVAGE_COUNT", 15, QUANTA}
 };
-
 
 struct dsr_node {
 	struct in_addr ifaddr;
@@ -119,7 +120,7 @@ struct dsr_node {
 	struct net_device *dev;
 	struct net_device *slave_dev;
 	struct in_device *slave_indev;
-	struct net_device_stats	stats;
+	struct net_device_stats stats;
 	spinlock_t lock;
 #endif
 };
@@ -134,7 +135,7 @@ struct dsr_node {
 #else
 #define DSR_SPIN_LOCK(l)
 #define DSR_SPIN_UNLOCK(l)
-#endif /* __KERNEL__ */
+#endif				/* __KERNEL__ */
 
 #ifdef __KERNEL__
 
@@ -143,19 +144,21 @@ struct dsr_node {
 
 extern struct dsr_node *dsr_node;
 
-static inline const unsigned int get_confval(enum confval cv)
+static inline const unsigned int
+get_confval(enum confval cv)
 {
 	unsigned int val = 0;
-	
+
 	if (dsr_node) {
 		DSR_SPIN_LOCK(&dsr_node->lock);
 		val = dsr_node->confvals[cv];
 		DSR_SPIN_UNLOCK(&dsr_node->lock);
 	}
-	return val;  
+	return val;
 }
 
-static inline const int set_confval(enum confval cv, unsigned int val)
+static inline const int
+set_confval(enum confval cv, unsigned int val)
 {
 	if (dsr_node) {
 		DSR_SPIN_LOCK(&dsr_node->lock);
@@ -164,23 +167,24 @@ static inline const int set_confval(enum confval cv, unsigned int val)
 	} else
 		return -1;
 
-	return val;  
+	return val;
 }
 
-
-static inline void dsr_node_init(struct dsr_node *dn)
+static inline void
+dsr_node_init(struct dsr_node *dn)
 {
 	int i;
 	spin_lock_init(&dn->lock);
 	dn->dev = NULL;
 	dn->slave_dev = NULL;
-	
+
 	for (i = 0; i < CONFVAL_MAX; i++) {
 		dn->confvals[i] = confvals_def[i].val;
 	}
 }
 
-static inline struct in_addr my_addr(void)
+static inline struct in_addr
+my_addr(void)
 {
 	static struct in_addr my_addr;
 	if (dsr_node) {
@@ -191,35 +195,39 @@ static inline struct in_addr my_addr(void)
 	return my_addr;
 }
 
-static inline unsigned long time_add_msec(unsigned long msecs)
+static inline unsigned long
+time_add_msec(unsigned long msecs)
 {
 	struct timespec t;
 
 	t.tv_sec = msecs / 1000;
 	t.tv_nsec = (msecs * 1000000) % 1000000000;
-	
+
 	return timespec_to_jiffies(&t);
 }
 
-static inline const int get_slave_dev_ifindex(void)
+static inline const int
+get_slave_dev_ifindex(void)
 {
 	int ifindex = -1;
-	
+
 	if (dsr_node) {
 		DSR_SPIN_LOCK(&dsr_node->lock);
 		if (dsr_node->slave_dev)
 			ifindex = dsr_node->slave_dev->ifindex;
 		DSR_SPIN_UNLOCK(&dsr_node->lock);
 	}
-	return ifindex;  
+	return ifindex;
 }
 
-static inline void dsr_node_lock(struct dsr_node *dnode)
+static inline void
+dsr_node_lock(struct dsr_node *dnode)
 {
 	spin_lock(&dnode->lock);
 }
 
-static inline void dsr_node_unlock(struct dsr_node *dnode)
+static inline void
+dsr_node_unlock(struct dsr_node *dnode)
 {
 	spin_unlock(&dnode->lock);
 }
@@ -228,17 +236,18 @@ int do_mackill(char *mac);
 
 #endif
 
-#endif /* NO_GLOBALS */
+#endif				/* NO_GLOBALS */
 
 #ifndef NO_DECLS
 
-static inline usecs_t confval_to_usecs(enum confval cv)
+static inline usecs_t
+confval_to_usecs(enum confval cv)
 {
 	usecs_t usecs = 0;
 	unsigned int val;
-	
+
 	val = ConfVal(cv);
-	
+
 	switch (confvals_def[cv].type) {
 	case SECONDS:
 		usecs = val * 1000000;
@@ -258,11 +267,10 @@ static inline usecs_t confval_to_usecs(enum confval cv)
 	case CONFVAL_TYPE_MAX:
 		break;
 	}
-	
+
 	return usecs;
 }
 
+#endif				/* NO_DECLS */
 
-#endif /* NO_DECLS */
-
-#endif /* _DSR_H */
+#endif				/* _DSR_H */

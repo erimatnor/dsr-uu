@@ -31,11 +31,12 @@ static int dbg_log_buf_len = DBG_LOG_BUF_LEN;
 
 static unsigned long dbg_log_start;	/* Index into dbg_log_buf: next char to be read by sysdbg_log() */
 static unsigned long dbg_log_end;	/* Index into dbg_log_buf: most-recently-written-char + 1 */
-static unsigned long logged_chars; /* Number of chars produced since last read+clear operation */
+static unsigned long logged_chars;	/* Number of chars produced since last read+clear operation */
 
 DECLARE_WAIT_QUEUE_HEAD(dbg_log_wait);
 
-int do_dbglog(int type, char * buf, int len)
+int
+do_dbglog(int type, char *buf, int len)
 {
 	unsigned long i, j, limit, count;
 	int do_clear = 0;
@@ -56,10 +57,12 @@ int do_dbglog(int type, char * buf, int len)
 		error = 0;
 		if (!len)
 			goto out;
-		error = verify_area(VERIFY_WRITE,buf,len);
+		error = verify_area(VERIFY_WRITE, buf, len);
 		if (error)
 			goto out;
-		error = wait_event_interruptible(dbg_log_wait, (dbg_log_start - dbg_log_end));
+		error =
+		    wait_event_interruptible(dbg_log_wait,
+					     (dbg_log_start - dbg_log_end));
 		if (error)
 			goto out;
 		i = 0;
@@ -69,7 +72,7 @@ int do_dbglog(int type, char * buf, int len)
 			c = DBG_LOG_BUF(dbg_log_start);
 			dbg_log_start++;
 			spin_unlock_irq(&dbg_logbuf_lock);
-			error = __put_user(c,buf);
+			error = __put_user(c, buf);
 			buf++;
 			i++;
 			cond_resched();
@@ -80,7 +83,7 @@ int do_dbglog(int type, char * buf, int len)
 			error = i;
 		break;
 	case 4:		/* Read/clear last kernel messages */
-		do_clear = 1; 
+		do_clear = 1;
 		/* FALL THRU */
 	case 3:		/* Read last kernel messages */
 		error = -EINVAL;
@@ -89,7 +92,7 @@ int do_dbglog(int type, char * buf, int len)
 		error = 0;
 		if (!len)
 			goto out;
-		error = verify_area(VERIFY_WRITE,buf,len);
+		error = verify_area(VERIFY_WRITE, buf, len);
 		if (error)
 			goto out;
 		count = len;
@@ -107,13 +110,13 @@ int do_dbglog(int type, char * buf, int len)
 		 * we try to copy to user space. Therefore
 		 * the messages are copied in reverse. <manfreds>
 		 */
-		for(i = 0; i < count && !error; i++) {
-			j = limit-1-i;
+		for (i = 0; i < count && !error; i++) {
+			j = limit - 1 - i;
 			if (j + dbg_log_buf_len < dbg_log_end)
 				break;
 			c = DBG_LOG_BUF(j);
 			spin_unlock_irq(&dbg_logbuf_lock);
-			error = __put_user(c,&buf[count-1-i]);
+			error = __put_user(c, &buf[count - 1 - i]);
 			cond_resched();
 			spin_lock_irq(&dbg_logbuf_lock);
 		}
@@ -121,12 +124,12 @@ int do_dbglog(int type, char * buf, int len)
 		if (error)
 			break;
 		error = i;
-		if(i != count) {
-			int offset = count-error;
+		if (i != count) {
+			int offset = count - error;
 			/* buffer overflow during copy, correct user buffer. */
-			for(i=0;i<error;i++) {
-				if (__get_user(c,&buf[i+offset]) ||
-				    __put_user(c,&buf[i])) {
+			for (i = 0; i < error; i++) {
+				if (__get_user(c, &buf[i + offset]) ||
+				    __put_user(c, &buf[i])) {
 					error = -EFAULT;
 					break;
 				}
@@ -141,17 +144,18 @@ int do_dbglog(int type, char * buf, int len)
 	case 6:		/* Number of chars in the log buffer */
 		error = dbg_log_end - dbg_log_start;
 		break;
-	case 7:	/* Size of the log buffer */
+	case 7:		/* Size of the log buffer */
 		error = dbg_log_buf_len;
 		break;
 	default:
 		error = -EINVAL;
 		break;
 	}
-out:
+      out:
 	return error;
 }
-static void dsr_emit_log_char(char c)
+static void
+dsr_emit_log_char(char c)
 {
 	DBG_LOG_BUF(dbg_log_end) = c;
 	dbg_log_end++;
@@ -161,35 +165,37 @@ static void dsr_emit_log_char(char c)
 		logged_chars++;
 }
 
-
-int dsr_vprintk(const char *func, const char *fmt, va_list args)
+int
+dsr_vprintk(const char *func, const char *fmt, va_list args)
 {
 	unsigned long flags;
 	int printed_len, prefix_len;
 	char *p;
 	static char printk_buf[1024];
 	struct timeval now;
-	
+
 	/* This stops the holder of console_sem just where we want him */
 	spin_lock_irqsave(&dbg_logbuf_lock, flags);
-	
+
 	gettime(&now);
-	
-	prefix_len = sprintf(printk_buf, "%ld:%ld:%03lu:%s: ", 
-			     now.tv_sec / 60, now.tv_sec % 60, 
+
+	prefix_len = sprintf(printk_buf, "%ld:%ld:%03lu:%s: ",
+			     now.tv_sec / 60, now.tv_sec % 60,
 			     now.tv_usec / 1000, func);
-	
+
 	/* Emit the output into the temporary buffer */
-	printed_len = vsnprintf(printk_buf+prefix_len, 
-				sizeof(printk_buf) - prefix_len, fmt, args);
+	printed_len = vsnprintf(printk_buf + prefix_len,
+				sizeof (printk_buf) - prefix_len, fmt, args);
 
 	for (p = printk_buf; *p; p++)
 		dsr_emit_log_char(*p);
-	
+
 	spin_unlock_irqrestore(&dbg_logbuf_lock, flags);
 	return printed_len;
 }
-int trace(const char *func, const char *fmt, ...)
+
+int
+trace(const char *func, const char *fmt, ...)
 {
 	va_list args;
 	int r;
@@ -201,18 +207,21 @@ int trace(const char *func, const char *fmt, ...)
 	return r;
 }
 
-static int dbg_log_open(struct inode * inode, struct file * file)
+static int
+dbg_log_open(struct inode *inode, struct file *file)
 {
-	return do_dbglog(1,NULL,0);
+	return do_dbglog(1, NULL, 0);
 }
 
-static int dbg_log_release(struct inode * inode, struct file * file)
+static int
+dbg_log_release(struct inode *inode, struct file *file)
 {
-	(void) do_dbglog(0,NULL,0);
+	(void) do_dbglog(0, NULL, 0);
 	return 0;
 }
 
-static ssize_t dbg_log_read(struct file *file, char  *buf, size_t count, loff_t *ppos)
+static ssize_t
+dbg_log_read(struct file *file, char *buf, size_t count, loff_t * ppos)
 {
 	/* printk(KERN_DEBUG "dbg_log_read\n"); */
 	if ((file->f_flags & O_NONBLOCK) && !do_dbglog(6, NULL, 0))
@@ -220,7 +229,8 @@ static ssize_t dbg_log_read(struct file *file, char  *buf, size_t count, loff_t 
 	return do_dbglog(2, buf, count);
 }
 
-static unsigned int dbg_log_poll(struct file *file, poll_table *wait)
+static unsigned int
+dbg_log_poll(struct file *file, poll_table * wait)
 {
 	poll_wait(file, &dbg_log_wait, wait);
 	if (do_dbglog(6, NULL, 0))
@@ -228,26 +238,28 @@ static unsigned int dbg_log_poll(struct file *file, poll_table *wait)
 	return 0;
 }
 
-
 struct file_operations proc_dbg_operations = {
-	.read		= dbg_log_read,
-	.poll		= dbg_log_poll,
-	.open		= dbg_log_open,
-	.release	= dbg_log_release,
+	.read = dbg_log_read,
+	.poll = dbg_log_poll,
+	.open = dbg_log_open,
+	.release = dbg_log_release,
 };
 
-int __init dbg_init(void)
+int __init
+dbg_init(void)
 {
 	struct proc_dir_entry *entry;
-	
-	entry = create_proc_entry("dsr_dbg", S_IRUSR | S_IRGRP | S_IROTH, proc_net);
+
+	entry =
+	    create_proc_entry("dsr_dbg", S_IRUSR | S_IRGRP | S_IROTH, proc_net);
 	if (entry)
 		entry->proc_fops = &proc_dbg_operations;
-	
+
 	return 0;
 }
 
-void __exit dbg_cleanup(void)
+void __exit
+dbg_cleanup(void)
 {
 	proc_net_remove("dsr_dbg");
 }

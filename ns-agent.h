@@ -3,7 +3,7 @@
 
 #ifndef NS2
 #error "To compile the ns-2 version of DSR-UU, NS2 must be defined!"
-#endif /* NS2 */
+#endif				/* NS2 */
 
 class DSRUU;
 
@@ -66,53 +66,60 @@ struct hdr_test {
 	int data;
 	/* Packet header access functions */
 	static int offset_;
-	inline static int& offset() { return offset_; }
-	inline static hdr_test* access(const Packet* p) {
-		return (hdr_test*) p->access(offset_);
+	inline static int &offset() {
+		return offset_;
+	} inline static hdr_test *access(const Packet * p) {
+		return (hdr_test *) p->access(offset_);
 	}
-	int size() { return data; }
+	int size() {
+		return data;
+	}
 
 };
 
-class DSRUU : public Tap, public Agent {
- public:
+class DSRUU:public Tap, public Agent {
+      public:
 	friend class DSRUUTimer;
-	
+
 	DSRUU();
 	~DSRUU();
 
 	DSRUUTimer ack_timer;
 
-	int command(int argc, const char*const* argv);
-	void recv(Packet*, Handler* callback = 0);
-	void tap(const Packet *p);
+	int command(int argc, const char *const *argv);
+	void recv(Packet *, Handler * callback = 0);
+	void tap(const Packet * p);
 	Packet *ns_packet_create(struct dsr_pkt *dp);
 	void ns_xmit(struct dsr_pkt *dp);
 	void ns_deliver(struct dsr_pkt *dp);
 
-	struct hdr_ip *	dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, 
-				     struct in_addr dst, int ip_len, 
-				     int tot_len, int protocol, int ttl);
-	void add_timer (DSRUUTimer *t) { 
+	struct hdr_ip *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src,
+				    struct in_addr dst, int ip_len,
+				    int tot_len, int protocol, int ttl);
+	void add_timer(DSRUUTimer * t) {
 		//printf("Setting timer %s to %f\n", t->get_name(), t->expires - Scheduler::instance().clock());
-		t->resched(t->expires - Scheduler::instance().clock()); }
-/* 	void mod_timer (DSRUUTimer *t, unsinged long expires_)  */
-/* 		{ t->expires = expires_ ; t->resched(t->expires); } */
-	void del_timer (DSRUUTimer *t) { 
+		t->resched(t->expires - Scheduler::instance().clock());
+	}
+/* 	void mod_timer (DSRUUTimer *t, unsinged long expires_)  *//* 		{ t->expires = expires_ ; t->resched(t->expires); } */
+	    void del_timer(DSRUUTimer * t) {
 		//printf("Cancelling timer %s\n", t->get_name());
-		t->cancel(); }
-	void set_timer(DSRUUTimer *t, struct timeval *expires) {
+		t->cancel();
+	}
+	void set_timer(DSRUUTimer * t, struct timeval *expires) {
 		//printf("In set_timer\n");
 		t->expires = expires->tv_usec;
 		t->expires /= 1000000l;
 		t->expires += expires->tv_sec;
 		add_timer(t);
 	}
-	static const unsigned int get_confval(enum confval cv) 
-		{ return confvals[cv]; }
-	static const unsigned int set_confval(enum confval cv, unsigned int val)
-		{ confvals[cv] = val; return val; }
-	
+	static const unsigned int get_confval(enum confval cv) {
+		return confvals[cv];
+	}
+	static const unsigned int set_confval(enum confval cv, unsigned int val) {
+		confvals[cv] = val;
+		return val;
+	}
+
 #define NO_GLOBALS
 #undef NO_DECLS
 
@@ -156,20 +163,20 @@ class DSRUU : public Tap, public Agent {
 #include "debug.h"
 
 #undef NO_GLOBALS
-	
-	struct in_addr my_addr() { return myaddr_; }
+
+	struct in_addr my_addr() {
+		return myaddr_;
+	}
 	int arpset(struct in_addr addr, unsigned int mac_addr);
-	inline void ethtoint(char * eth, int *num)
-		{
-			memcpy((char*)num, eth, ETH_ALEN);
-			return;
-		}
-	inline void inttoeth(int *num, char* eth)
-		{
-			memcpy(eth,(char*)num, ETH_ALEN);
-			return;
-		}
- private:
+	inline void ethtoint(char *eth, int *num) {
+		memcpy((char *) num, eth, ETH_ALEN);
+		return;
+	}
+	inline void inttoeth(int *num, char *eth) {
+		memcpy(eth, (char *) num, ETH_ALEN);
+		return;
+	}
+      private:
 	static int confvals[CONFVAL_MAX];
 	struct in_addr myaddr_;
 	unsigned long macaddr_;
@@ -184,9 +191,9 @@ class DSRUU : public Tap, public Agent {
 	struct tbl send_buf;
 	struct tbl neigh_tbl;
 	struct tbl maint_buf;
-	
+
 	unsigned int rreq_seqno;
-	
+
 	DSRUUTimer grat_rrep_tbl_timer;
 	DSRUUTimer send_buf_timer;
 	DSRUUTimer neigh_tbl_timer;
@@ -196,4 +203,4 @@ class DSRUU : public Tap, public Agent {
 	struct lc_graph LC;
 };
 
-#endif /* _DSR_NS_AGENT_H */
+#endif				/* _DSR_NS_AGENT_H */

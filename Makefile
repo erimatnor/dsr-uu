@@ -89,10 +89,10 @@ mips:
 
 $(MODNAME).ko: $(SRC) Makefile
 	@echo "Compiling for $(PWD)"
-	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) modules
+	$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) modules
 
 $(RTC_TRG).ko: $(RTC_SRC) Makefile
-	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) modules
+	$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) modules
 
 $(KOBJS): %.o: %.c Makefile
 	@echo "Compiling for $(PWD)"
@@ -132,12 +132,16 @@ TODO:
 TAGS: *.c *.h
 	etags.emacs $(SRC) *.h
 
+indent:
+	indent -kr -i8 -ts8 -sob -l80 -ss -bs -psl *.c *.h 
+
 clean-2.6:
-	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) clean
-	rm -rf Makefile.bak TAGS TODO endian endian.h
+	$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) clean
+	rm -rf *~ *.o Makefile.bak TAGS TODO endian endian.h $(NS_TARGET)
 
 clean-2.4:
-	rm -rf *.o Makefile.bak TAGS TODO endian endian.h $(NS_TARGET)
+	rm -rf *~ *.o Makefile.bak TAGS TODO endian endian.h $(NS_TARGET)
+
 endif
 # DO NOT DELETE
 

@@ -46,15 +46,16 @@ static DSRUUTimer rtc_timer;
 
 static void dsr_rtc_timeout(unsigned long data);
 
-static inline void __dsr_rtc_set_next_timeout(void)
+static inline void
+__dsr_rtc_set_next_timeout(void)
 {
 	struct rtc_entry *ne;
-    
-	if (list_empty(&rtc_head)) 
+
+	if (list_empty(&rtc_head))
 		return;
-	
+
 	/* Get first entry */
-	ne = (struct rtc_entry *)rtc_head.next;
+	ne = (struct rtc_entry *) rtc_head.next;
 
 	if (timer_pending(&rtc_timer)) {
 		mod_timer(&rtc_timer, ne->expires);
@@ -66,21 +67,22 @@ static inline void __dsr_rtc_set_next_timeout(void)
 	}
 }
 
-static void dsr_rtc_timeout(unsigned long data)
+static void
+dsr_rtc_timeout(unsigned long data)
 {
 	list_t *pos, *tmp;
 	int time = TimeNow;
-    
+
 	DSR_WRITE_LOCK(&rtc_lock);
-    
+
 	DEBUG("srt timeout\n");
 
 	list_for_each_safe(pos, tmp, &rtc_head) {
-		struct rtc_entry *e = (struct rtc_entry *)pos;
-	
+		struct rtc_entry *e = (struct rtc_entry *) pos;
+
 		if (e->expires > time)
 			break;
-	
+
 		list_del(&e->l);
 		FREE(e);
 		rtc_len--;
@@ -88,37 +90,39 @@ static void dsr_rtc_timeout(unsigned long data)
 	__dsr_rtc_set_next_timeout();
 	DSR_WRITE_UNLOCK(&rtc_lock);
 }
-#endif  /* RTC_TIMER */
+#endif				/* RTC_TIMER */
 
-static inline void __dsr_rtc_flush(void)
+static inline void
+__dsr_rtc_flush(void)
 {
 	list_t *pos, *tmp;
-    
+
 	list_for_each_safe(pos, tmp, &rtc_head) {
-		struct rtc_entry *e = (struct rtc_entry *)pos;
+		struct rtc_entry *e = (struct rtc_entry *) pos;
 		list_del(&e->l);
 		rtc_len--;
 		FREE(e);
 	}
 }
 
-static inline int __dsr_rtc_add(struct rtc_entry *e)
+static inline int
+__dsr_rtc_add(struct rtc_entry *e)
 {
-    
+
 	if (rtc_len >= RTC_MAX_LEN) {
 		printk(KERN_WARNING "dsr_rtc: Max list len reached\n");
 		return -ENOSPC;
 	}
-    
+
 	if (list_empty(&rtc_head)) {
 		list_add(&e->l, &rtc_head);
 	} else {
 		list_t *pos;
-	
+
 		list_for_each(pos, &rtc_head) {
-			struct rtc_entry *curr = (struct rtc_entry *)pos;
-	    
-			if (curr->expires > e->expires) 
+			struct rtc_entry *curr = (struct rtc_entry *) pos;
+
+			if (curr->expires > e->expires)
 				break;
 		}
 		list_add(&e->l, pos->prev);
@@ -126,102 +130,106 @@ static inline int __dsr_rtc_add(struct rtc_entry *e)
 	return 1;
 }
 
-static inline struct rtc_entry *__dsr_rtc_find(__u32 daddr)
+static inline struct rtc_entry *
+__dsr_rtc_find(__u32 daddr)
 {
 	list_t *pos;
-    
+
 	list_for_each(pos, &rtc_head) {
-		struct rtc_entry *e = (struct rtc_entry *)pos;
-	
+		struct rtc_entry *e = (struct rtc_entry *) pos;
+
 		if (e->srt.dst.s_addr == daddr)
 			return e;
 	}
 	return NULL;
 }
 
-static inline int __dsr_rtc_del(struct rtc_entry *e)
+static inline int
+__dsr_rtc_del(struct rtc_entry *e)
 {
 	if (e == NULL)
 		return 0;
-    
+
 	if (list_is_first(e)) {
-	 
+
 		list_del(&e->l);
 #ifdef RTC_TIMER
 		if (!list_empty(&rtc_head)) {
 			/* Get the first entry */
-			struct rtc_entry *f = (struct rtc_entry *)rtc_head.next;
-	    
+			struct rtc_entry *f =
+			    (struct rtc_entry *) rtc_head.next;
+
 			/* Update the timer */
 			mod_timer(&rtc_timer, f->expires);
 		}
 #endif
 	} else
 		list_del(&e->l);
-    
+
 	return 1;
 }
 
-int dsr_rtc_del(struct in_addr src, struct in_addr dst)
+int
+dsr_rtc_del(struct in_addr src, struct in_addr dst)
 {
 	int res;
 	struct rtc_entry *e;
-  
-	DSR_WRITE_LOCK(&rtc_lock); 
-    
+
+	DSR_WRITE_LOCK(&rtc_lock);
+
 	e = __dsr_rtc_find(dst.s_addr);
 
 	if (e == NULL) {
 		res = 0;
 		goto unlock;
 	}
-    
+
 	res = __dsr_rtc_del(e);
-    
+
 	if (res)
 		FREE(e);
- unlock:
+      unlock:
 	DSR_WRITE_UNLOCK(&rtc_lock);
-    
+
 	return res;
 }
 
-struct dsr_srt *dsr_rtc_find(struct in_addr src, struct in_addr dst)
+struct dsr_srt *
+dsr_rtc_find(struct in_addr src, struct in_addr dst)
 {
 	struct rtc_entry *e;
 	struct dsr_srt *srt;
-    
+
 /*     printk("Checking activeness\n"); */
 	DSR_READ_LOCK(&rtc_lock);
 	e = __dsr_rtc_find(dst.s_addr);
-    
+
 	if (e) {
 		/* We must make a copy of the source route so that we do not
 		 * return a pointer into the shared data structure */
-		srt = MALLOC(e->srt.laddrs + sizeof(struct dsr_srt), GFP_ATOMIC);
-		memcpy(srt, &e->srt, e->srt.laddrs + sizeof(struct dsr_srt));
+		srt =
+		    MALLOC(e->srt.laddrs + sizeof (struct dsr_srt), GFP_ATOMIC);
+		memcpy(srt, &e->srt, e->srt.laddrs + sizeof (struct dsr_srt));
 		DSR_READ_UNLOCK(&rtc_lock);
 		return srt;
-	}	
+	}
 	DSR_READ_UNLOCK(&rtc_lock);
 	return NULL;
 }
 
-
-int dsr_rtc_add(struct dsr_srt *srt, unsigned long time, 
-		unsigned short flags)
+int
+dsr_rtc_add(struct dsr_srt *srt, unsigned long time, unsigned short flags)
 {
 	struct rtc_entry *e;
 	int status = 0;
-    
+
 	if (!srt || dsr_rtc_find(srt->src, srt->dst))
 		return 0;
-    
+
 	DEBUG("Adding source route to route cache\n");
 
-	e = MALLOC(sizeof(struct rtc_entry) + srt->laddrs, 
-		    GFP_ATOMIC);
-    
+	e = MALLOC(sizeof (struct rtc_entry) + srt->laddrs, GFP_ATOMIC);
+
 	if (e == NULL) {
 		printk(KERN_ERR "rtc: OOM in rtc_add\n");
 		return -ENOMEM;
@@ -229,20 +237,20 @@ int dsr_rtc_add(struct dsr_srt *srt, unsigned long time,
 
 	e->flags = flags;
 	e->expires = TimeNow + (time * HZ) / 1000;
-	memcpy(&e->srt, srt, sizeof(struct dsr_srt));
+	memcpy(&e->srt, srt, sizeof (struct dsr_srt));
 	memcpy(e->srt.addrs, srt->addrs, srt->laddrs);
-    
+
 	DSR_WRITE_LOCK(&rtc_lock);
-    
+
 	status = __dsr_rtc_add(e);
-    
+
 	if (status)
 		rtc_len++;
 
 #ifdef RTC_TIMER
 	/* If the added element was added first in the list we update the timer */
 	if (status && list_is_first(e)) {
-	
+
 		if (timer_pending(&rtc_timer))
 			mod_timer(&rtc_timer, e->expires);
 		else {
@@ -254,24 +262,24 @@ int dsr_rtc_add(struct dsr_srt *srt, unsigned long time,
 	}
 #endif
 	DSR_WRITE_UNLOCK(&rtc_lock);
-    
+
 	if (status < 0) {
 		DEBUG("add failed\n");
-		FREE(e); 
+		FREE(e);
 	}
 	return status;
 }
 
-void dsr_rtc_update(struct dsr_srt *srt, unsigned long time, 
-		    unsigned short flags)
+void
+dsr_rtc_update(struct dsr_srt *srt, unsigned long time, unsigned short flags)
 {
 	struct rtc_entry *e;
 
 	if (!srt)
 		return;
-    
-	DSR_WRITE_LOCK(&rtc_lock); 
-    
+
+	DSR_WRITE_LOCK(&rtc_lock);
+
 	e = __dsr_rtc_find(srt->dst.s_addr);
 
 	if (e == NULL) {
@@ -281,61 +289,63 @@ void dsr_rtc_update(struct dsr_srt *srt, unsigned long time,
 	e->flags = flags;
 	/* Update expire time */
 	e->expires = TimeNow + (time * HZ) / 1000;
-	memcpy(&e->srt, srt, sizeof(struct dsr_srt));
+	memcpy(&e->srt, srt, sizeof (struct dsr_srt));
 	memcpy(e->srt.addrs, srt->addrs, srt->laddrs);
-    
-	/* Remove from list */    
+
+	/* Remove from list */
 	list_del(&e->l);
 	__dsr_rtc_add(e);
 #ifdef RTC_TIMER
 	__dsr_rtc_set_next_timeout();
 #endif
-    
- unlock:
-	DSR_WRITE_UNLOCK(&rtc_lock); 
+
+      unlock:
+	DSR_WRITE_UNLOCK(&rtc_lock);
 }
 
-static int dsr_rtc_print(char *buf)
+static int
+dsr_rtc_print(char *buf)
 {
 	list_t *pos;
 	int len = 0;
-    
+
 	DSR_READ_LOCK(&rtc_lock);
-    
+
 	len += sprintf(buf, "# %-5s %-8s Source Route\n", "Flags", "Expires");
 
 	list_for_each(pos, &rtc_head) {
 		char flags[4];
 		int num_flags = 0;
-		struct rtc_entry *e = (struct rtc_entry *)pos;
-	
-	
+		struct rtc_entry *e = (struct rtc_entry *) pos;
+
 		flags[num_flags] = '\0';
-	
-		len += sprintf(buf+len, "  %-5s %-8lu %s\n", flags, 
+
+		len += sprintf(buf + len, "  %-5s %-8lu %s\n", flags,
 			       (e->expires - TimeNow) * 1000 / HZ,
 			       print_srt(&e->srt));
 	}
-    
+
 	DSR_READ_UNLOCK(&rtc_lock);
 	return len;
 }
-static int dsr_rtc_proc_info(char *buffer, char **start, off_t offset, int length)
+static int
+dsr_rtc_proc_info(char *buffer, char **start, off_t offset, int length)
 {
 	int len;
 
 	len = dsr_rtc_print(buffer);
-    
+
 	*start = buffer + offset;
 	len -= offset;
 	if (len > length)
 		len = length;
 	else if (len < 0)
 		len = 0;
-	return len;    
+	return len;
 }
 
-void dsr_rtc_flush(void)
+void
+dsr_rtc_flush(void)
 {
 #ifdef RTC_TIMER
 	if (timer_pending(&rtc_timer))
@@ -349,7 +359,8 @@ void dsr_rtc_flush(void)
 	DSR_WRITE_UNLOCK(&rtc_lock);
 }
 
-int __init dsr_rtc_init(void)
+int __init
+dsr_rtc_init(void)
 {
 	proc_net_create(DSR_RTC_PROC_NAME, 0, dsr_rtc_proc_info);
 
@@ -358,7 +369,8 @@ int __init dsr_rtc_init(void)
 #endif
 	return 0;
 }
-void __exit dsr_rtc_cleanup(void)
+void __exit
+dsr_rtc_cleanup(void)
 {
 	dsr_rtc_flush();
 	proc_net_remove(DSR_RTC_PROC_NAME);

@@ -4,7 +4,7 @@
 
 #ifdef NS2
 #include "ns-agent.h"
-#endif /* NS2 */
+#endif				/* NS2 */
 
 #include "tbl.h"
 #include "neigh.h"
@@ -13,7 +13,6 @@
 
 #define NEIGH_TBL_MAX_LEN 50
 
-
 #define DSRTV_SRTTBASE 0
 #define DSRTV_MIN 2
 #define DSRTV_REXMTMAX 128
@@ -21,9 +20,9 @@
 #define TICK 2
 #define PR_SLOWHZ 2
 
-#define NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT 3000 
+#define NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT 3000
 #define NEIGH_TBL_TIMEOUT 2000
-#define RTT_DEF  500000 /* usecs */
+#define RTT_DEF  500000		/* usecs */
 
 #define DSRT_RANGESET(tv, value, tvmin, tvmax) { \
         (tv) = (value); \
@@ -47,26 +46,27 @@ struct neighbor {
 	struct sockaddr hw_addr;
 	unsigned short id;
 	struct timeval last_ack_req;
-	usecs_t t_rtt, t_srtt, t_rxtcur, t_rttmin, t_rttvar, jitter; /* RTT in usec */
+	usecs_t t_rtt, t_srtt, t_rxtcur, t_rttmin, t_rttvar, jitter;	/* RTT in usec */
 };
 
 struct neighbor_query {
 	struct in_addr *addr;
 	struct neighbor_info *info;
 };
-	
-static inline int crit_addr(void *pos, void *query)
+
+static inline int
+crit_addr(void *pos, void *query)
 {
-	struct neighbor_query *q = (struct neighbor_query *)query; 
-	struct neighbor *n = (struct neighbor *)pos;
-	
+	struct neighbor_query *q = (struct neighbor_query *) query;
+	struct neighbor *n = (struct neighbor *) pos;
+
 	if (n->addr.s_addr == q->addr->s_addr) {
 		if (q->info) {
 			q->info->id = n->id;
 			q->info->last_ack_req = n->last_ack_req;
-			memcpy(&q->info->hw_addr, &n->hw_addr, 
-			       sizeof(struct sockaddr));
-			
+			memcpy(&q->info->hw_addr, &n->hw_addr,
+			       sizeof (struct sockaddr));
+
 			/* TODO: Calculate RTO */
 			q->info->rto = n->t_rtt;
 		}
@@ -75,11 +75,12 @@ static inline int crit_addr(void *pos, void *query)
 	return 0;
 }
 
-static inline int crit_addr_id_inc(void *pos, void *addr)
+static inline int
+crit_addr_id_inc(void *pos, void *addr)
 {
-	struct in_addr *a = (struct in_addr *)addr; 
-	struct neighbor *n = (struct neighbor *)pos;
-	
+	struct in_addr *a = (struct in_addr *) addr;
+	struct neighbor *n = (struct neighbor *) pos;
+
 	if (n->addr.s_addr == a->s_addr) {
 		n->id++;
 		gettime(&n->last_ack_req);
@@ -88,77 +89,78 @@ static inline int crit_addr_id_inc(void *pos, void *addr)
 	return 0;
 }
 
-void NSCLASS neigh_tbl_garbage_timeout(unsigned long data)
+void NSCLASS
+neigh_tbl_garbage_timeout(unsigned long data)
 {
 	/* tbl_for_each_del(&neigh_tbl, NULL, crit_garbage); */
-	
-	
+
 /* 	if (!tbl_empty(&neigh_tbl)) { */
-	/* 	garbage_timer.expires = TimeNow +  */
+	/*      garbage_timer.expires = TimeNow +  */
 /* 			MSECS_TO_TIMENOW(NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT); */
-	/* 	add_timer(&garbage_timer);	 */
+	/*      add_timer(&garbage_timer);       */
 	/* } */
 }
 
-
-
-static struct neighbor *neigh_tbl_create(struct in_addr addr, 
-					 struct sockaddr *hw_addr,
-					 unsigned short id)
+static struct neighbor *
+neigh_tbl_create(struct in_addr addr,
+		 struct sockaddr *hw_addr, unsigned short id)
 {
 	struct neighbor *neigh;
-	
-	neigh = (struct neighbor *)MALLOC(sizeof(struct neighbor), GFP_ATOMIC);
-	
+
+	neigh =
+	    (struct neighbor *) MALLOC(sizeof (struct neighbor), GFP_ATOMIC);
+
 	if (!neigh)
 		return NULL;
-	
-	memset(neigh, 0, sizeof(struct neighbor));
+
+	memset(neigh, 0, sizeof (struct neighbor));
 
 	neigh->id = id;
 	neigh->addr = addr;
-	neigh->t_srtt = DSRTV_SRTTBASE; 
+	neigh->t_srtt = DSRTV_SRTTBASE;
 	neigh->t_rttvar = 0;
 	neigh->t_rttmin = DSRTV_MIN;
 	neigh->t_rtt = RTT_DEF;
 	gettime(&neigh->last_ack_req);
-	memcpy(&neigh->hw_addr, hw_addr, sizeof(struct sockaddr));
-	
+	memcpy(&neigh->hw_addr, hw_addr, sizeof (struct sockaddr));
+
 /* 	garbage_timer.expires = TimeNow + NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT / 1000*HZ; */
 /* 	add_timer(&garbage_timer); */
 
 	return neigh;
 }
-#ifdef NS2 
-int NSCLASS neigh_tbl_add(struct in_addr neigh_addr, struct hdr_mac *mach)
+
+#ifdef NS2
+int NSCLASS
+neigh_tbl_add(struct in_addr neigh_addr, struct hdr_mac *mach)
 #else
-int NSCLASS neigh_tbl_add(struct in_addr neigh_addr, struct ethhdr *ethh)
+int NSCLASS
+neigh_tbl_add(struct in_addr neigh_addr, struct ethhdr *ethh)
 #endif
 {
 	struct sockaddr hw_addr;
 	struct neighbor *neigh;
 	struct neighbor_query q;
-	
+
 	q.addr = &neigh_addr;
 	q.info = NULL;
 
 	if (in_tbl(&neigh_tbl, &q, crit_addr))
 		return 0;
-#ifdef NS2 
+#ifdef NS2
 	/* This should probably be changed to lookup the MAC type
 	 * dynamically in case the simulation is run over a non 802.11
 	 * mac layer... Or is there a uniform way to get hold of the mac
 	 * source for all mac headers? */
-	struct hdr_mac802_11 *mh_802_11 = 
-		(struct hdr_mac802_11 *)mach;
-	
+	struct hdr_mac802_11 *mh_802_11 = (struct hdr_mac802_11 *) mach;
+
 	int mac_src = ETHER_ADDR(mh_802_11->dh_ta);
-	
-	inttoeth(&mac_src, (char *)&hw_addr);
-#else	
+
+	inttoeth(&mac_src, (char *) &hw_addr);
+#else
 	memcpy(hw_addr.sa_data, ethh->h_source, ETH_ALEN);
-#endif		
-	
+#endif
+
 	neigh = neigh_tbl_create(neigh_addr, &hw_addr, 1);
 
 	if (!neigh) {
@@ -170,7 +172,8 @@ int NSCLASS neigh_tbl_add(struct in_addr neigh_addr, struct ethhdr *ethh)
 	return 1;
 }
 
-int NSCLASS neigh_tbl_del(struct in_addr neigh_addr)
+int NSCLASS
+neigh_tbl_del(struct in_addr neigh_addr)
 {
 	return tbl_for_each_del(&neigh_tbl, &neigh_addr, crit_addr);
 }
@@ -179,19 +182,19 @@ int NSCLASS neigh_tbl_del(struct in_addr neigh_addr)
 /* { */
 /* 	struct neighbor *neigh; */
 /* 	int delta; */
-	
+
 /* 	DSR_WRITE_LOCK(&neigh_tbl.lock); */
 
 /* 	neigh = (struct neighbor *)__tbl_find(&neigh_tbl, &nxt_hop, crit_addr); */
-	
+
 /* 	if (!neigh) { */
 /* 		DSR_WRITE_UNLOCK(&neigh_tbl.lock); */
 /* 		return -1; */
 /* 	} */
-	
+
 /* 	/\* Use TCP RTO estimation *\/ */
 /* 	delta = nticks - neigh->srtt; */
-	
+
 /*        	neigh->srtt = neigh->srtt + (delta >> 3); */
 
 /* 	DSR_WRITE_UNLOCK(&neigh_tbl.lock); */
@@ -199,71 +202,75 @@ int NSCLASS neigh_tbl_del(struct in_addr neigh_addr)
 /* 	return 0; */
 /* } */
 
-
-
-int NSCLASS neigh_tbl_query(struct in_addr neigh_addr, struct neighbor_info *neigh_info)
+int NSCLASS
+neigh_tbl_query(struct in_addr neigh_addr, struct neighbor_info *neigh_info)
 {
 	struct neighbor_query q;
-	
+
 	q.addr = &neigh_addr;
 	q.info = neigh_info;
-	
+
 	return in_tbl(&neigh_tbl, &q, crit_addr);
 }
 
-int NSCLASS neigh_tbl_id_inc(struct in_addr neigh_addr)
+int NSCLASS
+neigh_tbl_id_inc(struct in_addr neigh_addr)
 {
 	return in_tbl(&neigh_tbl, &neigh_addr, crit_addr_id_inc);
 }
 
 #ifdef __KERNEL__
-static int neigh_tbl_print(char *buf)
+static int
+neigh_tbl_print(char *buf)
 {
 	list_t *pos;
 	int len = 0;
-    
+
 	DSR_READ_LOCK(&neigh_tbl.lock);
-    
-	len += sprintf(buf, "# %-15s %-17s %-10s %-6s\n", "Addr", "HwAddr", "RTT (usec)", "Id" /*, "AckRxTime","AckTxTime" */);
+
+	len +=
+	    sprintf(buf, "# %-15s %-17s %-10s %-6s\n", "Addr", "HwAddr",
+		    "RTT (usec)", "Id" /*, "AckRxTime","AckTxTime" */ );
 
 	list_for_each(pos, &neigh_tbl.head) {
-		struct neighbor *neigh =(struct neighbor *)pos;
-		
-		len += sprintf(buf+len, "  %-15s %-17s %-10lu %-6u\n", 
-			       print_ip(neigh->addr), 
+		struct neighbor *neigh = (struct neighbor *) pos;
+
+		len += sprintf(buf + len, "  %-15s %-17s %-10lu %-6u\n",
+			       print_ip(neigh->addr),
 			       print_eth(neigh->hw_addr.sa_data),
 			       neigh->t_rtt, neigh->id);
 	}
-    
+
 	DSR_READ_UNLOCK(&neigh_tbl.lock);
 	return len;
 
 }
 
-static int neigh_tbl_proc_info(char *buffer, char **start, off_t offset, int length)
+static int
+neigh_tbl_proc_info(char *buffer, char **start, off_t offset, int length)
 {
 	int len;
 
 	len = neigh_tbl_print(buffer);
-    
+
 	*start = buffer + offset;
 	len -= offset;
 	if (len > length)
 		len = length;
 	else if (len < 0)
 		len = 0;
-	return len;    
+	return len;
 }
 
-#endif /* __KERNEL__ */
+#endif				/* __KERNEL__ */
 
-
-int __init NSCLASS neigh_tbl_init(void)
+int __init NSCLASS
+neigh_tbl_init(void)
 {
 	INIT_TBL(&neigh_tbl, NEIGH_TBL_MAX_LEN);
 
 	init_timer(&neigh_tbl_timer);
-	
+
 	neigh_tbl_timer.function = &NSCLASS neigh_tbl_garbage_timeout;
 
 #ifdef __KERNEL__
@@ -272,8 +279,8 @@ int __init NSCLASS neigh_tbl_init(void)
 	return 0;
 }
 
-
-void __exit NSCLASS neigh_tbl_cleanup(void)
+void __exit NSCLASS
+neigh_tbl_cleanup(void)
 {
 	tbl_flush(&neigh_tbl, crit_none);
 

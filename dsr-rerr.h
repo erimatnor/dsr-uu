@@ -15,9 +15,9 @@ struct dsr_rerr_opt {
 	u_int8_t err_type;
 #if defined(__LITTLE_ENDIAN_BITFIELD)
 	u_int8_t res:4;
-	u_int8_t salv:4;		
+	u_int8_t salv:4;
 #elif defined (__BIG_ENDIAN_BITFIELD)
-	u_int8_t l:4;		
+	u_int8_t l:4;
 	u_int8_t salv:4;
 #else
 #error  "Please fix <asm/byteorder.h>"
@@ -38,13 +38,13 @@ struct node_unreach_info {
 #define FLOW_STATE_NOT_SUPPORTED  2
 #define OPTION_NOT_SUPPORTED      3
 
-#endif /* NO_GLOBALS */
+#endif				/* NO_GLOBALS */
 
 #ifndef NO_DECLS
 
 int dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr);
 int dsr_rerr_opt_recv(struct dsr_rerr_opt *dsr_rerr_opt);
 
-#endif /* NO_DECLS */
+#endif				/* NO_DECLS */
 
-#endif /* _DSR_RERR_H */
+#endif				/* _DSR_RERR_H */

@@ -18,17 +18,17 @@ struct dsr_srt_opt {
 	u_int16_t salv1:2;
 	u_int16_t sleft:6;
 	u_int16_t f:1;
-	u_int16_t l:1;	
+	u_int16_t l:1;
 	u_int16_t res:4;
-	u_int16_t salv2:2;	
+	u_int16_t salv2:2;
 #define SET_SALVAGE(sr, x) ( {  u_int8_t __x = (x); \
                                (sr)->salv1 = (__x & 0x03 << 2); \
                                (sr)->salv2 = (__x & 0x0c >> 2); })
 #define GET_SALVAGE(sr, x) ( {  x = 0; })
 
 #elif defined (__BIG_ENDIAN_BITFIELD)
-	u_int16_t f:1;	
-	u_int16_t l:1;	
+	u_int16_t f:1;
+	u_int16_t l:1;
 	u_int16_t res:4;
 	u_int16_t salv:4;
 	u_int16_t sleft:6;
@@ -52,11 +52,12 @@ struct dsr_srt {
 	struct in_addr dst;
 	unsigned short flags;
 	unsigned short index;
-	unsigned int laddrs;  /* length in bytes if addrs */
-	struct in_addr addrs[0];  /* Intermediate nodes */
+	unsigned int laddrs;	/* length in bytes if addrs */
+	struct in_addr addrs[0];	/* Intermediate nodes */
 };
 
-static inline char *print_srt(struct dsr_srt *srt)
+static inline char *
+print_srt(struct dsr_srt *srt)
 {
 #define BUFLEN 256
 	static char buf[BUFLEN];
@@ -64,31 +65,31 @@ static inline char *print_srt(struct dsr_srt *srt)
 
 	if (!srt)
 		return NULL;
-	
+
 	len = sprintf(buf, "%s<->", print_ip(srt->src));
-	
-	for (i = 0; i < (srt->laddrs / sizeof(u_int32_t)) && 
-		     (len + 16) < BUFLEN; i++)
-		len += sprintf(buf+len, "%s<->", print_ip(srt->addrs[i]));
-	
+
+	for (i = 0; i < (srt->laddrs / sizeof (u_int32_t)) &&
+	     (len + 16) < BUFLEN; i++)
+		len += sprintf(buf + len, "%s<->", print_ip(srt->addrs[i]));
+
 	if ((len + 16) < BUFLEN)
-		len = sprintf(buf+len, "%s", print_ip(srt->dst));
+		len = sprintf(buf + len, "%s", print_ip(srt->dst));
 	return buf;
 }
 struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, int sleft);
 struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt, int sleft);
 struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt);
-struct dsr_srt *dsr_srt_new(struct in_addr src, struct in_addr dst, 
+struct dsr_srt *dsr_srt_new(struct in_addr src, struct in_addr dst,
 			    unsigned int length, char *addrs);
 struct dsr_srt *dsr_srt_new_rev(struct dsr_srt *srt);
 void dsr_srt_del(struct dsr_srt *srt);
-#endif /* NO_GLOBALS */
+#endif				/* NO_GLOBALS */
 
 #ifndef NO_DECLS
 
 int dsr_srt_add(struct dsr_pkt *dp);
 int dsr_srt_opt_recv(struct dsr_pkt *dp);
 
-#endif /* NO_DECLS */
+#endif				/* NO_DECLS */
 
-#endif /* _DSR_SRT_H */
+#endif				/* _DSR_SRT_H */

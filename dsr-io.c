@@ -19,15 +19,16 @@
 #include "debug.h"
 #include "send-buf.h"
 
-void NSCLASS dsr_recv(struct dsr_pkt *dp)
+void NSCLASS
+dsr_recv(struct dsr_pkt *dp)
 {
 	int i = 0, action;
 	int mask = DSR_PKT_NONE;
 
 	/* Process DSR Options */
 	action = dsr_opt_recv(dp);
-	
-      	/* Add mac address of previous hop to the neighbor table */
+
+	/* Add mac address of previous hop to the neighbor table */
 
 	if (dp->flags & PKT_PROMISC_RECV) {
 		dsr_pkt_free(dp);
@@ -35,7 +36,7 @@ void NSCLASS dsr_recv(struct dsr_pkt *dp)
 	}
 	for (i = 0; i < DSR_PKT_ACTION_LAST; i++) {
 		//DEBUG("i=%d action=0x%08x mask=0x%08x (action & mask)=0x%08x\n", i, action, (mask), (action & mask));
-		
+
 		switch (action & mask) {
 		case DSR_PKT_NONE:
 			break;
@@ -45,13 +46,13 @@ void NSCLASS dsr_recv(struct dsr_pkt *dp)
 			dsr_pkt_free(dp);
 			return;
 		case DSR_PKT_SEND_ACK:
-		/* 	if (dp->ack_req_opt && dp->srt) { */
+			/*      if (dp->ack_req_opt && dp->srt) { */
 /* 				unsigned short id = ntohs(dp->ack_req_opt->id); */
-				
+
 /* 				DEBUG("send ACK: src=%s prv=%s id=%u\n",  */
 /* 				      print_ip(dp->src),  */
 /* 				      print_ip(dp->prv_hop), id); */
-			
+
 /* 				dsr_ack_send(dp->prv_hop, id); */
 /* 			} */
 			break;
@@ -62,8 +63,8 @@ void NSCLASS dsr_recv(struct dsr_pkt *dp)
 			//dsr_opts_remove(dp);
 			break;
 		case DSR_PKT_FORWARD:
-			
-#ifdef NS2	
+
+#ifdef NS2
 			if (dp->nh.iph->ttl() < 1)
 #else
 			if (dp->nh.iph->ttl < 1)
@@ -73,10 +74,9 @@ void NSCLASS dsr_recv(struct dsr_pkt *dp)
 				dsr_pkt_free(dp);
 				return;
 			} else {
-				DEBUG("Forwarding %s %s nh %s\n", 
-				      print_ip(dp->src), 
-				      print_ip(dp->dst), 
-				      print_ip(dp->nxt_hop));
+				DEBUG("Forwarding %s %s nh %s\n",
+				      print_ip(dp->src),
+				      print_ip(dp->dst), print_ip(dp->nxt_hop));
 				XMIT(dp);
 				return;
 			}
@@ -86,7 +86,7 @@ void NSCLASS dsr_recv(struct dsr_pkt *dp)
 			XMIT(dp);
 			return;
 		case DSR_PKT_SEND_RREP:
-			
+
 /* 			if (dp->srt) { */
 /* 				/\* send rrep.... *\/ */
 /* 				dsr_rrep_send(dp->srt); */
@@ -96,8 +96,8 @@ void NSCLASS dsr_recv(struct dsr_pkt *dp)
 			DEBUG("Send ICMP\n");
 			break;
 		case DSR_PKT_SEND_BUFFERED:
-			if (dp->srt) 
-				send_buf_set_verdict(SEND_BUF_SEND, 
+			if (dp->srt)
+				send_buf_set_verdict(SEND_BUF_SEND,
 						     dp->srt->src);
 			break;
 		case DSR_PKT_DELIVER:
@@ -114,46 +114,47 @@ void NSCLASS dsr_recv(struct dsr_pkt *dp)
 	dsr_pkt_free(dp);
 }
 
-void NSCLASS dsr_start_xmit(struct dsr_pkt *dp)
+void NSCLASS
+dsr_start_xmit(struct dsr_pkt *dp)
 {
 	int res;
-	
+
 	if (!dp) {
 		DEBUG("Could not allocate DSR packet\n");
 		return;
 	}
-	
+
 	dp->srt = dsr_rtc_find(dp->src, dp->dst);
-	
+
 	if (dp->srt) {
-		
+
 		if (dsr_srt_add(dp) < 0) {
 			DEBUG("Could not add source route\n");
 			goto out;
 		}
 		/* Send packet */
-		
+
 		XMIT(dp);
-		
+
 		return;
-		
-	} else {			
+
+	} else {
 #ifdef NS2
 		res = send_buf_enqueue_packet(dp, &DSRUU::ns_xmit);
 #else
 		res = send_buf_enqueue_packet(dp, &dsr_dev_xmit);
-#endif	
+#endif
 		if (res < 0) {
 			DEBUG("Queueing failed!\n");
 			goto out;
 		}
 		res = dsr_rreq_route_discovery(dp->dst);
-		
+
 		if (res < 0)
 			DEBUG("RREQ Transmission failed...");
-		
+
 		return;
 	}
- out:
+      out:
 	dsr_pkt_free(dp);
 }
