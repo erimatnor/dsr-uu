@@ -1,100 +1,92 @@
+#ifdef __KERNEL__
 #include <linux/proc_fs.h>
 #include <linux/timer.h>
 #include <net/ip.h>
 
+#include "dsr-dev.h"
+#endif
+
 #include "debug.h"
 #include "dsr.h"
 #include "tbl.h"
-#include "kdsr.h"
 #include "dsr-rrep.h"
 #include "dsr-rreq.h"
 #include "dsr-opt.h"
 #include "dsr-rtc.h"
-#include "dsr-dev.h"
 #include "send-buf.h"
 
-#define RREQ_TBL_PROC_NAME "dsr_rreq_tbl"
-#define RREQ_TTL_MAX 8
-
+#ifdef NS2
+#include "ns-agent.h"
+#else 
 static TBL(rreq_tbl, RREQ_TBL_MAX_LEN);
+static unsigned int rreq_seqno = 1;
+#endif
+
+#define RREQ_TTL_MAX 8
 
 #define STATE_LATENT        0
 #define STATE_IN_ROUTE_DISC 1
 
-static unsigned int rreq_seqno = 1;
-
 struct rreq_tbl_entry {
-	struct list_head l;
+	list_t l;
 	int state;
 	struct in_addr node_addr;
 	int ttl;
-	struct timer_list timer;
-	unsigned long tx_time;
-	unsigned long last_used;
-	unsigned long timeout;
+	DSRTimer timer;
+	Time tx_time;
+	Time last_used;
+	Time timeout;
 	int num_rexmts;
 	struct tbl rreq_id_tbl;
 };
 
 struct id_entry {
-	struct list_head l;
+	list_t l;
 	struct in_addr trg_addr;
 	unsigned short id;	
 };
+struct rreq_tbl_query {
+	struct in_addr *initiator;
+	struct in_addr *target;
+	unsigned int *id;
+};
+	
 
-int dsr_rreq_send(struct in_addr target, int ttl);
-
-static int crit_addr(void *pos, void *data)
+static inline int crit_addr(void *pos, void *data)
 {
-	struct rreq_tbl_entry *e = pos;
-	struct in_addr *a = data;
+	struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)pos;
+	struct in_addr *a = (struct in_addr *)data;
 	
 	if (e->node_addr.s_addr == a->s_addr)
 		return 1;
 	return 0;
 }
 
-static int crit_duplicate(void *pos, void *data)
+static inline int crit_duplicate(void *pos, void *data)
 {
-	struct rreq_tbl_entry *e = pos;
-	struct {
-		struct in_addr *initiator;
-		struct in_addr *target;
-		unsigned int *id;
-	} *d;
+	struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)pos;
+	struct rreq_tbl_query *q = (struct rreq_tbl_query *)data;
 
-	d = data;
-	
-	if (e->node_addr.s_addr == d->initiator->s_addr) {
-		struct list_head *p;
+	if (e->node_addr.s_addr == q->initiator->s_addr) {
+		list_t *p;
 	
 		list_for_each(p, &e->rreq_id_tbl.head) {
 			struct id_entry *id_e = (struct id_entry *)p;
 			
-			if (id_e->trg_addr.s_addr == d->target->s_addr &&
-			    id_e->id == *(d->id))
+			if (id_e->trg_addr.s_addr == q->target->s_addr &&
+			    id_e->id == *(q->id))
 				return 1;
 		}
 	}
 	return 0;
 }
 
-static int crit_flush(void *pos, void *data)
-{
-	struct rreq_tbl_entry *e = pos;
-
-	del_timer_sync(&e->timer);
-	tbl_flush(&e->rreq_id_tbl, crit_none);
-
-	return 1;
-}
-
-void rreq_tbl_set_max_len(unsigned int max_len)
+void NSCLASS rreq_tbl_set_max_len(unsigned int max_len)
 {
         rreq_tbl.max_len = max_len;
 }
 
-static void rreq_tbl_timeout(unsigned long data)
+void NSCLASS rreq_tbl_timeout(unsigned long data)
 {
 	struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)data;
 	struct in_addr target;
@@ -103,7 +95,7 @@ static void rreq_tbl_timeout(unsigned long data)
 	if (!e)
 		return;
        
-	write_lock_bh(&rreq_tbl);
+	DSR_WRITE_LOCK(&rreq_tbl);
 	
 	/* Put at end of list */
 	__tbl_detach(&rreq_tbl, &e->l);
@@ -111,11 +103,11 @@ static void rreq_tbl_timeout(unsigned long data)
 	
 	if (e->num_rexmts >= PARAM(MaxRequestRexmt)) {
 		DEBUG("MAX RREQs reached for %s\n", 
-		      print_ip(e->node_addr.s_addr));
+		      print_ip(e->node_addr));
 
 		e->state = STATE_LATENT;
 
-		write_unlock_bh(&rreq_tbl);
+		DSR_WRITE_UNLOCK(&rreq_tbl);
 		return;
 	}
 	
@@ -131,7 +123,7 @@ static void rreq_tbl_timeout(unsigned long data)
 	
 	add_timer(&e->timer);
 	
-	write_unlock_bh(&rreq_tbl);
+	DSR_WRITE_UNLOCK(&rreq_tbl);
 	
 	dsr_rreq_send(target, ttl);
 }
@@ -140,7 +132,7 @@ static struct rreq_tbl_entry *__rreq_tbl_entry_create(struct in_addr node_addr)
 {
 	struct rreq_tbl_entry *e;
 	
-	e = kmalloc(sizeof(struct rreq_tbl_entry), GFP_ATOMIC);
+	e = (struct rreq_tbl_entry *)MALLOC(sizeof(struct rreq_tbl_entry), GFP_ATOMIC);
 
 	if (!e)
 		return NULL;
@@ -150,15 +142,17 @@ static struct rreq_tbl_entry *__rreq_tbl_entry_create(struct in_addr node_addr)
 	e->ttl = 0;
 	e->tx_time = 0;
 	e->num_rexmts = 0;
+#ifndef NS2
 	init_timer(&e->timer);
 	e->timer.function = &rreq_tbl_timeout;
 	e->timer.data = (unsigned long)e;
+#endif
 	INIT_TBL(&e->rreq_id_tbl, PARAM(RequestTableIds));
 	
 	return e;
 }
 
-static struct rreq_tbl_entry *__rreq_tbl_add(struct in_addr node_addr)
+struct rreq_tbl_entry *NSCLASS __rreq_tbl_add(struct in_addr node_addr)
 {
 	struct rreq_tbl_entry *e;
 		
@@ -178,23 +172,23 @@ static struct rreq_tbl_entry *__rreq_tbl_add(struct in_addr node_addr)
 
 		tbl_flush(&f->rreq_id_tbl, NULL);
 		
-		kfree(f);	
+		FREE(f);	
 	}
 	__tbl_add_tail(&rreq_tbl, &e->l);
 
 	return e;
 }
 
-static int rreq_tbl_add_id(struct in_addr initiator, struct in_addr target, 
+int NSCLASS rreq_tbl_add_id(struct in_addr initiator, struct in_addr target, 
 			   unsigned short id)
 {
 	struct rreq_tbl_entry *e;
 	struct id_entry *id_e;
 	int res = 0;
 	
-	write_lock_bh(&rreq_tbl);
+	DSR_WRITE_LOCK(&rreq_tbl);
 	
-	e = __tbl_find(&rreq_tbl, &initiator, crit_addr);
+	e = (struct rreq_tbl_entry *)__tbl_find(&rreq_tbl, &initiator, crit_addr);
 	
 	if (!e)
 		e = __rreq_tbl_add(initiator);
@@ -214,7 +208,7 @@ static int rreq_tbl_add_id(struct in_addr initiator, struct in_addr target,
 	if (TBL_FULL(&e->rreq_id_tbl))
 		tbl_del_first(&e->rreq_id_tbl);
 	
-	id_e = kmalloc(sizeof(struct id_entry), GFP_ATOMIC);
+	id_e = (struct id_entry *)MALLOC(sizeof(struct id_entry), GFP_ATOMIC);
 	
 	if (!id_e) {
 		res = -ENOMEM;
@@ -226,22 +220,22 @@ static int rreq_tbl_add_id(struct in_addr initiator, struct in_addr target,
 	
 	tbl_add_tail(&e->rreq_id_tbl, &id_e->l);
  out:
-	write_unlock_bh(&rreq_tbl);
+	DSR_WRITE_UNLOCK(&rreq_tbl);
 
 	return 1;
 }
 
-int rreq_tbl_disable_route_discovery(struct in_addr dst)
+int NSCLASS rreq_tbl_disable_route_discovery(struct in_addr dst)
 {
 	struct rreq_tbl_entry *e;
 
-	write_lock_bh(&rreq_tbl);
+	DSR_WRITE_LOCK(&rreq_tbl);
 	
-	e = __tbl_find(&rreq_tbl, &dst, crit_addr);
+	e = (struct rreq_tbl_entry *)__tbl_find(&rreq_tbl, &dst, crit_addr);
 
 	if (!e) {
-		DEBUG("%s not in RREQ table\n", print_ip(dst.s_addr));
-		write_unlock_bh(&rreq_tbl);
+		DEBUG("%s not in RREQ table\n", print_ip(dst));
+		DSR_WRITE_UNLOCK(&rreq_tbl);
 		return -1;
 	}
 
@@ -252,19 +246,19 @@ int rreq_tbl_disable_route_discovery(struct in_addr dst)
 	__tbl_detach(&rreq_tbl, &e->l);
 	__tbl_add_tail(&rreq_tbl, &e->l);
 	       
-	write_unlock_bh(&rreq_tbl);
+	DSR_WRITE_UNLOCK(&rreq_tbl);
 	return 1;	
 }
-int dsr_rreq_route_discovery(struct in_addr target)
+int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
 {
 	struct rreq_tbl_entry *e;
 	int ttl, res = 0;
 
 #define	TTL_START 1
 	
-	write_lock_bh(&rreq_tbl);
+	DSR_WRITE_LOCK(&rreq_tbl);
 	
-	e = __tbl_find(&rreq_tbl, &target, crit_addr);
+	e = (struct rreq_tbl_entry *)__tbl_find(&rreq_tbl, &target, crit_addr);
 	
 	if (!e)
 		e = __rreq_tbl_add(target);
@@ -282,31 +276,31 @@ int dsr_rreq_route_discovery(struct in_addr target)
 	
 	if (e->state == STATE_IN_ROUTE_DISC) {
 		DEBUG("Route discovery for %s already in progress\n", 
-		      print_ip(target.s_addr));
+		      print_ip(target));
 		goto out;
 	} 
 	
 	e->last_used = jiffies;
 	e->ttl = ttl = TTL_START;
-	e->timeout = 1 * HZ;
+	e->timeout = SECONDS(1);
 	e->state = STATE_IN_ROUTE_DISC;
 	e->num_rexmts = 0;
 	
 	e->timer.expires = jiffies + e->timeout;
 	add_timer(&e->timer);
 	
-	write_unlock_bh(&rreq_tbl);
+	DSR_WRITE_UNLOCK(&rreq_tbl);
 
 	dsr_rreq_send(target, ttl);
 		
 	return 1;
  out:
-	write_unlock_bh(&rreq_tbl);
+	DSR_WRITE_UNLOCK(&rreq_tbl);
 
 	return res;
 }
 
-static int dsr_rreq_duplicate(struct in_addr initiator, struct in_addr target, unsigned int id)
+int NSCLASS dsr_rreq_duplicate(struct in_addr initiator, struct in_addr target, unsigned int id)
 {
 	struct {
 		struct in_addr *initiator;
@@ -323,7 +317,8 @@ static int dsr_rreq_duplicate(struct in_addr initiator, struct in_addr target, u
 
 
 static struct dsr_rreq_opt *dsr_rreq_opt_add(char *buf, int len, 
-					struct in_addr target)
+					     struct in_addr target,
+					     unsigned int seqno)
 {
 	struct dsr_rreq_opt *rreq_opt;
 
@@ -334,13 +329,13 @@ static struct dsr_rreq_opt *dsr_rreq_opt_add(char *buf, int len,
 	
 	rreq_opt->type = DSR_OPT_RREQ;
 	rreq_opt->length = 6;
-	rreq_opt->id = htons(rreq_seqno++);
+	rreq_opt->id = htons(seqno);
 	rreq_opt->target = target.s_addr;
 	
 	return rreq_opt;
 }
 
-int dsr_rreq_send(struct in_addr target, int ttl)
+int NSCLASS dsr_rreq_send(struct in_addr target, int ttl)
 {
 	struct dsr_pkt *dp;
 	char *buf;
@@ -360,12 +355,12 @@ int dsr_rreq_send(struct in_addr target, int ttl)
 	
 	if (!buf)
 		goto out_err;
-	
+#ifdef __KERNEL__
 	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN, IP_HDR_LEN + len, IPPROTO_DSR, ttl);
 	
 	if (!dp->nh.iph) 
 		goto out_err;
-
+#endif	
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, 0);
 	
 	if (!dp->dh.opth) {
@@ -376,18 +371,16 @@ int dsr_rreq_send(struct in_addr target, int ttl)
 	buf += DSR_OPT_HDR_LEN;
 	len -= DSR_OPT_HDR_LEN;
 	
-	dp->rreq_opt = dsr_rreq_opt_add(buf, len, target);
+	dp->rreq_opt = dsr_rreq_opt_add(buf, len, target, ++rreq_seqno);
 
 	if (!dp->rreq_opt) {
 		DEBUG("Could not create RREQ opt\n");
 		goto out_err;
 	}
 	
-	dp->nh.iph->ttl = ttl;
-	
-	DEBUG("Sending RREQ for %s ttl=%d\n", print_ip(target.s_addr), ttl);
+	DEBUG("Sending RREQ for %s ttl=%d\n", print_ip(target), ttl);
 
-	dsr_dev_xmit(dp);
+	XMIT(dp);
 
 	return 0;
 
@@ -397,7 +390,7 @@ int dsr_rreq_send(struct in_addr target, int ttl)
 	return -1;
 }
 
-int dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
+int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 {
 	struct in_addr myaddr;
 	struct in_addr trg;
@@ -414,7 +407,7 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 	trg.s_addr = rreq_opt->target;
 
 	if (dsr_rreq_duplicate(dp->src, trg, ntohs(rreq_opt->id))) {
-		DEBUG("Duplicate RREQ from %s\n", print_ip(dp->src.s_addr));
+		DEBUG("Duplicate RREQ from %s\n", print_ip(dp->src));
 		return DSR_PKT_DROP;
 	}
 
@@ -428,8 +421,8 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		DEBUG("Could not extract source route\n");
 		return DSR_PKT_ERROR;
 	}
-	DEBUG("RREQ target=%s\n", print_ip(rreq_opt->target));
-	DEBUG("my addr %s\n", print_ip(myaddr.s_addr));
+	DEBUG("RREQ target=%s\n", print_ip(trg));
+	DEBUG("my addr %s\n", print_ip(myaddr));
 	
         /* Add reversed source route */
 	srt_rev = dsr_srt_new_rev(dp->srt);
@@ -445,9 +438,9 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 	dsr_rtc_add(srt_rev, 60000, 0);
 	
 	/* Send buffered packets */
-	send_buf_set_verdict(SEND_BUF_SEND, srt_rev->dst.s_addr);
+	send_buf_set_verdict(SEND_BUF_SEND, srt_rev->dst);
 
-	kfree(srt_rev);
+	FREE(srt_rev);
 		
 	if (rreq_opt->target == myaddr.s_addr) {
 
@@ -455,8 +448,11 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		
 		/* According to the draft, the dest addr in the IP header must
 		 * be updated with the target address */
+#ifdef NS2
+
+#else
 		dp->nh.iph->daddr = rreq_opt->target;
-			
+#endif		
 		return DSR_PKT_SEND_RREP;
 	} else {
 		int i, n;
@@ -483,22 +479,30 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		
 		dp->dh.opth->p_len = htons(ntohs(dp->dh.opth->p_len) + 
 					   sizeof(struct in_addr));
-		
-		dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN, ntohs(dp->nh.iph->tot_len) + sizeof(struct in_addr), IPPROTO_DSR, dp->nh.iph->ttl);
-		
+#ifdef __KERNEL__	
+		dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN, 
+			     ntohs(dp->nh.iph->tot_len) + 
+			     sizeof(struct in_addr), IPPROTO_DSR,
+			     dp->nh.iph->ttl);
+#endif
 		/* Forward RREQ */
 		return DSR_PKT_FORWARD_RREQ;
 	}
 
 	return DSR_PKT_DROP;
 }
+
+#ifdef __KERNEL__
+
+#define RREQ_TBL_PROC_NAME "dsr_rreq_tbl"
+
 static int rreq_tbl_print(char *buf)
 {
-	struct list_head *pos1, *pos2;
+	list_t *pos1, *pos2;
 	int len = 0;
 	int first = 1;
     
-	read_lock_bh(&rreq_tbl.lock);
+	DSR_READ_LOCK(&rreq_tbl.lock);
     
 	len += sprintf(buf, "# %-15s %-6s %-8s %15s:%s\n", "IPAddr", "TTL", "Used", "TargetIPAddr", "ID");
 
@@ -508,23 +512,23 @@ static int rreq_tbl_print(char *buf)
 		
 		if (TBL_EMPTY(&e->rreq_id_tbl))
 			len += sprintf(buf+len, "  %-15s %-6u %-8lu %15s:%s\n",
-				       print_ip(e->node_addr.s_addr), e->ttl,
+				       print_ip(e->node_addr), e->ttl,
 				       e->tx_time ? ((jiffies - e->last_used) * HZ) : 0, "-", "-");
 		else {
 			id_e = (struct id_entry *)TBL_FIRST(&e->rreq_id_tbl);
 			len += sprintf(buf+len, "  %-15s %-6u %-8lu %15s:%u\n",
-				       print_ip(e->node_addr.s_addr), e->ttl,
-				       e->tx_time ? ((jiffies - e->last_used) * HZ) : 0, print_ip(id_e->trg_addr.s_addr), id_e->id);
+				       print_ip(e->node_addr), e->ttl,
+				       e->tx_time ? ((jiffies - e->last_used) * HZ) : 0, print_ip(id_e->trg_addr), id_e->id);
 		}
 		list_for_each(pos2, &e->rreq_id_tbl.head) {
 			id_e = (struct id_entry *)pos2;
 			if (!first)
-				len += sprintf(buf+len, "%49s:%u\n", print_ip(id_e->trg_addr.s_addr), id_e->id);
+				len += sprintf(buf+len, "%49s:%u\n", print_ip(id_e->trg_addr), id_e->id);
 			first = 0;
 		}
 	}
 	
-	read_unlock_bh(&rreq_tbl.lock);
+	DSR_READ_UNLOCK(&rreq_tbl.lock);
 	return len;
 
 }
@@ -545,6 +549,16 @@ static int rreq_tbl_proc_info(char *buffer, char **start, off_t offset, int leng
 	return len;    
 }
 
+static inline int crit_flush(void *pos, void *data)
+{
+	struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)pos;
+
+	del_timer_sync(&e->timer);
+	tbl_flush(&e->rreq_id_tbl, crit_none);
+
+	return 1;
+}
+
 int __init rreq_tbl_init(void)
 {
 	proc_net_create(RREQ_TBL_PROC_NAME, 0, rreq_tbl_proc_info);
@@ -557,3 +571,4 @@ void __exit rreq_tbl_cleanup(void)
 	proc_net_remove(RREQ_TBL_PROC_NAME);
 }
 
+#endif

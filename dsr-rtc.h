@@ -1,9 +1,10 @@
 #ifndef _DSR_RTC_H
 #define _DSR_RTC_H
 
-#include <linux/list.h>
+#ifdef __KERNEL__
 #include <linux/in.h>
 #include <linux/types.h>
+#endif
 
 #include "dsr-srt.h"
 

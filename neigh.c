@@ -1,89 +1,95 @@
+#ifdef __KERNEL__
 #include <linux/proc_fs.h>
 #include <linux/timer.h>
+#endif
 
 #include "tbl.h"
 #include "neigh.h"
 #include "debug.h"
 
+#ifdef NS2
+#include "ns-agent.h"
+#else
 #define NEIGH_TBL_MAX_LEN 50
+
+
+static TBL(neigh_tbl, NEIGH_TBL_MAX_LEN);
+
+#define NEIGH_TBL_PROC_NAME "dsr_neigh_tbl"
+
+static DSRTimer garbage_timer;
+
+#endif /* NS2 */
 
 #define DSRTV_SRTTBASE 0
 #define DSRTV_MIN 2
 #define DSRTV_REXMTMAX
 #define TICK 2
 
-static TBL(neigh_tbl, NEIGH_TBL_MAX_LEN);
-
 #define NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT 3000 
 #define NEIGH_TBL_TIMEOUT 2000
-#define RTT_DEF 1*HZ /* sec */
-
-#define NEIGH_TBL_PROC_NAME "dsr_neigh_tbl"
+#define RTT_DEF SECONDS(1) /* sec */
 
 struct neighbor {
-	struct list_head l;
+	list_t l;
 	struct in_addr addr;
 	struct sockaddr hw_addr;
 	unsigned short id;
 	int rtt, srtt, rttvar, jitter; /* RTT in usec */
 };
 
-static struct timer_list garbage_timer;
-
+struct hw_query {
+	struct in_addr *a;
+	struct sockaddr *hw;
+};
+struct id_query {
+	struct in_addr *a;
+	unsigned short *id;
+};
+struct rtt_query {
+	struct in_addr *a;
+	int *srtt;
+};
+		
 static inline int crit_addr(void *pos, void *addr)
 {
-	struct in_addr *a = addr; 
-	struct neighbor *e = pos;
+	struct in_addr *a = (struct in_addr *)addr; 
+	struct neighbor *e = (struct neighbor *)pos;
 	
 	if (e->addr.s_addr == a->s_addr)
 		return 1;
 	return 0;
 }
 static inline int crit_addr_get_hwaddr(void *pos, void *data)
-{
-	struct {
-		struct in_addr *a;
-		struct sockaddr *hw;
-	} *d;
-	
-	struct neighbor *e = pos;
-	d = data;
+{	
+	struct neighbor *e = (struct neighbor *)pos;
+	struct hw_query *q = (struct hw_query *)data;
 
-	if (e->addr.s_addr == d->a->s_addr) {
-		memcpy(d->hw, &e->hw_addr, sizeof(struct sockaddr));
+	if (e->addr.s_addr == q->a->s_addr) {
+		memcpy(q->hw, &e->hw_addr, sizeof(struct sockaddr));
 		return 1;
 	}
 	return 0;
 }
 static inline int crit_addr_get_id(void *pos, void *data)
 {
-	struct {
-		struct in_addr *a;
-		unsigned short *id;
-	} *d;
-	
-	struct neighbor *e = pos;
-	d = data;
+	struct neighbor *e = (struct neighbor *)pos;
+	struct id_query *q = (struct id_query *)data;
 
-	if (e->addr.s_addr == d->a->s_addr) {
+	if (e->addr.s_addr == q->a->s_addr) {
 		/* Increase id so it is always unique */
-		*(d->id) = ++e->id;
+		*(q->id) = ++e->id;
 		return 1;
 	}
 	return 0;
 }
 static inline int crit_addr_get_rtt(void *pos, void *data)
 {
-	struct {
-		struct in_addr *a;
-		int *srtt;
-	} *d;
-	
-	struct neighbor *e = pos;
-	d = data;
+	struct neighbor *e = (struct neighbor *)pos;
+	struct rtt_query *q = (struct rtt_query *)data;
 
-	if (e->addr.s_addr == d->a->s_addr) {
-		*(d->srtt) = e->srtt;
+	if (e->addr.s_addr == q->a->s_addr) {
+		*(q->srtt) = e->srtt;
 		return 1;
 	}
 	return 0;
@@ -97,19 +103,19 @@ static inline int crit_garbage(void *pos, void *foo)
 	return 0;
 }
 
-static void neigh_tbl_garbage_timeout(unsigned long data)
+void NSCLASS neigh_tbl_garbage_timeout(unsigned long data)
 {
 	tbl_for_each_del(&neigh_tbl, NULL, crit_garbage);
 	
-	read_lock_bh(&neigh_tbl.lock);
+	DSR_READ_LOCK(&neigh_tbl.lock);
 	
 	if (!TBL_EMPTY(&neigh_tbl)) {
 	/* 	garbage_timer.expires = jiffies +  */
 /* 			MSECS_TO_JIFFIES(NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT); */
-		add_timer(&garbage_timer);	
+	/* 	add_timer(&garbage_timer);	 */
 	}
 
-	read_unlock_bh(&neigh_tbl.lock);
+	DSR_READ_UNLOCK(&neigh_tbl.lock);
 }
 
 
@@ -120,7 +126,7 @@ static struct neighbor *neigh_tbl_create(struct in_addr addr,
 {
 	struct neighbor *neigh;
 	
-	neigh = kmalloc(sizeof(struct neighbor), GFP_ATOMIC);
+	neigh = (struct neighbor *)MALLOC(sizeof(struct neighbor), GFP_ATOMIC);
 	
 	if (!neigh)
 		return NULL;
@@ -140,7 +146,7 @@ static struct neighbor *neigh_tbl_create(struct in_addr addr,
 	return neigh;
 }
 
-int neigh_tbl_add(struct in_addr neigh_addr, struct sockaddr *hw_addr)
+int NSCLASS neigh_tbl_add(struct in_addr neigh_addr, struct sockaddr *hw_addr)
 {
 	struct neighbor *neigh;
 	
@@ -159,22 +165,22 @@ int neigh_tbl_add(struct in_addr neigh_addr, struct sockaddr *hw_addr)
 	return 1;
 }
 
-int neigh_tbl_del(struct in_addr neigh_addr)
+int NSCLASS neigh_tbl_del(struct in_addr neigh_addr)
 {
 	return tbl_for_each_del(&neigh_tbl, &neigh_addr, crit_addr);
 }
 
-int neigh_tbl_rtt_update(struct in_addr nxt_hop, int nticks)
+int NSCLASS neigh_tbl_rtt_update(struct in_addr nxt_hop, int nticks)
 {
 	struct neighbor *neigh;
 	int delta;
 	
-	write_lock_bh(&neigh_tbl.lock);
+	DSR_WRITE_LOCK(&neigh_tbl.lock);
 
-	neigh = __tbl_find(&neigh_tbl, &nxt_hop, crit_addr);
+	neigh = (struct neighbor *)__tbl_find(&neigh_tbl, &nxt_hop, crit_addr);
 	
 	if (!neigh) {
-		write_unlock_bh(&neigh_tbl.lock);
+		DSR_WRITE_UNLOCK(&neigh_tbl.lock);
 		return -1;
 	}
 	
@@ -183,86 +189,76 @@ int neigh_tbl_rtt_update(struct in_addr nxt_hop, int nticks)
 	
        	neigh->srtt = neigh->srtt + (delta >> 3);
 
-	write_unlock_bh(&neigh_tbl.lock);
+	DSR_WRITE_UNLOCK(&neigh_tbl.lock);
 
 	return 0;
 }
 
-unsigned long neigh_tbl_get_rto(struct in_addr nxt_hop)
+long NSCLASS neigh_tbl_get_rto(struct in_addr nxt_hop)
 {
 	struct neighbor *neigh;
 	int rtt, srtt, rttvar;
 
-	read_lock_bh(&neigh_tbl.lock);
+	DSR_READ_LOCK(&neigh_tbl.lock);
 
-	neigh = __tbl_find(&neigh_tbl, &nxt_hop, crit_addr);
+	neigh = (struct neighbor *)__tbl_find(&neigh_tbl, &nxt_hop, crit_addr);
 	
 	if (!neigh) {
-		read_unlock_bh(&neigh_tbl.lock);
+		DSR_READ_UNLOCK(&neigh_tbl.lock);
 		return -1;
 	}
 	srtt = neigh->srtt;
 	rttvar = neigh->rttvar;
 	rtt = neigh->rtt;
 	
-	read_unlock_bh(&neigh_tbl.lock);
+	DSR_READ_UNLOCK(&neigh_tbl.lock);
 
 	return rtt;
 }
 
-int neigh_tbl_get_hwaddr(struct in_addr neigh_addr, struct sockaddr *hw_addr)
+int NSCLASS neigh_tbl_get_hwaddr(struct in_addr neigh_addr, struct sockaddr *hw_addr)
 {
-	struct {
-		struct in_addr *a;
-		struct sockaddr *hw;
-	} data;
+	struct hw_query q;
 	
-	data.a = &neigh_addr;
-	data.hw = hw_addr;
+	q.a = &neigh_addr;
+	q.hw = hw_addr;
 	
-	return in_tbl(&neigh_tbl, &data, crit_addr_get_hwaddr);
+	return in_tbl(&neigh_tbl, &q, crit_addr_get_hwaddr);
 }
 
-unsigned short neigh_tbl_get_id(struct in_addr neigh_addr)
+unsigned short NSCLASS neigh_tbl_get_id(struct in_addr neigh_addr)
 {
 	unsigned short id = 0;
-
-	struct {
-		struct in_addr *a;
-		unsigned short *id;
-	} data;
+	struct id_query q;
 	
-	data.a = &neigh_addr;
-	data.id = &id;
+	q.a = &neigh_addr;
+	q.id = &id;
 	
-	in_tbl(&neigh_tbl, &data, crit_addr_get_id);
+	in_tbl(&neigh_tbl, &q, crit_addr_get_id);
 	
 	return id;
 }
 
-int neigh_tbl_get_rtt(struct in_addr neigh_addr)
+int NSCLASS neigh_tbl_get_rtt(struct in_addr neigh_addr)
 {
 	int srtt;
-
-	struct {
-		struct in_addr *a;
-		int *srtt;
-	} data;
+	struct rtt_query q;
 	
-	data.a = &neigh_addr;
-	data.srtt = &srtt;
+	q.a = &neigh_addr;
+	q.srtt = &srtt;
 	
-	in_tbl(&neigh_tbl, &data, crit_addr_get_rtt);
+	in_tbl(&neigh_tbl, &q, crit_addr_get_rtt);
 	
 	return srtt;
 }
 
+#ifdef __KERNEL__
 static int neigh_tbl_print(char *buf)
 {
-	struct list_head *pos;
+	list_t *pos;
 	int len = 0;
     
-	read_lock_bh(&neigh_tbl.lock);
+	DSR_READ_LOCK(&neigh_tbl.lock);
     
 	len += sprintf(buf, "# %-15s %-17s %-3s %-6s\n", "Addr", "HwAddr", "RTT", "Id" /*, "AckRxTime","AckTxTime" */);
 
@@ -270,12 +266,12 @@ static int neigh_tbl_print(char *buf)
 		struct neighbor *neigh =(struct neighbor *)pos;
 		
 		len += sprintf(buf+len, "  %-15s %-17s %-3d %-6u\n", 
-			       print_ip(neigh->addr.s_addr), 
+			       print_ip(neigh->addr), 
 			       print_eth(neigh->hw_addr.sa_data),
 			       neigh->rtt, neigh->id);
 	}
     
-	read_unlock_bh(&neigh_tbl.lock);
+	DSR_READ_UNLOCK(&neigh_tbl.lock);
 	return len;
 
 }
@@ -312,3 +308,5 @@ void __exit neigh_tbl_cleanup(void)
 	tbl_flush(&neigh_tbl, crit_none);
 	proc_net_remove(NEIGH_TBL_PROC_NAME);
 }
+
+#endif /* __KERNEL__ */

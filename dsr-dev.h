@@ -3,6 +3,9 @@
 
 #include <linux/netdevice.h>
 
+#include "dsr.h"
+#include "dsr-pkt.h"
+
 int dsr_dev_xmit(struct dsr_pkt *dp);
 int dsr_dev_deliver(struct dsr_pkt *dp);
 

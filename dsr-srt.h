@@ -1,12 +1,10 @@
 #ifndef _DSR_SRT_H
 #define _DSR_SRT_H
 
-#include <asm/byteorder.h>
-#include <linux/types.h>
-#include <linux/in.h>
-
 #include "dsr.h"
 #include "debug.h"
+
+#ifndef NO_GLOBALS
 
 /* Source route options header */
 struct dsr_srt_opt {
@@ -19,7 +17,7 @@ struct dsr_srt_opt {
 	u_int16_t l:1;	
 	u_int16_t res:4;
 	u_int16_t salv2:2;	
-#define SET_SALVAGE(sr, x) ( {  __u8 __x = (x); \
+#define SET_SALVAGE(sr, x) ( {  u_int8_t __x = (x); \
                                (sr)->salv1 = (__x & 0x03 << 2); \
                                (sr)->salv2 = (__x & 0x0c >> 2); })
 #define GET_SALVAGE(sr, x) ( {  x = 0; })
@@ -63,16 +61,21 @@ static inline char *print_srt(struct dsr_srt *srt)
 	if (!srt)
 		return NULL;
 	
-	len = sprintf(buf, "%s<->", print_ip(srt->src.s_addr));
+	len = sprintf(buf, "%s<->", print_ip(srt->src));
 	
 	for (i = 0; i < (srt->laddrs / sizeof(u_int32_t)) && 
 		     (len + 16) < BUFLEN; i++)
-		len += sprintf(buf+len, "%s<->", print_ip(srt->addrs[i].s_addr));
+		len += sprintf(buf+len, "%s<->", print_ip(srt->addrs[i]));
 	
 	if ((len + 16) < BUFLEN)
-		len = sprintf(buf+len, "%s", print_ip(srt->dst.s_addr));
+		len = sprintf(buf+len, "%s", print_ip(srt->dst));
 	return buf;
 }
+
+#endif /* NO_GLOBALS */
+
+#ifndef NO_DECLS
+
 
 struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, int index);
 struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt);
@@ -85,5 +88,7 @@ struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt);
 int dsr_srt_opt_recv(struct dsr_pkt *dp);
 int dsr_srt_add(struct dsr_pkt *dp);
 void dsr_srt_del(struct dsr_srt *srt);
+
+#endif /* NO_DECLS */
 
 #endif /* _DSR_SRT_H */

@@ -1,8 +1,9 @@
-#ifndef _DSR_ACK
-#define _DSR_ACK
+#ifndef _DSR_ACK_H
+#define _DSR_ACK_H
 
-#include <asm/byteorder.h>
-#include <linux/types.h>
+#include "dsr.h"
+
+#ifndef NO_GLOBALS
 
 struct dsr_ack_req_opt {
 	u_int8_t type;
@@ -22,11 +23,17 @@ struct dsr_ack_opt {
 #define DSR_ACK_HDR_LEN sizeof(struct dsr_ack_opt)
 #define DSR_ACK_OPT_LEN (DSR_ACK_HDR_LEN - 2)
 
+#endif /* NO_GLOBALS */
+
+#ifndef NO_DECLS
+
 struct dsr_ack_req_opt *dsr_ack_req_opt_add(struct dsr_pkt *dp, unsigned short id);
 int dsr_ack_add_ack_req(struct in_addr neigh);
 int dsr_ack_opt_recv(struct dsr_ack_opt *ack);
 int dsr_ack_req_opt_recv(struct dsr_pkt *dp, struct dsr_ack_req_opt *areq);
 int dsr_ack_req_send(struct in_addr neigh_addr, unsigned short id);
 int dsr_ack_send(struct in_addr dst, unsigned short id);
+
+#endif /* NO_DECLS */
 
 #endif  /* _DSR_ACK */

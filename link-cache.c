@@ -29,7 +29,7 @@ MODULE_DESCRIPTION("DSR link cache kernel module");
 MODULE_LICENSE("GPL");
 
 struct lc_node {
-	struct list_head l;
+	list_t l;
 	struct in_addr addr;
 	unsigned int links;
 	unsigned int cost; /* Cost estimate from source when running Dijkstra */
@@ -40,7 +40,7 @@ struct lc_node {
 };
 
 struct lc_link {
-	struct list_head l;
+	list_t l;
 	struct lc_node *src, *dst;
 	int status;
 	unsigned int cost;
@@ -53,7 +53,7 @@ struct lc_graph {
 	struct lc_node *src;
 	rwlock_t lock;
 #ifdef LC_TIMER
-	struct timer_list timer;
+	DSRTimer timer;
 #endif
 };
 
@@ -112,7 +112,7 @@ static inline int do_lowest_cost(void *pos, void *cheapest)
 	} *d = cheapest;
 	
 	if (!d->cheapest || n->cost < d->cheapest->cost) {
-		DEBUG("New lowest cost %lu, %s\n", n->cost, print_ip(n->addr.s_addr));
+		DEBUG("New lowest cost %lu, %s\n", n->cost, print_ip(n->addr));
 		d->cheapest = n;		
 	}
 	return 0;
@@ -164,14 +164,14 @@ static void lc_garbage_collect_set(void);
 
 static void lc_garbage_collect(unsigned long data)
 {
-	write_lock_bh(&LC.lock);
+	DSR_WRITE_LOCK(&LC.lock);
 	
 	tbl_do_for_each(&LC.links, NULL, crit_expire);
 
 	if (!TBL_EMPTY(&LC.links))
 		lc_garbage_collect_set();
 	
-	write_unlock_bh(&LC.lock);
+	DSR_WRITE_UNLOCK(&LC.lock);
 }
 
 static void lc_garbage_collect_set(void)
@@ -190,7 +190,7 @@ static inline struct lc_node *lc_node_create(struct in_addr addr)
 {
 	struct lc_node *n;
 
-	n = kmalloc(sizeof(struct lc_node), GFP_ATOMIC);
+	n = MALLOC(sizeof(struct lc_node), GFP_ATOMIC);
 	
 	if (!n)
 		return NULL;
@@ -227,7 +227,7 @@ static int __lc_link_tbl_add(struct lc_node *src, struct lc_node *dst,
 	link = __lc_link_find(src->addr, dst->addr);
 	
 	if (!link) {
-		link = kmalloc(sizeof(struct lc_link), GFP_ATOMIC);
+		link = MALLOC(sizeof(struct lc_link), GFP_ATOMIC);
 		
 		if (!link) {
 			DEBUG("Could not allocate link\n");
@@ -236,8 +236,8 @@ static int __lc_link_tbl_add(struct lc_node *src, struct lc_node *dst,
 		memset(link, 0, sizeof(struct lc_link));
 
 		DEBUG("Adding Link %s <-> %s cost=%d\n", 
-		      print_ip(src->addr.s_addr), 
-		      print_ip(dst->addr.s_addr), 
+		      print_ip(src->addr), 
+		      print_ip(dst->addr), 
 		      cost);
 		
 		__tbl_add_tail(&LC.links, &link->l);
@@ -264,7 +264,7 @@ int lc_link_add(struct in_addr src, struct in_addr dst,
 	struct lc_node *sn, *dn;
 	int res;
 	
-	write_lock_bh(&LC.lock);
+	DSR_WRITE_LOCK(&LC.lock);
 	
 	sn = __tbl_find(&LC.nodes, &src, crit_addr);
 
@@ -273,7 +273,7 @@ int lc_link_add(struct in_addr src, struct in_addr dst,
 
 		if (!sn) {
 			DEBUG("Could not allocate nodes\n");
-			write_unlock_bh(&LC.lock);
+			DSR_WRITE_UNLOCK(&LC.lock);
 			return -1;
 		}
 		__tbl_add_tail(&LC.nodes, &sn->l);
@@ -286,7 +286,7 @@ int lc_link_add(struct in_addr src, struct in_addr dst,
 		dn = lc_node_create(dst);
 		if (!dn) {
 			DEBUG("Could not allocate nodes\n");
-			write_unlock_bh(&LC.lock);
+			DSR_WRITE_UNLOCK(&LC.lock);
 			return -1;
 		}
 		__tbl_add_tail(&LC.nodes, &dn->l);
@@ -303,7 +303,7 @@ int lc_link_add(struct in_addr src, struct in_addr dst,
 	} else if (res < 0)
 		DEBUG("Could not add new link\n");
 	
-	write_unlock_bh(&LC.lock);
+	DSR_WRITE_UNLOCK(&LC.lock);
 
 	return 0;
 }
@@ -314,7 +314,7 @@ int lc_link_del(struct in_addr src, struct in_addr dst)
 	struct lc_link *link;
 	int res = 1;
 
-	write_lock_bh(&LC.lock);
+	DSR_WRITE_LOCK(&LC.lock);
 
 	link = __lc_link_find(src, dst);
 
@@ -337,7 +337,7 @@ int lc_link_del(struct in_addr src, struct in_addr dst)
 
  out:
 	LC.src = NULL;
-	write_unlock_bh(&LC.lock);
+	DSR_WRITE_UNLOCK(&LC.lock);
 	
 	return res;
 }
@@ -417,7 +417,7 @@ struct dsr_srt *dsr_rtc_find(struct in_addr src, struct in_addr dst)
 	struct dsr_srt *srt = NULL;
 	struct lc_node *dst_node;
 	
-	write_lock_bh(&LC.lock);
+	DSR_WRITE_LOCK(&LC.lock);
 	
 /* 	if (!LC.src || LC.src->addr.s_addr != src.s_addr) */
 	__dijkstra(src);
@@ -425,18 +425,18 @@ struct dsr_srt *dsr_rtc_find(struct in_addr src, struct in_addr dst)
 	dst_node = __tbl_find(&LC.nodes, &dst, crit_addr);
 
 	if (!dst_node) {
-		DEBUG("%s not found\n", print_ip(dst.s_addr));
+		DEBUG("%s not found\n", print_ip(dst));
 		goto out;
 	}
 	
-	DEBUG("Hops to %s: %u\n", print_ip(dst.s_addr), dst_node->hops);
+	DEBUG("Hops to %s: %u\n", print_ip(dst), dst_node->hops);
 	
 	if (dst_node->cost != LC_COST_INF) {
 		struct lc_node *n;
 		int k = (dst_node->hops - 1);
 		int i = 0;
 		
-		srt = kmalloc(sizeof(srt) * k, GFP_ATOMIC);
+		srt = MALLOC(sizeof(srt) * k, GFP_ATOMIC);
 		
 		if (!srt) {
 			DEBUG("Could not allocate source route!!!\n");
@@ -448,7 +448,7 @@ struct dsr_srt *dsr_rtc_find(struct in_addr src, struct in_addr dst)
 		srt->laddrs = k * sizeof(srt->dst);
 
 		if (!dst_node->pred) {
-			kfree(srt);
+			FREE(srt);
 			srt = NULL;
 			DEBUG("Predecessor was NULL\n");
 			goto out;			
@@ -466,7 +466,7 @@ struct dsr_srt *dsr_rtc_find(struct in_addr src, struct in_addr dst)
 			       dst_node->hops);
 	}
  out:
-	write_unlock_bh(&LC.lock);
+	DSR_WRITE_UNLOCK(&LC.lock);
 
 	return srt;
 }
@@ -517,7 +517,7 @@ int dsr_rtc_del(struct in_addr src, struct in_addr dst)
 
 void lc_flush(void)
 {
-	write_lock_bh(&LC.lock);
+	DSR_WRITE_LOCK(&LC.lock);
 #ifdef LC_TIMER
 	if (timer_pending(&LC.timer))
 		del_timer(&LC.timer);
@@ -527,7 +527,7 @@ void lc_flush(void)
 	
 	LC.src = NULL;
 	
-	write_unlock_bh(&LC.lock);
+	DSR_WRITE_UNLOCK(&LC.lock);
 }
 
 void dsr_rtc_flush(void)
@@ -558,10 +558,10 @@ static char *print_cost(unsigned int cost)
 }
 static int lc_print(char *buf)
 {
-	struct list_head *pos;
+	list_t *pos;
 	int len = 0;
 	
-	read_lock_bh(&LC.lock);
+	DSR_READ_LOCK(&LC.lock);
     
 	len += sprintf(buf, "# %-15s %-15s %-4s Timeout\n", "Src Addr", "Dst Addr", "Cost");
 
@@ -569,8 +569,8 @@ static int lc_print(char *buf)
 		struct lc_link *link = (struct lc_link *)pos;
 		
 		len += sprintf(buf+len, "  %-15s %-15s %-4u %lu\n", 
-			       print_ip(link->src->addr.s_addr),
-			       print_ip(link->dst->addr.s_addr),
+			       print_ip(link->src->addr),
+			       print_ip(link->dst->addr),
 			       link->cost,
 			       (link->expire - jiffies) / HZ);
 	}
@@ -581,7 +581,7 @@ static int lc_print(char *buf)
 		struct lc_node *n = (struct lc_node *)pos;
 		
 		len += sprintf(buf+len, "  %-15s %4s %4s %5u %12lX %12lX\n", 
-			       print_ip(n->addr.s_addr),
+			       print_ip(n->addr),
 			       print_hops(n->hops),
 			       print_cost(n->cost),
 			       n->links,
@@ -589,7 +589,7 @@ static int lc_print(char *buf)
 			       (unsigned long)n->pred);
 	}
     
-	read_unlock_bh(&LC.lock);
+	DSR_READ_UNLOCK(&LC.lock);
 	return len;
 
 }

@@ -109,7 +109,7 @@ static int dsr_arpset(struct in_addr addr, struct sockaddr *hw_addr,
 {
 	struct neighbour *neigh;
 
-	DEBUG("Setting arp for %s %s\n", print_ip(addr.s_addr), 
+	DEBUG("Setting arp for %s %s\n", print_ip(addr), 
 	      print_eth(hw_addr->sa_data));
 
 	neigh = __neigh_lookup_errno(&arp_tbl, &(addr.s_addr), dev);
@@ -181,29 +181,29 @@ static int dsr_ip_recv(struct sk_buff *skb)
 		unsigned short id = ntohs(dp->ack_req_opt->id);
 				
 		DEBUG("send ACK: src=%s prv=%s id=%u\n", 
-		      print_ip(dp->src.s_addr), 
-		      print_ip(dp->prv_hop.s_addr), id);
+		      print_ip(dp->src), 
+		      print_ip(dp->prv_hop), id);
 		
 		dsr_ack_send(dp->prv_hop, id);
 	}
 
 	if (action & DSR_PKT_FORWARD) {
 		DEBUG("Forwarding %s %s nh %s\n", 
-		      print_ip(dp->src.s_addr), 
-		      print_ip(dp->dst.s_addr), 
-		      print_ip(dp->nxt_hop.s_addr));
+		      print_ip(dp->src), 
+		      print_ip(dp->dst), 
+		      print_ip(dp->nxt_hop));
 
 		if (dp->nh.iph->ttl < 1) {
 			DEBUG("ttl=0, dropping!\n");
 			action = DSR_PKT_NONE;
 		} else {
 			DEBUG("Forwarding (dev_queue_xmit)\n");
-			dsr_dev_xmit(dp);
+			XMIT(dp);
 			return 0;
 		}
 	}
 	if (action & DSR_PKT_FORWARD_RREQ) {
-		dsr_dev_xmit(dp);
+		XMIT(dp);
 		return 0;
 	}
 
@@ -224,7 +224,7 @@ static int dsr_ip_recv(struct sk_buff *skb)
 		/* Send buffered packets */
 		DEBUG("Sending buffered packets\n");
 		if (dp->srt) {
-			send_buf_set_verdict(SEND_BUF_SEND, dp->srt->src.s_addr);
+			send_buf_set_verdict(SEND_BUF_SEND, dp->srt->src);
 		}
 	}
 
@@ -314,7 +314,7 @@ int dsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb)
 	else {
 		/* Get hardware destination address */
 		if (neigh_tbl_get_hwaddr(dp->nxt_hop, &dest) < 0) {
-			DEBUG("Could not get hardware address for next hop %s\n", print_ip(dp->nxt_hop.s_addr));
+			DEBUG("Could not get hardware address for next hop %s\n", print_ip(dp->nxt_hop));
 			return -1;
 		}
 	}

@@ -1,5 +1,7 @@
+#ifdef __KERNEL__
 #include <linux/slab.h>
 #include <net/ip.h>
+#endif
 
 #include "dsr.h"
 #include "dsr-srt.h"
@@ -8,6 +10,9 @@
 #include "dsr-rtc.h"
 #include "debug.h"
 
+#ifdef NS2
+#include "ns-agent.h"
+#endif
 
 struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, int index)
 {
@@ -30,8 +35,8 @@ struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, int index)
 			nxt_hop = srt->addrs[index-1];
 	}
 	
-	DEBUG("Next hop for %s is %s\n", print_ip(srt->dst.s_addr), 
-	      print_ip(nxt_hop.s_addr));
+	DEBUG("Next hop for %s is %s\n", 
+	      print_ip(srt->dst), print_ip(nxt_hop));
 
 	return nxt_hop;
 }
@@ -65,7 +70,7 @@ struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt)
 		}
 	}
  out:
-	DEBUG("Previous hop=%s\n", print_ip(prev_hop.s_addr));
+	DEBUG("Previous hop=%s\n", print_ip(prev_hop));
 	return prev_hop;
 }
 
@@ -75,7 +80,7 @@ struct dsr_srt *dsr_srt_new(struct in_addr src, struct in_addr dst,
 {
 	struct dsr_srt *sr;
 
-	sr = kmalloc(sizeof(struct dsr_srt) + length, GFP_ATOMIC);
+	sr = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) + length, GFP_ATOMIC);
 	
 	if (!sr)
 		return NULL;
@@ -99,7 +104,8 @@ struct dsr_srt *dsr_srt_new_rev(struct dsr_srt *srt)
 	if (!srt)
 		return NULL;
 	
-	srt_rev = kmalloc(sizeof(struct dsr_srt) + srt->laddrs, GFP_ATOMIC);
+	srt_rev = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) + 
+					   srt->laddrs, GFP_ATOMIC);
 	
 	srt_rev->src.s_addr = srt->dst.s_addr;
 	srt_rev->dst.s_addr = srt->src.s_addr;
@@ -115,7 +121,7 @@ struct dsr_srt *dsr_srt_new_rev(struct dsr_srt *srt)
 
 void dsr_srt_del(struct dsr_srt *srt)
 {
-	kfree(srt);
+	FREE(srt);
 }
 
 
@@ -148,7 +154,7 @@ int dsr_srt_add(struct dsr_pkt *dp)
 	int len;
 	int prot;
 	
-	if (!dp || !dp->srt || !dp->nh.iph)
+	if (!dp || !dp->srt)
 		return -1;
 
 	dp->nxt_hop = dsr_srt_next_hop(dp->srt, 0);
@@ -165,6 +171,8 @@ int dsr_srt_add(struct dsr_pkt *dp)
 		DEBUG("Could allocate memory\n");
 		return -1;
 	}
+
+#ifdef __KERNEL__
 	prot = dp->nh.iph->protocol;
 	
 	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, (dp->nh.iph->ihl << 2), 
@@ -173,6 +181,7 @@ int dsr_srt_add(struct dsr_pkt *dp)
 	
 	if (!dp->nh.iph) 
 		return -1;
+#endif
 
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, prot);
 
@@ -197,7 +206,7 @@ int dsr_srt_add(struct dsr_pkt *dp)
 	return 0;
 }
 
-int dsr_srt_opt_recv(struct dsr_pkt *dp)
+int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp)
 {
 	int n;	
 	
@@ -245,7 +254,7 @@ int dsr_srt_opt_recv(struct dsr_pkt *dp)
 		dp->nxt_hop = dsr_srt_next_hop(dp->srt, i);
 
 		DEBUG("Setting next hop %s and forward n=%d i=%d\n", 
-		      print_ip(dp->nxt_hop.s_addr), n, i);
+		      print_ip(dp->nxt_hop), n, i);
 		/* TODO: check for multicast address in next hop or dst */
 		/* TODO: check MTU and compare to pkt size */
 	

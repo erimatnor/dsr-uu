@@ -1,12 +1,22 @@
 #ifndef _DEBUG_H
 #define _DEBUG_H
 
+#ifdef __KERNEL__
 #include <stdarg.h>
 #include <linux/types.h>
 #include <linux/string.h>
 #include <linux/ctype.h>
 #include <linux/kernel.h>
 #include <linux/if_ether.h>
+#include <linux/in.h>
+extern atomic_t num_pkts;
+#else
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#endif /* __KERNEL__ */
 
 #ifdef DEBUG
 #undef DEBUG
@@ -18,23 +28,22 @@
 
 #define DEBUG_BUFLEN 256
 
-extern atomic_t num_pkts;
-
-static inline char *print_ip(__u32 addr)
+static inline char *print_ip(struct in_addr addr)
 {
 	static char buf[16 * 4];
 	static int index = 0;
 	char *str;
 	
 	sprintf(&buf[index], "%d.%d.%d.%d",
-		0x0ff & addr,
-		0x0ff & (addr >> 8),
-		0x0ff & (addr >> 16),
-		0x0ff & (addr >> 24));
+		0x0ff & addr.s_addr,
+		0x0ff & (addr.s_addr >> 8),
+		0x0ff & (addr.s_addr >> 16),
+		0x0ff & (addr.s_addr >> 24));
 	
 	str = &buf[index];
 	index += 16;
 	index %= 64;
+
 	return str;
 }
 
@@ -63,7 +72,9 @@ static inline char *print_pkt(char *p, int len)
 
 int dsr_printk(const char *func, const char *fmt, ...);
 
+#ifdef __KERNEL__
 void __init dbg_init(void);
 void __exit dbg_cleanup(void);
+#endif
 
 #endif /* _DEBUG_H */

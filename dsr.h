@@ -1,16 +1,26 @@
 #ifndef _DSR_H
 #define _DSR_H
 
+#ifdef __KERNEL__
 #include <asm/byteorder.h>
 #include <linux/types.h>
-#include <linux/netdevice.h>
 #include <linux/in.h>
+#include <linux/netdevice.h>
 #include <linux/skbuff.h>
 #include <linux/ip.h>
 #include <linux/time.h>
 #ifdef KERNEL26
 #include <linux/jiffies.h>
 #endif
+#else
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <endian.h>
+#include <netinet/in.h>
+#endif /* __KERNEL__ */
+
+
 #include "dsr-pkt.h"
 
 #define DSR_BROADCAST ((unsigned long int) 0xffffffff)
@@ -71,14 +81,31 @@ static struct {
 };
 
 struct dsr_node {
+	struct in_addr ifaddr;
+	struct in_addr bcaddr;
+	int params[PARAMS_MAX];
+#ifdef __KERNEL__
 	struct net_device *dev;
 	struct net_device *slave_dev;
 	struct net_device_stats	stats;
-	struct in_addr ifaddr;
-	struct in_addr bcaddr;
 	spinlock_t lock;
-	int params[PARAMS_MAX];
+#endif
 };
+
+#ifdef __KERNEL__
+#define DSR_SPIN_LOCK(l)    spin_lock(l)
+#define DSR_SPIN_UNLOCK(l)  spin_unlock(l)
+#define MALLOC(s, p)        kmalloc(s, p)
+#define FREE(p)             kfree(p)
+typedef struct timer_list DSRTimer;
+typedef unsigned long Time;
+#define SECONDS(secs) (secs*HZ)
+#define NSCLASS
+#define XMIT(pkt) dsr_dev_xmit(pkt)
+#else
+#define DSR_SPIN_LOCK(l)
+#define DSR_SPIN_UNLOCK(l)
+#endif /* __KERNEL__ */
 
 extern struct dsr_node *dsr_node;
 
@@ -87,9 +114,9 @@ static inline const int get_param(int index)
 	int param = 0;
 	
 	if (dsr_node) {
-		spin_lock(&dsr_node->lock);
+		DSR_SPIN_LOCK(&dsr_node->lock);
 		param = dsr_node->params[index];
-		spin_unlock(&dsr_node->lock);
+		DSR_SPIN_UNLOCK(&dsr_node->lock);
 	}
 	return param;  
 }
@@ -97,41 +124,65 @@ static inline const int set_param(int index, int val)
 {
 	
 	if (dsr_node) {
-		spin_lock(&dsr_node->lock);
+		DSR_SPIN_LOCK(&dsr_node->lock);
 		dsr_node->params[index] = val;
-		spin_unlock(&dsr_node->lock);
+		DSR_SPIN_UNLOCK(&dsr_node->lock);
 	} else
 		return -1;
 
 	return val;  
 }
-static inline const int get_slave_dev_ifindex(void)
-{
-	int ifindex = -1;
-	
-	if (dsr_node) {
-		spin_lock(&dsr_node->lock);
-		if (dsr_node->slave_dev)
-			ifindex = dsr_node->slave_dev->ifindex;
-		spin_unlock(&dsr_node->lock);
-	}
-	return ifindex;  
-}
+
 
 #define PARAM(name) (get_param(name))
 
 static inline void dsr_node_init(struct dsr_node *dn)
 {
 	int i;
-	
+#ifndef NS2	
 	spin_lock_init(&dn->lock);
-
 	dn->dev = NULL;
 	dn->slave_dev = NULL;
+#endif
 	
 	for (i = 0; i < PARAMS_MAX; i++) {
 		dn->params[i] = params_def[i].val;
 	}
+}
+
+static inline struct in_addr my_addr(void)
+{
+	static struct in_addr my_addr;
+	if (dsr_node) {
+		DSR_SPIN_LOCK(&dsr_node->lock);
+		my_addr = dsr_node->ifaddr;
+		DSR_SPIN_UNLOCK(&dsr_node->lock);
+	}
+	return my_addr;
+}
+
+#ifdef __KERNEL__
+static inline unsigned long time_add_msec(unsigned long msecs)
+{
+	struct timespec t;
+
+	t.tv_sec = msecs / 1000;
+	t.tv_nsec = (msecs * 1000000) % 1000000000;
+	
+	return timespec_to_jiffies(&t);
+}
+
+static inline const int get_slave_dev_ifindex(void)
+{
+	int ifindex = -1;
+	
+	if (dsr_node) {
+		DSR_SPIN_LOCK(&dsr_node->lock);
+		if (dsr_node->slave_dev)
+			ifindex = dsr_node->slave_dev->ifindex;
+		DSR_SPIN_UNLOCK(&dsr_node->lock);
+	}
+	return ifindex;  
 }
 
 static inline void dsr_node_lock(struct dsr_node *dnode)
@@ -144,36 +195,6 @@ static inline void dsr_node_unlock(struct dsr_node *dnode)
 	spin_unlock(&dnode->lock);
 }
 
-
-static inline struct in_addr my_addr(void)
-{
-	static struct in_addr my_addr;
-	if (dsr_node) {
-		spin_lock(&dsr_node->lock);
-		my_addr = dsr_node->ifaddr;
-		spin_unlock(&dsr_node->lock);
-	}
-	return my_addr;
-}
-
-
-//#define SECS_TO_JIFFIES(sec) secs_to_jiffies(sec)
-/* #define MSECS_TO_JIFFIES(msec) dmsecs_to_jiffies(msec) */
-/* #define JIFFIES_TO_MSECS(j) jiffies_to_msecs(j) */
-//#define JIFFIES_TO_USECS(j) jiffies_to_usecs(j)
-//#define JIFFIES_TO_SECS(j) jiffies_to_secs(j)
-
-static inline unsigned long time_add_msec(unsigned long msecs)
-{
-	struct timespec t;
-
-	t.tv_sec = msecs / 1000;
-	t.tv_nsec = (msecs * 1000000) % 1000000000;
-	
-	return timespec_to_jiffies(&t);
-}
-
-/* struct dsr_pkt *dsr_pkt_alloc(int size); */
-/* void dsr_pkt_free(struct dsr_pkt *dp); */
+#endif
 
 #endif /* _DSR_H */

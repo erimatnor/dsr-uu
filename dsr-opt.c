@@ -1,4 +1,6 @@
+#ifdef __KERNEL__
 #include <net/ip.h>
+#endif
 
 #include "debug.h"
 #include "dsr.h"
@@ -8,8 +10,10 @@
 #include "dsr-rerr.h"
 #include "dsr-srt.h"
 #include "dsr-ack.h"
-#include "kdsr.h"
 
+#ifdef NS2
+#include "ns-agent.h"
+#endif
 
 struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, int len, unsigned int protocol)
 {
@@ -27,7 +31,7 @@ struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, int len, unsigned int protocol)
 
 	return opt_hdr;
 }
-
+#ifdef __KERNEL__
 struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, struct in_addr dst, int ip_len, int tot_len, int protocol, int ttl)
 {
 	struct iphdr *iph;
@@ -49,6 +53,8 @@ struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, struct in_add
 
 	return iph;
 }
+#endif
+
 struct dsr_opt *dsr_opt_find_opt(struct dsr_pkt *dp, int type)
 {
 	int dsr_len, l;
@@ -75,13 +81,17 @@ int dsr_opts_remove(struct dsr_pkt *dp)
 
 	if (!dp)
 		return -1;
-	
-	ip_len = (dp->nh.iph->ihl << 2);
-	
+
 	prot = dp->dh.opth->nh;
-	
+
+#ifdef NS2
+	ip_len = 20;
+#else	
+	ip_len = (dp->nh.iph->ihl << 2);
+
 	dsr_build_ip(dp, dp->src, dp->dst, ip_len, ip_len + dp->payload_len, prot, dp->nh.iph->ttl);
-		
+#endif
+			
 	len = dsr_pkt_free_opts(dp);
 	
 	DEBUG("Removed %d bytes of DSR options %d payload=%d prot=%02x\n", len, dsr_pkt_opts_len(dp),  dp->payload_len, prot);
@@ -89,7 +99,8 @@ int dsr_opts_remove(struct dsr_pkt *dp)
 	/* Return bytes removed */
 	return len;
 }
-int dsr_opt_recv(struct dsr_pkt *dp)
+
+int NSCLASS dsr_opt_recv(struct dsr_pkt *dp)
 {	
 	int dsr_len, l;
 	int action = DSR_PKT_NONE;

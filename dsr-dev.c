@@ -12,6 +12,7 @@
 
 #include "debug.h"
 #include "dsr.h"
+#include "dsr-pkt.h"
 #include "kdsr.h"
 #include "dsr-opt.h"
 #include "dsr-rreq.h"
@@ -32,7 +33,7 @@ static int dsr_dev_inetaddr_event(struct notifier_block *this,
 {
 	struct in_ifaddr *ifa = (struct in_ifaddr *)ptr;
 	struct in_device *indev;
-	
+	struct in_addr addr, bc;
 	struct dsr_node *dnode;
 
 	if (!ifa)
@@ -52,9 +53,12 @@ static int dsr_dev_inetaddr_event(struct notifier_block *this,
 			dnode->bcaddr.s_addr = ifa->ifa_broadcast;
 			dsr_node_unlock(dnode);
 			
+			addr.s_addr = ifa->ifa_address;
+			bc.s_addr = ifa->ifa_broadcast;
+			
 			DEBUG("New ip=%s broadcast=%s\n", 
-			      print_ip(ifa->ifa_address), 
-			      print_ip(ifa->ifa_broadcast));
+			      print_ip(addr), 
+			      print_ip(bc));
 		}
 		break;
         case NETDEV_DOWN:

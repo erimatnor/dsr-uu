@@ -1,5 +1,7 @@
+#ifdef __KERNEL_
 #include <linux/skbuff.h>
 #include <linux/if_ether.h>
+#endif
 
 #include "dsr.h"
 #include "dsr-opt.h"
@@ -9,7 +11,7 @@ char *dsr_pkt_alloc_opts(struct dsr_pkt *dp, int len)
 	if (!dp && len)
 		return NULL;
 	
-	dp->dsr_opts = kmalloc(len + DEFAULT_TAILROOM, GFP_ATOMIC);
+	dp->dsr_opts = (char *)MALLOC(len + DEFAULT_TAILROOM, GFP_ATOMIC);
 
 	if (!dp->dsr_opts)
 		return NULL;
@@ -42,7 +44,7 @@ char *dsr_pkt_alloc_opts_expand(struct dsr_pkt *dp, int len)
 	
 	memcpy(dp->dsr_opts, tmp, old_len);
 
-	kfree(tmp);
+	FREE(tmp);
 
 	return (dp->dsr_opts + old_len);
 }
@@ -56,7 +58,7 @@ int dsr_pkt_free_opts(struct dsr_pkt *dp)
 	
 	len = dsr_pkt_opts_len(dp);
 
-	kfree(dp->dsr_opts);
+	FREE(dp->dsr_opts);
 	
 	dp->dh.raw = dp->dsr_opts = dp->end = dp->tail = NULL;
 	dp->srt_opt = NULL;
@@ -74,13 +76,13 @@ struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb)
 	struct dsr_pkt *dp;
 	int dsr_opts_len = 0;
 
-	dp = kmalloc(sizeof(struct dsr_pkt), GFP_ATOMIC);
+	dp = (struct dsr_pkt *)MALLOC(sizeof(struct dsr_pkt), GFP_ATOMIC);
 
 	if (!dp)
 		return NULL;
 	
 	memset(dp, 0, sizeof(struct dsr_pkt));
-		
+#ifdef __KERNEL__		
 	if (skb) {		
 		dp->skb = skb;
 		dp->nh.iph = skb->nh.iph;
@@ -93,7 +95,7 @@ struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb)
 			dsr_opts_len = ntohs(dp->dh.opth->p_len) + DSR_OPT_HDR_LEN;
 
 			if (!dsr_pkt_alloc_opts(dp, dsr_opts_len)) {
-				kfree(dp);
+				FREE(dp);
 				return NULL;
 			}
 			
@@ -107,7 +109,7 @@ struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb)
 		dp->payload_len = ntohs(dp->nh.iph->tot_len) - 
 			(dp->nh.iph->ihl << 2) - dsr_opts_len;
 	}
-       	
+#endif    	
 	return dp;
 }
 
@@ -117,16 +119,16 @@ void dsr_pkt_free(struct dsr_pkt *dp)
 	
 	if (!dp)
 		return;
-	
+#ifdef __KERNEL__	
 	if (dp->skb)
 		kfree_skb(dp->skb);
-
+#endif
 	dsr_pkt_free_opts(dp);
 
 	if (dp->srt)
-		kfree(dp->srt);
+		FREE(dp->srt);
 
-	kfree(dp);
+	FREE(dp);
 	
 	return;
 }

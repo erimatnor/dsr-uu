@@ -1,6 +1,10 @@
 #ifndef _DSR_OPT_H
 #define _DSR_OPT_H
 
+#ifdef NS2
+#include "endian.h"
+#endif
+
 /* Generic header for all options */
 struct dsr_opt {
 	u_int8_t type;

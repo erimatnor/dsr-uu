@@ -1,7 +1,11 @@
+#ifdef __KERNEL__
 #include <linux/proc_fs.h>
 #include <linux/string.h>
 #include <linux/if_ether.h>
 #include <net/ip.h>
+#include "kdsr.h"
+#include "dsr-dev.h"
+#endif /* __KERNEL__ */
 
 #include "dsr.h"
 #include "debug.h"
@@ -11,28 +15,31 @@
 #include "dsr-opt.h"
 #include "dsr-srt.h"
 #include "dsr-rtc.h"
-#include "dsr-dev.h"
 #include "send-buf.h"
-#include "kdsr.h"
 
 #define GRAT_RREP_TBL_MAX_LEN 64
-#define GRAT_RREP_TBL_PROC_NAME "dsr_grat_rrep_tbl"
 #define GRAT_REPLY_HOLDOFF 1
 
+#ifdef NS2
+#include "ns-agent.h"
+#else
+#define GRAT_RREP_TBL_PROC_NAME "dsr_grat_rrep_tbl"
 static TBL(grat_rrep_tbl, GRAT_RREP_TBL_MAX_LEN);
+DSRTimer grat_rrep_tbl_timer;
+#endif
 
 struct grat_rrep_entry {
-	struct list_head l;
+	list_t l;
 	struct in_addr src, prev_hop;
-	unsigned long expire;
+	Time expire;
 };
-struct timer_list grat_rrep_tbl_timer;
+
 
 static inline int crit_query(void *pos, void *query)
 {
-	struct grat_rrep_entry *p = pos;
-	struct in_addr *src = query;
-	struct in_addr *prev_hop = src+1;
+	struct grat_rrep_entry *p = (struct grat_rrep_entry *)pos;
+	struct in_addr *src = (struct in_addr *)query;
+	struct in_addr *prev_hop = (struct in_addr *)src+1;
 	
 	if (p->src.s_addr == src->s_addr && 
 	    p->prev_hop.s_addr == prev_hop->s_addr)
@@ -41,8 +48,8 @@ static inline int crit_query(void *pos, void *query)
 }
 static inline int crit_time(void *pos, void *time)
 {
-	struct grat_rrep_entry *p = pos;
-	unsigned long *t = time;
+	struct grat_rrep_entry *p = (struct grat_rrep_entry *)pos;
+	unsigned long *t = (unsigned long *)time;
 
 	if (p->expire > *t)
 		return 1;
@@ -50,63 +57,68 @@ static inline int crit_time(void *pos, void *time)
 	return 0;
 }
 
-static void grat_rrep_tbl_timeout(unsigned long data)
+void NSCLASS grat_rrep_tbl_timeout(unsigned long data)
 {
-	struct grat_rrep_entry *e = tbl_detach_first(&grat_rrep_tbl);
+	struct grat_rrep_entry *e = 
+		(struct grat_rrep_entry *)tbl_detach_first(&grat_rrep_tbl);
 	
-	kfree(e);
+	FREE(e);
 
-	read_lock_bh(&grat_rrep_tbl.lock);
+	DSR_READ_LOCK(&grat_rrep_tbl.lock);
 	
 	if (!TBL_EMPTY(&grat_rrep_tbl)) {
 		e = (struct grat_rrep_entry *)TBL_FIRST(&grat_rrep_tbl);
+#ifdef __KERNEL__
 		grat_rrep_tbl_timer.function = grat_rrep_tbl_timeout;
+#endif
 		grat_rrep_tbl_timer.expires = e->expire;
 		add_timer(&grat_rrep_tbl_timer);
-		read_unlock_bh(&grat_rrep_tbl.lock);
+		DSR_READ_UNLOCK(&grat_rrep_tbl.lock);
 	}	
-	read_unlock_bh(&grat_rrep_tbl.lock);
+	DSR_READ_UNLOCK(&grat_rrep_tbl.lock);
 }
 
-int grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop)
+int NSCLASS grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop)
 {
 	struct in_addr q[2] = { src, prev_hop };
 	struct grat_rrep_entry *e;
-	unsigned long int time = jiffies;
+	Time time = jiffies;
 	
 	if (in_tbl(&grat_rrep_tbl, q, crit_query))
 		return 0;
 
-	e = kmalloc(sizeof(struct grat_rrep_entry), GFP_ATOMIC);
+	e = (struct grat_rrep_entry *)MALLOC(sizeof(struct grat_rrep_entry), GFP_ATOMIC);
 	
 	if (!e)
 		return -1;
 
 	e->src = src;
 	e->prev_hop = prev_hop;
-	e->expire = time + (GRAT_REPLY_HOLDOFF * HZ);
+	e->expire = time + SECONDS(GRAT_REPLY_HOLDOFF);
 	
 	if (timer_pending(&grat_rrep_tbl_timer))
 		del_timer(&grat_rrep_tbl_timer);
 			
 	if (tbl_add(&grat_rrep_tbl, &e->l, crit_time)) {
 		
-		read_lock_bh(&grat_rrep_tbl.lock);
+		DSR_READ_LOCK(&grat_rrep_tbl.lock);
 		e = (struct grat_rrep_entry *)TBL_FIRST(&grat_rrep_tbl);
+#ifdef __KERNEL__
 		grat_rrep_tbl_timer.function = grat_rrep_tbl_timeout;
+#endif
 		grat_rrep_tbl_timer.expires = e->expire;
 		add_timer(&grat_rrep_tbl_timer);
-		read_unlock_bh(&grat_rrep_tbl.lock);		
+		DSR_READ_UNLOCK(&grat_rrep_tbl.lock);		
 	}
 	return 1;
 }
-
+#ifdef __KERNEL__
 static int grat_rrep_tbl_print(char *buf)
 {
-	struct list_head *pos;
+	list_t *pos;
 	int len = 0;
     
-	read_lock_bh(&grat_rrep_tbl.lock);
+	DSR_READ_LOCK(&grat_rrep_tbl.lock);
     
 	len += sprintf(buf, "# %-15s %-15s Time\n", "Source", "Prev hop");
 
@@ -114,12 +126,12 @@ static int grat_rrep_tbl_print(char *buf)
 		struct grat_rrep_entry *e = (struct grat_rrep_entry *)pos;
 		
 		len += sprintf(buf+len, "  %-15s %-15s %lu\n", 
-			       print_ip(e->src.s_addr), 
-			       print_ip(e->prev_hop.s_addr),
+			       print_ip(e->src), 
+			       print_ip(e->prev_hop),
 			       e->expire ? ((e->expire - jiffies) / HZ) : 0);
 	}
     
-	read_unlock_bh(&grat_rrep_tbl.lock);
+	DSR_READ_UNLOCK(&grat_rrep_tbl.lock);
 	return len;
 
 }
@@ -150,6 +162,7 @@ void __exit grat_rrep_tbl_cleanup(void)
 	tbl_flush(&grat_rrep_tbl, NULL);
 	proc_net_remove(GRAT_RREP_TBL_PROC_NAME);
 }
+#endif /* __KERNEL__ */
 
 static inline int dsr_rrep_add_srt(struct dsr_rrep_opt *rrep_opt, struct dsr_srt *srt)
 {
@@ -186,7 +199,7 @@ static struct dsr_rrep_opt *dsr_rrep_opt_add(char *buf, int len, struct dsr_srt 
 	return rrep_opt;	
 }
 
-int dsr_rrep_send(struct dsr_srt *srt_to_me)
+int NSCLASS dsr_rrep_send(struct dsr_srt *srt_to_me)
 {
 	struct dsr_pkt *dp;
 	char *buf;
@@ -232,12 +245,15 @@ int dsr_rrep_send(struct dsr_srt *srt_to_me)
 	if (!buf)
 		goto out_err;
 
+#ifdef __KERNEL__
+	
 	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN, IP_HDR_LEN + len, IPPROTO_DSR, ttl);
 	
 	if (!dp->nh.iph) {
 		DEBUG("Could not create IP header\n");
 		goto out_err;
 	}
+#endif
 	
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, 0);
 	
@@ -273,7 +289,7 @@ int dsr_rrep_send(struct dsr_srt *srt_to_me)
 	pad1_opt = (struct dsr_pad1_opt *)buf;
 	pad1_opt->type = DSR_OPT_PAD1;
 	
-	dsr_dev_xmit(dp);
+	XMIT(dp);
 	
 	return 0;
 
@@ -283,7 +299,7 @@ int dsr_rrep_send(struct dsr_srt *srt_to_me)
 	return -1;
 }
 
-int dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
+int NSCLASS dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 {
 	struct in_addr myaddr;
 	struct dsr_srt *rrep_opt_srt;
@@ -308,7 +324,7 @@ int dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 	
 	rreq_tbl_disable_route_discovery(rrep_opt_srt->dst);
 	
-	kfree(rrep_opt_srt);
+	FREE(rrep_opt_srt);
 	
 	if (dp->dst.s_addr == myaddr.s_addr) {
 		/*RREP for this node */
