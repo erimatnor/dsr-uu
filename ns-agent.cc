@@ -116,14 +116,24 @@ DSRUU::recv(Packet* p, Handler*)
 {
 	struct dsr_pkt *dp;
 	int action, res = -1;
+	struct hdr_cmn *cmh= hdr_cmn::access(p);
 
 	dp = dsr_pkt_alloc(p);
-
-	if (dp->src.s_addr == ip_addr.s_addr) {
+	
+	switch(cmh->ptype()) {
+	case PT_DSR:
+		if (dp->src.s_addr != ip_addr.s_addr) 
+			dsr_recv(dp);
+		break;
+	default:
+		if (dp->src.s_addr == ip_addr.s_addr) {
 		
-		dsr_start_xmit(dp);
+			dsr_start_xmit(dp);
+		} else {
+			// This shouldn't really happen ?
+			DEBUG("Data packet without DSR header!n");
+		}
 	}
-		
 	return;
 }
 
