@@ -344,21 +344,30 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp)
 	
 	trg.s_addr = dp->rreq_opt->target;
 
-	if (dsr_rreq_duplicate(dp->src, trg, dp->rreq_opt->id))
+	if (dsr_rreq_duplicate(dp->src, trg, dp->rreq_opt->id)) {
+		DEBUG("Duplicate RREQ from %s\n", print_ip(dp->src.s_addr));
 		return DSR_PKT_DROP;
-	
+	}
 	rreq_tbl_add(dp->src, dp->src, trg, dp->nh.iph->ttl, dp->rreq_opt->id, 0);
 
 	dp->srt = dsr_srt_new(dp->src, myaddr,
 			      DSR_RREQ_ADDRS_LEN(dp->rreq_opt),
 			      (char *)dp->rreq_opt->addrs);
-
+	
+	if (!dp->srt) {
+		DEBUG("Could not extract source route\n");
+		return DSR_PKT_ERROR;
+	}
 	DEBUG("RREQ target=%s\n", print_ip(dp->rreq_opt->target));
 	DEBUG("my addr %s\n", print_ip(myaddr.s_addr));
 	
         /* Add reversed source route */
 	srt_rev = dsr_srt_new_rev(dp->srt);
 	
+	if (!srt_rev) {
+		DEBUG("Could not reverse source route\n");
+		return DSR_PKT_ERROR;
+	}
 	DEBUG("srt: %s\n", print_srt(dp->srt));
 
 	DEBUG("srt_rev: %s\n", print_srt(srt_rev));
@@ -379,7 +388,7 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp)
 		dp->nh.iph->daddr = dp->rreq_opt->target;
 	
 		
-		return DSR_PKT_SEND_RREP | DSR_PKT_DROP;
+		return DSR_PKT_SEND_RREP;
 	} else {
 		int i, n;
 		/* TODO: Reply if I have a route */

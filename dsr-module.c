@@ -129,8 +129,22 @@ static int dsr_ip_recv(struct sk_buff *skb)
 	int action;
 
 	DEBUG("Received DSR packet\n");
-		
+
 	memset(&dp, 0, sizeof(dp));
+
+	dp.nh.iph = skb->nh.iph;
+		
+	if ((skb->len + (dp.nh.iph->ihl << 2)) < ntohs(dp.nh.iph->tot_len)) {
+		DEBUG("data to short according to IP header len=%d tot_len=%d!\n", skb->len + (dp.nh.iph->ihl << 2), ntohs(dp.nh.iph->tot_len));
+		kfree_skb(skb);
+		return -1;
+	}
+	
+	dp.dh.raw = skb->data;
+	dp.dsr_opts_len = ntohs(dp.dh.opth->p_len) + DSR_OPT_HDR_LEN;
+
+	dp.data = skb->data + dp.dsr_opts_len;
+	dp.data_len = skb->len - dp.dsr_opts_len;
 
 	/* Get IP stuff that we need */
 	dp.src.s_addr = dp.nh.iph->saddr;
@@ -138,6 +152,8 @@ static int dsr_ip_recv(struct sk_buff *skb)
 	
 	DEBUG("iph_len=%d iph_totlen=%d dsr_opts_len=%d data_len=%d\n", 
 	      (dp.nh.iph->ihl << 2), ntohs(dp.nh.iph->tot_len), dp.dsr_opts_len, dp.data_len);
+
+	
 	/* Process packet */
 	action = dsr_opt_recv(&dp);
 
@@ -168,6 +184,12 @@ static int dsr_ip_recv(struct sk_buff *skb)
 /* 		DEBUG("DSR srt options remove!\n"); */
 		
 /* 	} */
+	if (action & DSR_PKT_DROP || action & DSR_PKT_ERROR) {
+		DEBUG("DSR_PKT_DROP or DSR_PKT_ERROR\n");
+		kfree_skb(skb);
+		return 0;
+	}
+
 	if (action & DSR_PKT_FORWARD) {
 		DEBUG("Forwarding %s", print_ip(dp.src.s_addr));
 		printk(" %s", print_ip(dp.dst.s_addr));		
@@ -175,7 +197,7 @@ static int dsr_ip_recv(struct sk_buff *skb)
 
 		if (dp.nh.iph->ttl < 1) {
 			DEBUG("ttl=0, dropping!\n");
-			action = DSR_PKT_DROP;
+			action = DSR_PKT_NONE;
 		} else {
 			DEBUG("Forwarding (dev_queue_xmit)\n");
 			dsr_dev_xmit(&dp);
@@ -212,7 +234,9 @@ static int dsr_ip_recv(struct sk_buff *skb)
 			memcpy(tmp, dp.dh.raw, ntohs(dp.dh.opth->p_len) + 2);
 		}
 		dp.dh.raw = tmp;
-		dp.rreq_opt = (struct rreq_opt *)(tmp + len_to_rreq);
+		dp.dh.opth->p_len = htons(dsr_len + sizeof(struct in_addr));
+		dp.dsr_opts_len += sizeof(struct in_addr);
+		dp.rreq_opt = (struct dsr_rreq_opt *)(tmp + len_to_rreq);
 		dp.rreq_opt->addrs[n] = myaddr.s_addr;
 		dp.rreq_opt->length += sizeof(struct in_addr);
 		
@@ -258,12 +282,6 @@ static int dsr_ip_recv(struct sk_buff *skb)
 		dsr_opts_remove(&dp);
 		DEBUG("Deliver to DSR device\n");
 		dsr_dev_deliver(&dp);
-		kfree_skb(skb);
-		return 0;
-	}
-
-	if (action & DSR_PKT_DROP || action & DSR_PKT_ERROR) {
-		DEBUG("DSR_PKT_DROP or DSR_PKT_ERROR\n");
 		kfree_skb(skb);
 		return 0;
 	}
@@ -439,6 +457,8 @@ static unsigned int dsr_pre_routing_recv(unsigned int hooknum,
 	struct iphdr *iph = (*skb)->nh.iph;
 	struct in_addr myaddr = my_addr();
 	
+	return NF_ACCEPT;
+
 	if (in && in->ifindex == get_slave_dev_ifindex() && 
 	    (*skb)->protocol == htons(ETH_P_IP)) {
 		

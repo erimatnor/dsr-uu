@@ -286,7 +286,7 @@ int dsr_rrep_opt_recv(struct dsr_pkt *dp)
 	struct dsr_srt *rrep_opt_srt;
 
 	if (!dp || !dp->rrep_opt)
-		return DSR_PKT_DROP;
+		return DSR_PKT_ERROR;
 
 	
 	myaddr = my_addr();
@@ -296,7 +296,7 @@ int dsr_rrep_opt_recv(struct dsr_pkt *dp)
 			      (char *)dp->rrep_opt->addrs);
 	
 	if (!rrep_opt_srt)
-		return DSR_PKT_DROP;
+		return DSR_PKT_ERROR;
 	
 	DEBUG("Adding srt to cache\n");
 	dsr_rtc_add(rrep_opt_srt, 60000, 0);
@@ -308,7 +308,7 @@ int dsr_rrep_opt_recv(struct dsr_pkt *dp)
 		
 		DEBUG("RREP for me!\n");
 				
-		return DSR_PKT_DROP | DSR_PKT_SEND_BUFFERED;				
+		return DSR_PKT_SEND_BUFFERED;				
 	}
 	
 	DEBUG("I am not RREP destination\n");
