@@ -3,7 +3,6 @@
 
 #include <linux/netdevice.h>
 
-/* int dsr_dev_build_hw_hdr(struct sk_buff *skb, struct sockaddr *dest); */
 int dsr_dev_xmit(struct dsr_pkt *dp);
 int dsr_dev_deliver(struct dsr_pkt *dp);
 

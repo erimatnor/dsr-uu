@@ -1,4 +1,5 @@
 #include <linux/slab.h>
+#include <linux/icmp.h>
 #include <net/ip.h>
 
 #include "dsr.h"
@@ -101,19 +102,91 @@ dsr_srt_opt_t *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt)
 	return srt_opt;
 }
 
-int dsr_srt_add(struct dsr_pkt *dp)
+char *dsr_srt_opt_make_room(struct dsr_srt *srt, struct sk_buff *skb, int len)
 {
-	int len;
-	char *buf;
+	char *dsr_opts;
+
+	if (!srt || !skb || !len)
+		return NULL;
+
+	DEBUG("Adding %d bytes to end of skb, skb->len=%d headroom=%d tailroom=%d\n", len, skb->len, skb_headroom(skb), skb_tailroom(skb));
+
+	if (skb->nh.iph->protocol == IPPROTO_ICMP) {
+					
+		struct icmphdr *icmp;
+		icmp = skb->h.icmph;
+		
+		DEBUG("ICMP type=%u code=%u\n", icmp->type, icmp->code);
+		
+	}
+	/* Check if there are already enough tailroom for doing
+	 * skb_put. That way it is not always necessary to create a new skb. */
+
+	if (skb_tailroom(skb) >= len) {
+		DEBUG("Tailroom large enough\n");
+		skb_put(skb, len);
+	} else {
+		struct sk_buff *nskb;
+		
+		DEBUG("Not enough tailroom!!!, fix skb_copy_expand!!!\n");
+		return NULL;
+
+		/* Allocate new data space at head */
+		nskb = skb_copy_expand(skb, skb_headroom(skb),
+				       skb_tailroom(skb) + len,
+				       GFP_ATOMIC);
+		
+		if (nskb == NULL) {
+			printk("Could not allocate new skb\n");
+			return NULL;
+		}
+		/* Set old owner */
+		if (skb->sk != NULL)
+			skb_set_owner_w(nskb, skb->sk);
+		
+		/* Move tail len bytes (add data space at end of skb) */
+		skb_put(nskb, len);
+		
+		kfree_skb(skb);
+		skb = nskb;
+	}
 	
-	if (!dp || !dp->srt)
+	DEBUG("Moving %d amount of data\n", skb->tail - skb->h.raw - len);
+	
+	/* Move data (from after iph and up) towards tail */
+	memmove(skb->h.raw + len, skb->h.raw, skb->tail - skb->h.raw - len);
+	
+	dsr_opts = skb->h.raw;
+	skb->h.raw += len;
+
+	DEBUG("New skb->len=%d\n", skb->len);
+
+	return dsr_opts;
+}
+
+int dsr_srt_add(struct dsr_pkt *dp, struct sk_buff *skb)
+{
+	struct iphdr *iph;
+	char *buf;
+	int len;
+	
+	if (!dp || !dp->srt || !skb)
 		return -1;
 
 	/* Calculate extra space needed */
 	dp->dsr_opts_len = len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(dp->srt);
 	
-	buf = kmalloc(len, GFP_ATOMIC);
+	DEBUG("dsr_opts_len=%d\n", dp->dsr_opts_len);
 	
+	buf = dsr_srt_opt_make_room(dp->srt, skb, len);
+	
+	dp->data = buf + dp->dsr_opts_len;
+
+	if (!buf) {
+		DEBUG("Could not make room!\n");
+		return -1;
+	}
+ 
 	if (!dp->iph) {
 		DEBUG("No IP header!\n");
 		return -1;
@@ -129,18 +202,26 @@ int dsr_srt_add(struct dsr_pkt *dp)
 	buf += DSR_OPT_HDR_LEN;
 	len -= DSR_OPT_HDR_LEN;
 	
-	dp->iph->tot_len = htons(ntohs(dp->iph->tot_len) + len);
-	dp->iph->protocol = IPPROTO_DSR;
-	
-	ip_send_check(dp->iph);
-
 	dp->srt_opt = dsr_srt_opt_add(buf, len, dp->srt);
 
 	if (!dp->srt_opt) {
 		DEBUG("Could not create Source Route option header!\n");
 		return -1;
 	}
+
+	iph = skb->nh.iph;
+
+	if (!iph)
+		return -1;
+
+	iph->tot_len = htons(ntohs(iph->tot_len) + dp->dsr_opts_len);
 	
+	DEBUG("New iph->tot_len=%d\n", ntohs(iph->tot_len));
+
+	iph->protocol = IPPROTO_DSR;
+	
+	ip_send_check(iph);
+
 	return 0;
 }
 
@@ -184,55 +265,3 @@ int dsr_srt_opt_recv(struct dsr_pkt *dp)
 
 
 
-/* int dsr_srt_add(struct dsr_pkt *dp, char *buf, int len) */
-/* { */
-/* 	struct iphdr *iph; */
-/* 	int dsr_len; */
-	
-/* 	if (!dp || !dp->skb || !dp->srt) */
-/* 		return -1; */
-
-/* 	/\* Calculate extra space needed *\/ */
-/* 	dsr_len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(dp->srt); */
-	
-/* 	/\* Allocate new data space at head *\/ */
-/* 	nskb = skb_copy_expand(dp->skb, skb_headroom(dp->skb), */
-/* 			       skb_tailroom(dp->skb) + dsr_len,  */
-/* 			       GFP_ATOMIC); */
-	
-/* 	if (nskb == NULL) { */
-/* 		printk("Could not allocate new skb\n"); */
-/* 		return -1;	 */
-/* 	} */
-/* 	/\* Set old owner *\/ */
-/* 	if (dp->skb->sk != NULL) */
-/* 		skb_set_owner_w(nskb, dp->skb->sk); */
-		
-/* 	skb_put(nskb, dsr_len); */
-
-/* 	kfree_skb(dp->skb); */
-/* 	dp->skb = nskb;	 */
-	
-/* 	/\* Update pointer to IP header *\/ */
-/* 	iph = dp->skb->nh.iph; */
-	
-/* 	if (!iph) { */
-/* 		DEBUG("No IP header!\n"); */
-/* 		return -1; */
-/* 	} */
-/* 	/\* Move data towards tail *\/ */
-/* 	memmove(dp->skb->h.raw + dsr_len, dp->skb->h.raw, dp->skb->tail - dp->skb->h.raw); */
-	
-/* 	dsr_opt_hdr_add(dp->skb->h.raw, dsr_len, iph->protocol); */
-	
-/* 	iph->tot_len = htons(ntohs(iph->tot_len) + dsr_len); */
-/* 	iph->protocol = IPPROTO_DSR; */
-	
-/* 	ip_send_check(iph); */
-
-/* 	dsr_srt_opt_add(dp->skb->h.raw + DSR_OPT_HDR_LEN, dsr_len - DSR_OPT_HDR_LEN, dp->srt); */
-/* 	dp->skb->h.raw += dsr_len; */
-/* 	DEBUG("New skb->len=%d\n", dp->skb->len); */
-
-/* 	return 0; */
-/* } */

@@ -10,6 +10,7 @@
 #include <linux/proc_fs.h>
 #include <net/sock.h>
 #include <net/route.h>
+#include <linux/icmp.h>
 #include <net/icmp.h>
 
 #include "p-queue.h"
@@ -41,15 +42,15 @@ static LIST_HEAD(queue_list);
 
 static inline int __p_queue_enqueue_entry(struct p_queue_entry *entry)
 {
-       if (queue_total >= queue_maxlen) {
-               if (net_ratelimit()) 
-                       printk(KERN_WARNING "ip_queue: full at %d entries, "
-                              "dropping packet(s).\n", queue_total);
-               return -ENOSPC;
-       }
-       list_add(&entry->list, &queue_list);
-       queue_total++;
-       return 0;
+	if (queue_total >= queue_maxlen) {
+		if (net_ratelimit()) 
+			printk(KERN_WARNING "ip_queue: full at %d entries, "
+			       "dropping packet(s).\n", queue_total);
+		return -ENOSPC;
+	}
+	list_add(&entry->list, &queue_list);
+	queue_total++;
+	return 0;
 }
 
 /*
@@ -90,17 +91,17 @@ static inline void __p_queue_flush(void)
 	int n = 0;
 	
 	while ((entry = __p_queue_find_dequeue_entry(NULL, 0))) {
-	    kfree_skb(entry->skb);
-	    /* dsr_pkt_free(entry->dp); */
-	    kfree(entry);
-	    n++;
+		kfree_skb(entry->skb);
+		/* dsr_pkt_free(entry->dp); */
+		kfree(entry);
+		n++;
 	}
 	DEBUG("%d pkts flushed\n", n);
 }
 
 static inline void __p_queue_reset(void)
 {
-    __p_queue_flush();
+	__p_queue_flush();
 }
 
 static struct p_queue_entry *p_queue_find_dequeue_entry(p_queue_cmpfn cmpfn, unsigned long data)
@@ -149,7 +150,7 @@ int p_queue_enqueue_packet(struct dsr_pkt *dp, struct sk_buff *skb, int (*okfn)(
 	write_unlock_bh(&queue_lock);
 	return status;
 	
-err_out_unlock:
+ err_out_unlock:
 	write_unlock_bh(&queue_lock);
 	kfree(entry);
 
@@ -163,88 +164,90 @@ static inline int dest_cmp(struct p_queue_entry *e, unsigned long daddr)
 
 int p_queue_find(__u32 daddr)
 {
-    struct p_queue_entry *entry;
-    int res = 0;
+	struct p_queue_entry *entry;
+	int res = 0;
 
-    read_lock_bh(&queue_lock);
-    entry = __p_queue_find_entry(dest_cmp, daddr);
-    if (entry != NULL)
-	res = 1;
+	read_lock_bh(&queue_lock);
+	entry = __p_queue_find_entry(dest_cmp, daddr);
+	if (entry != NULL)
+		res = 1;
     
-    read_unlock_bh(&queue_lock);
-    return res;    
+	read_unlock_bh(&queue_lock);
+	return res;    
 }
 
 
 int p_queue_set_verdict(int verdict, unsigned long daddr)
 {
-    struct p_queue_entry *entry;
-    int pkts = 0;
+	struct p_queue_entry *entry;
+	int pkts = 0;
 
-    if (verdict == P_QUEUE_DROP) {
+	if (verdict == P_QUEUE_DROP) {
 	
-	while (1) {
-	    entry = p_queue_find_dequeue_entry(dest_cmp, daddr);
+		while (1) {
+			entry = p_queue_find_dequeue_entry(dest_cmp, daddr);
 	    
-	    if (entry == NULL)
-		    break;
+			if (entry == NULL)
+				break;
 	    
-	    /* Send an ICMP message informing the application that the
-	     * destination was unreachable. */
-	    if (pkts == 0)
-		icmp_send(entry->skb, ICMP_DEST_UNREACH, ICMP_HOST_UNREACH, 0);	    
+			/* Send an ICMP message informing the application that the
+			 * destination was unreachable. */
+			if (pkts == 0)
+				icmp_send(entry->skb, ICMP_DEST_UNREACH, ICMP_HOST_UNREACH, 0);	    
 	    
-	    kfree_skb(entry->skb);
-	  /*   dsr_pkt_free(entry->dp); */
-	    kfree(entry);
-	    pkts++;
-	}
+			kfree_skb(entry->skb);
+			kfree(entry);
+			pkts++;
+		}
 	
-	DEBUG("Dropped %d queued pkts\n", pkts);
+		DEBUG("Dropped %d queued pkts\n", pkts);
 
-    } else if (verdict == P_QUEUE_SEND) {
-	/* struct expl_entry e; */
+	} else if (verdict == P_QUEUE_SEND) {
 
-	while (1) {
-	    entry = p_queue_find_dequeue_entry(dest_cmp, daddr);
-	    
-	    if (entry == NULL) {
-		    if (pkts == 0)
-			    DEBUG("No packets for dest %s\n", print_ip(daddr));
-		    break;
-	    }
-	    
-	    entry->dp.srt = dsr_rtc_find(entry->dp.dst);
-		
-	    if (entry->dp.srt) {
+		while (1) {
+			entry = p_queue_find_dequeue_entry(dest_cmp, daddr);
+		    
+			if (entry == NULL) {
+				if (pkts == 0)
+					DEBUG("No packets for dest %s\n", print_ip(daddr));
+				break;
+			}
+		    
+			entry->dp.srt = dsr_rtc_find(entry->dp.dst);
+		    
+			if (entry->dp.srt) {
+				
 
-		    dsr_srt_add(&entry->dp);
-			
-		    /* Set next hop */
-		    entry->dp.nxt_hop = dsr_srt_next_hop(entry->dp.srt);
-			
-		    /* Send packet */
-		    entry->okfn(&entry->dp);
+				if (entry->skb->nh.iph->protocol == IPPROTO_ICMP) {
+					
+					struct icmphdr *icmp;
+					icmp = entry->skb->h.icmph;
 
-		    /* Free source route */
-		    kfree(entry->dp.srt);
+					DEBUG("ICMP type=%u code=%u\n", icmp->type, icmp->code);
 
-		    kfree_skb(entry->skb); 
-	    } else {
-
-		    DEBUG("No source route found for %s!\n", print_ip(daddr));
-		    dev_kfree_skb(entry->skb);
-		    goto loop_end;
-	    }
-
-	    pkts++;
-	    
-	loop_end:
-	    kfree(entry);
+				}
+				
+				if (dsr_srt_add(&entry->dp, entry->skb) < 0) {
+					DEBUG("Could not add source route\n");
+				} else {
+					/* Set next hop */
+					entry->dp.nxt_hop = dsr_srt_next_hop(entry->dp.srt);
+					/* Send packet */
+					entry->okfn(&entry->dp);
+				    
+				}
+				/* Free source route */
+				kfree(entry->dp.srt);
+			} else
+				DEBUG("No source route found for %s!\n", print_ip(daddr));
+		    
+			pkts++;
+			kfree_skb(entry->skb); 
+			kfree(entry);
+		}
+		DEBUG("Sent or Removed %d queued pkts\n", pkts);
 	}
-	DEBUG("Sent %d queued pkts\n", pkts);
-    }
-    return pkts;
+	return pkts;
 }
 
 static int p_queue_get_info(char *buffer, char **start, off_t offset, int length)
@@ -295,11 +298,11 @@ static int init_or_cleanup(int init)
 		proc->owner = THIS_MODULE;
 	else {
 		printk(KERN_ERR "p_queue: failed to create proc entry\n");
-	return -1;
+		return -1;
 	}
 	return 1;
 
-cleanup:
+ cleanup:
 #ifdef KERNEL26
 	synchronize_net();
 #endif

@@ -87,7 +87,9 @@ static int kdsr_ip_recv(struct sk_buff *skb)
 	/* Get IP stuff that we need */
 	dp.src.s_addr = dp.iph->saddr;
 	dp.dst.s_addr = dp.iph->daddr;
-
+	
+	DEBUG("iph_len=%d iph_totlen=%d dsr_opts_len=%d data_len=%d\n", 
+	      (dp.iph->ihl << 2), ntohs(dp.iph->tot_len), dp.dsr_opts_len, dp.data_len);
 	/* Process packet */
 	action = dsr_opt_recv(&dp);  /* Kernel panics here!!! */
 
@@ -159,6 +161,7 @@ static int kdsr_ip_recv(struct sk_buff *skb)
 	}
 	if (action & DSR_PKT_SEND_BUFFERED) {
 		/* Send buffered packets */
+		DEBUG("Sending buffered packets\n");
 		if (dp.srt) {
 			p_queue_set_verdict(P_QUEUE_SEND, dp.srt->src.s_addr);
 		}
@@ -177,7 +180,7 @@ static int kdsr_ip_recv(struct sk_buff *skb)
 	}
 	if (action & DSR_PKT_DELIVER) {
 		DEBUG("Deliver to DSR device\n");
-	/* 	dsr_dev_deliver(&dp); */
+		dsr_dev_deliver(&dp);
 		kfree_skb(skb);
 		return 0;
 	}
@@ -213,28 +216,25 @@ int kdsr_get_hwaddr(struct in_addr addr, struct sockaddr *hwaddr,
 	}
 	return -1;
 }
-struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp, struct net_device *dev)
+struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp, struct sockaddr *dest, 
+				struct net_device *dev)
 {
 	struct sk_buff *skb;
 /* 	struct ethhdr *ethh; */
-	struct sockaddr dest = {AF_UNSPEC, {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
-	/* struct net_device *dev; */
+	struct sockaddr broadcast = {AF_UNSPEC, {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
+	struct sockaddr dest2;
 	char *buf;
 	int ip_len;
-	int len;
+	int tot_len;
 	
-/* 	dsr_node_lock(dsr_node); */
-/* 	dev = dsr_node->slave_dev; */
-/* 	dsr_node_unlock(dsr_node); */
-
 	ip_len = dp->iph->ihl << 2;
 	
-	len = ip_len + dp->dsr_opts_len + dp->data_len;
+	tot_len = ip_len + dp->dsr_opts_len + dp->data_len;
 	
-	DEBUG("dp->data_len=%d dp->dsr_opts_len=%d len=%d\n", 
-	      dp->data_len, dp->dsr_opts_len, len);
+	DEBUG("iph_len=%d dp->data_len=%d dp->dsr_opts_len=%d TOT len=%d\n", 
+	      ip_len, dp->data_len, dp->dsr_opts_len, tot_len);
 	
-	skb = alloc_skb(dev->hard_header_len + 15 + len, GFP_ATOMIC);
+	skb = alloc_skb(dev->hard_header_len + 15 + tot_len, GFP_ATOMIC);
 	
 	if (!skb) {
 		DEBUG("alloc_skb failed\n");
@@ -248,7 +248,7 @@ struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp, struct net_device *dev)
 	skb->protocol = htons(ETH_P_IP);
 
 	/* Copy in all the headers in the right order */
-	buf = skb_put(skb, len);
+	buf = skb_put(skb, tot_len);
 
 	memcpy(buf, dp->iph, ip_len);
 	
@@ -262,10 +262,14 @@ struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp, struct net_device *dev)
 	if (dp->data_len && dp->data)
 		memcpy(buf, dp->data, dp->data_len);
 
-	/* Get hardware destination address */
- 	if (dp->nxt_hop.s_addr != DSR_BROADCAST) {
+	if (!dest && dp->nxt_hop.s_addr == DSR_BROADCAST)
+		dest = &broadcast;
 		
-		if (kdsr_get_hwaddr(dp->nxt_hop, &dest, dev) < 0) {
+	/* Get hardware destination address */
+ 	if (!dest) {
+		dest = &dest2;
+		
+		if (kdsr_get_hwaddr(dp->nxt_hop, dest, dev) < 0) {
 			DEBUG("Could not get hardware address for next hop %s\n", print_ip(dp->nxt_hop.s_addr));
 			kfree_skb(skb);
 			return NULL;
@@ -274,7 +278,7 @@ struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp, struct net_device *dev)
 
 	if (dev->hard_header) {
 		dev->hard_header(skb, dev, ETH_P_IP,
-				      dest.sa_data, 0, skb->len);
+				      dest->sa_data, 0, skb->len);
 	} else {
 		DEBUG("Missing hard_header\n");
 		kfree_skb(skb);

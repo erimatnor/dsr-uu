@@ -48,8 +48,9 @@ static int dsr_dev_inetaddr_event(struct notifier_block *this,
 			dnode->bcaddr.s_addr = ifa->ifa_broadcast;
 			dsr_node_unlock(dnode);
 			
-			DEBUG("New ip=%s, broadcast=%s\n", 
-			      print_ip(ifa->ifa_address), 
+			DEBUG("New ip=%s, ", 
+			      print_ip(ifa->ifa_address));
+			DEBUG("broadcast=%s\n",
 			      print_ip(ifa->ifa_broadcast));
 		}
 		break;
@@ -86,7 +87,6 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 		break;
         case NETDEV_UP:
 		DEBUG("Netdev up %s\n", dev->name);
-		
 		break;
         case NETDEV_UNREGISTER:
 		DEBUG("Netdev unregister %s\n", dev->name); 
@@ -100,9 +100,7 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 		break;
         case NETDEV_DOWN:
 		DEBUG("Netdev down %s\n", dev->name);
-		
                 break;
-
         default:
                 break;
         };
@@ -186,26 +184,35 @@ static void __init dsr_dev_setup(struct net_device *dev)
 	get_random_bytes(dev->dev_addr, 6);
 }
 
-int dsr_dev_build_hw_hdr(struct sk_buff *skb, struct sockaddr *dest)
-{
-	
-	if (skb->dev && skb->dev->hard_header) {
-		skb->dev->hard_header(skb, skb->dev, ETH_P_IP, 
-				      dest->sa_data, 0, skb->len);
-		return 0;
-	} 
-	DEBUG("no dev->hard_header...\n");
-	return -1;
-}
 
 int dsr_dev_deliver(struct dsr_pkt *dp)
 {	
 	struct sk_buff *skb;
-	int res;
+	struct sockaddr dest;
+	int res = NET_RX_DROP;
+	
+	memcpy(dest.sa_data, dsr_dev->dev_addr, ETH_ALEN);
+	
+	skb = kdsr_skb_create(dp, &dest, dsr_dev);
 
-	skb = kdsr_skb_create(dp, dsr_dev);
+	if (!skb) {
+		DEBUG("Could not allocate skb\n");
+		return -1;
+	}
+
+/* 	kfree_skb(skb); */
+/* 	return 0; */
 
 	skb->pkt_type = PACKET_HOST;
+	
+/* 	secpath_reset(skb); */
+	
+	/* Need to make hardware header visible again since we are going down a
+	 * layer */	
+	DEBUG("skb->len=%d headroom=%d tailroom=%d\n", 
+	      skb->len, skb_headroom(skb), skb_tailroom(skb));
+
+	skb->mac.raw = skb->data;
 	
 	dsr_node_lock(dsr_node);
 	dsr_node->stats.rx_packets++;
@@ -221,11 +228,12 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 	skb->nf_debug = 0;
 #endif
 #endif
-	res = netif_rx(skb);	
+	res = netif_rx(skb);
 	
 	if (res == NET_RX_DROP) {
 		DEBUG("Netif_rx DROP\n");
 	}
+	/* kfree_skb(skb); */
 	return res;
 }
 
@@ -234,7 +242,7 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 	struct sk_buff *skb;
 	
 	dsr_node_lock(dsr_node);
-	skb = kdsr_skb_create(dp, dsr_node->slave_dev);
+	skb = kdsr_skb_create(dp, NULL, dsr_node->slave_dev);
 	dsr_node_unlock(dsr_node);
 
 	if (!skb) {
@@ -281,8 +289,11 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		dp.srt = dsr_rtc_find(dp.dst);
 		
 		if (dp.srt) {
-	       
-			dsr_srt_add(&dp);
+
+			if (dsr_srt_add(&dp, skb) < 0) {
+				DEBUG("Could not add source route\n");
+				break;
+			}
 			
 			/* Set next hop */
 			dp.nxt_hop = dsr_srt_next_hop(dp.srt);
