@@ -28,19 +28,22 @@ static inline int crit_addr(void *pos, void *addr)
 		return 1;
 	return 0;
 }
+static inline int crit_addr_get_hwaddr(void *pos, void *data)
+{
+	struct {
+		struct in_addr *a;
+		struct sockaddr *hw;
+	} *d;
+	
+	struct neighbor *e = pos;
+	d = data;
 
-/* static inline int crit_ack(void *pos, void *ack) */
-/* { */
-/* 	struct dsr_ack_opt *a = ack;  */
-/* 	struct neighbor *e = pos; */
-/* 	struct in_addr myaddr = my_addr(); */
-
-/* 	if (e->addr.s_addr == a->src &&  */
-/* 	    e->id_req == ntohs(a->id) &&  */
-/* 	    a->dst == myaddr.s_addr) */
-/* 		return 1; */
-/* 	return 0; */
-/* } */
+	if (e->addr.s_addr == d->a->s_addr) {
+		memcpy(d->hw, &e->hw_addr, sizeof(struct sockaddr));
+		return 1;
+	}
+	return 0;
+}
 
 static inline int timer_remove(void *entry, void *data)
 {
@@ -140,8 +143,9 @@ out:
 }
 
 static struct neighbor *neigh_tbl_create(struct in_addr addr, 
-				     unsigned short id_req, 
-				     unsigned short id_ack)
+					 struct sockaddr *hw_addr,
+					 unsigned short id_req, 
+					 unsigned short id_ack)
 {
 	struct neighbor *neigh;
 	
@@ -157,7 +161,8 @@ static struct neighbor *neigh_tbl_create(struct in_addr addr,
 	neigh->addr = addr;
 	neigh->rtt = RTT_DEF;
 	neigh->reqs = 0;
-	
+	memcpy(&neigh->hw_addr, hw_addr, sizeof(struct sockaddr));
+
 	init_timer(&neigh->ack_req_timer);
 	init_timer(&neigh->ack_timer);
 	
@@ -174,12 +179,14 @@ static struct neighbor *neigh_tbl_create(struct in_addr addr,
 	return neigh;
 }
 
-int neigh_tbl_add(struct in_addr neigh_addr)
+int neigh_tbl_add(struct in_addr neigh_addr, struct sockaddr *hw_addr)
 {
 	struct neighbor *neigh;
 	
-	
-	neigh = neigh_tbl_create(neigh_addr, 0, 0);
+	if (in_tbl(&neigh_tbl, &neigh_addr, crit_addr))
+		return 0;
+
+	neigh = neigh_tbl_create(neigh_addr, hw_addr, 0, 0);
 
 	if (!neigh) {
 		DEBUG("Could not create new neighbor entry\n");
@@ -191,6 +198,20 @@ int neigh_tbl_add(struct in_addr neigh_addr)
 	return 1;
 }
 
+int neigh_tbl_get_hwaddr(struct in_addr neigh_addr, struct sockaddr *hw_addr)
+{
+	struct {
+		struct in_addr *a;
+		struct sockaddr *hw;
+	} data;
+	
+	data.a = &neigh_addr;
+	data.hw = hw_addr;
+	
+	return in_tbl(&neigh_tbl, &data, crit_addr_get_hwaddr);
+}
+
+
 static int neigh_tbl_print(char *buf)
 {
 	struct list_head *pos;
@@ -198,13 +219,14 @@ static int neigh_tbl_print(char *buf)
     
 	read_lock_bh(&neigh_tbl.lock);
     
-	len += sprintf(buf, "# %-15s %-6s %-6s %-6s %-12s %-12s %-12s\n", "Addr", "Reqs", "RTT", "Id", "AckReqTxTime", "AckRxTime", "AckTxTime");
+	len += sprintf(buf, "# %-15s %-17s %-6s %-6s %-6s %-12s %-12s %-12s\n", "Addr", "HwAddr", "Reqs", "RTT", "Id", "AckReqTxTime", "AckRxTime", "AckTxTime");
 
 	list_for_each(pos, &neigh_tbl.head) {
 		struct neighbor *neigh =(struct neighbor *)pos;
 		
-		len += sprintf(buf+len, "  %-15s %-6d %-6u %-6u %-12lu %-12lu %-12lu\n", 
-			       print_ip(neigh->addr.s_addr), neigh->reqs,
+		len += sprintf(buf+len, "  %-15s %-17s %-6d %-6u %-6u %-12lu %-12lu %-12lu\n", 
+			       print_ip(neigh->addr.s_addr), 
+			       print_eth(neigh->hw_addr.sa_data), neigh->reqs,
 			       neigh->rtt, neigh->id_req,
 			       neigh->last_req_tx_time ? (jiffies - neigh->last_req_tx_time) * 1000 / HZ : 0,
 			       neigh->last_ack_rx_time ? (jiffies - neigh->last_ack_rx_time) * 1000 / HZ : 0,

@@ -1,5 +1,5 @@
 
-SRC=dsr-module.c dsr-pkt.c dsr-dev.c dsr-opt.c dsr-rreq.c dsr-rrep.c dsr-srt.c send-buf.c debug.c neigh.c maint-buf.c
+SRC=dsr-module.c dsr-pkt.c dsr-dev.c dsr-opt.c dsr-rreq.c dsr-rrep.c dsr-srt.c send-buf.c debug.c neigh.c maint-buf.c dsr-ack.c
 
 DEFS=-DDEBUG 
 

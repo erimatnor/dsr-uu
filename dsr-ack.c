@@ -7,7 +7,7 @@
 #include "dsr-ack.h"
 #include "dsr-dev.h"
 #include "dsr-rtc.h"
-#include "dsr-neigh.h"
+#include "neigh.h"
 
 unsigned short ID = 0;
 
@@ -38,43 +38,41 @@ struct dsr_ack_opt *dsr_ack_opt_add(char *buf, int len, struct in_addr addr, uns
 
 static int dsr_ack_send(struct neighbor *neigh)
 {
-	struct dsr_pkt dp;
+	struct dsr_pkt *dp;
 	struct dsr_ack_opt *ack_opt;
-	int len = DSR_OPT_HDR_LEN + DSR_ACK_HDR_LEN;
-	char ip_buf[IP_HDR_LEN];
+	int len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_ACK_HDR_LEN;
 	char *buf;
 
 	if (!neigh)
 		return -1;
 
-	memset(&dp, 0, sizeof(dp));
+	dp = dsr_pkt_alloc(NULL, len);
 	
-	dp.data = NULL; /* No data in this packet */
-	dp.data_len = 0;
-	dp.dst = neigh->addr;
-	dp.nxt_hop = neigh->addr;
-	dp.dsr_opts_len = len;
-	dp.src = my_addr();
+	dp->data = NULL; /* No data in this packet */
+	dp->data_len = 0;
+	dp->dst = neigh->addr;
+	dp->nxt_hop = neigh->addr;
+	dp->dsr_opts_len = len;
+	dp->src = my_addr();
 
-	dp.nh.iph = dsr_build_ip(ip_buf, IP_HDR_LEN, IP_HDR_LEN + len, 
-				 dp.src, dp.dst, 1);
+	buf = dp->dsr_data;	
+
+	dp->nh.iph = dsr_build_ip(buf, IP_HDR_LEN, IP_HDR_LEN + len, 
+				 dp->src, dp->dst, 1);
 	
-	if (!dp.nh.iph) {
+	if (!dp->nh.iph) {
 		DEBUG("Could not create IP header\n");
-		return -1;
+		goto out_err;
 	}
-	
-	buf = kmalloc(len, GFP_ATOMIC);
-	
-	if (!buf)
-		return -1;
 
-	dp.dh.opth = dsr_opt_hdr_add(buf, len, 0);
+	buf += IP_HDR_LEN;
+	len -= IP_HDR_LEN;
+
+	dp->dh.opth = dsr_opt_hdr_add(buf, len, 0);
 	
-	if (!dp.dh.opth) {
+	if (!dp->dh.opth) {
 		DEBUG("Could not create DSR opt header\n");
-		kfree(buf);
-		return -1;
+		goto out_err;
 	}
 	
 	buf += DSR_OPT_HDR_LEN;
@@ -84,21 +82,22 @@ static int dsr_ack_send(struct neighbor *neigh)
 
 	if (!ack_opt) {
 		DEBUG("Could not create DSR ACK opt header\n");
-		kfree(dp.dh.raw);
-		return -1;
+		goto out_err;
 	}
 	
-	dp.nh.iph->ttl = 1;
+	dp->nh.iph->ttl = 1;
 
 	DEBUG("Sending ACK for %s\n", print_ip(neigh->addr.s_addr));
 	
 	neigh->last_ack_tx_time = jiffies;
 
-	dsr_dev_xmit(&dp);
+	dsr_dev_xmit(dp);
 	
-	kfree(dp.dh.raw);
-
 	return 1;
+
+ out_err:
+	dsr_pkt_free(dp);
+	return -1;
 }
 
 struct dsr_ack_req_opt *dsr_ack_req_opt_add(char *buf, int len, 
@@ -112,75 +111,72 @@ struct dsr_ack_req_opt *dsr_ack_req_opt_add(char *buf, int len,
 	
 	DEBUG("Adding ACK REQ opt\n");
 	
-	write_lock_bh(&neigh_tbl.lock);
+	/* write_lock_bh(&neigh_tbl.lock); */
 	
-	neigh = __tbl_find(&neigh_tbl, &addr, crit_addr);
+/* 	neigh = __tbl_find(&neigh_tbl, &addr, crit_addr); */
 
-	if (!neigh)
-		neigh = __neigh_create(addr, ++ID, -1);
+/* 	if (!neigh) */
+/* 		neigh = __neigh_create(addr, ++ID, -1); */
 
-	if (!neigh)
-		return NULL;
+/* 	if (!neigh) */
+/* 		return NULL; */
 	
-	neigh->ack_req_timer.expires = time_add_msec(neigh->rtt);
-	neigh->last_req_tx_time = jiffies;
-	neigh->reqs++;
+/* 	neigh->ack_req_timer.expires = time_add_msec(neigh->rtt); */
+/* 	neigh->last_req_tx_time = jiffies; */
+/* 	neigh->reqs++; */
 
-	if (timer_pending(&neigh->ack_req_timer))
-		mod_timer(&neigh->ack_req_timer, neigh->ack_req_timer.expires);
-	else
-		add_timer(&neigh->ack_req_timer);
+/* 	if (timer_pending(&neigh->ack_req_timer)) */
+/* 		mod_timer(&neigh->ack_req_timer, neigh->ack_req_timer.expires); */
+/* 	else */
+/* 		add_timer(&neigh->ack_req_timer); */
 	
 	/* Build option */
 	ack_req->type = DSR_OPT_ACK_REQ;
 	ack_req->length = DSR_ACK_REQ_OPT_LEN;
-	ack_req->id = htons(neigh->id_req);
+/* 	ack_req->id = htons(neigh->id_req); */
 	
-	write_unlock_bh(&neigh_tbl.lock);
+/* 	write_unlock_bh(&neigh_tbl.lock); */
 
 	return ack_req;
 }
 
 static int dsr_ack_req_send(struct neighbor *neigh)
 {
-	struct dsr_pkt dp;
+	struct dsr_pkt *dp;
 	struct dsr_ack_req_opt *ack_req;
-	int len = DSR_OPT_HDR_LEN + DSR_ACK_REQ_HDR_LEN;
-	char ip_buf[IP_HDR_LEN];
+	int len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_ACK_REQ_HDR_LEN;
 	char *buf;
 	
 	if (!neigh)
 		return -1;
 	
-	memset(&dp, 0, sizeof(dp));
-	
-	dp.data = NULL; /* No data in this packet */
-	dp.data_len = 0;
-	dp.dst = neigh->addr;
-	dp.nxt_hop = neigh->addr;
-	dp.dsr_opts_len = len;
-	dp.src = my_addr();
-	
+	dp = dsr_pkt_alloc(NULL, len);
 
-	dp.nh.iph = dsr_build_ip(ip_buf, IP_HDR_LEN, IP_HDR_LEN + len, 
-				 dp.src, dp.dst, 1);
+	dp->data = NULL; /* No data in this packet */
+	dp->data_len = 0;
+	dp->dst = neigh->addr;
+	dp->nxt_hop = neigh->addr;
+	dp->dsr_opts_len = len;
+	dp->src = my_addr();
+
+	buf = dp->dsr_data;
+
+	dp->nh.iph = dsr_build_ip(buf, IP_HDR_LEN, IP_HDR_LEN + len, 
+				  dp->src, dp->dst, 1);
 	
-	if (!dp.nh.iph) {
+	if (!dp->nh.iph) {
 		DEBUG("Could not create IP header\n");
-		return -1;
+		goto out_err;
 	}
+
+	buf += IP_HDR_LEN;
+	len -= IP_HDR_LEN;
+
+	dp->dh.opth = dsr_opt_hdr_add(buf, len, 0);
 	
-	buf = kmalloc(len, GFP_ATOMIC);
-	
-	if (!buf)
-		return -1;
-	
-	dp.dh.opth = dsr_opt_hdr_add(buf, len, 0);
-	
-	if (!dp.dh.opth) {
+	if (!dp->dh.opth) {
 		DEBUG("Could not create DSR opt header\n");
-		kfree(buf);
-		return -1;
+		goto out_err;
 	}
 	
 	buf += DSR_OPT_HDR_LEN;
@@ -190,23 +186,24 @@ static int dsr_ack_req_send(struct neighbor *neigh)
 
 	if (!ack_req) {
 		DEBUG("Could not create ACK REQ opt\n");
-		kfree(dp.dh.raw);
-		return -1;
+		goto out_err;
 	}
 	
 	DEBUG("Sending ACK REQ for %s id=%u\n", print_ip(neigh->addr.s_addr), neigh->id_req);
 
-	dsr_dev_xmit(&dp);
+	dsr_dev_xmit(dp);
 	
-	kfree(dp.dh.raw);
-
 	return 1;
+
+ out_err:
+	dsr_pkt_free(dp);
+	return -1;
 }
 
-int dsr_ack_add_ack_req(struct in_addr addr)
-{
-	return !in_tbl(&neigh_tbl, &addr, crit_not_send_req);
-}
+/* int dsr_ack_add_ack_req(struct in_addr addr) */
+/* { */
+/* 	return !in_tbl(&neigh_tbl, &addr, crit_not_send_req); */
+/* } */
 
 int dsr_ack_req_opt_recv(struct dsr_pkt *dp, struct dsr_ack_req_opt *ack_req)
 {
@@ -216,26 +213,26 @@ int dsr_ack_req_opt_recv(struct dsr_pkt *dp, struct dsr_ack_req_opt *ack_req)
 		return DSR_PKT_ERROR;
 	
 	DEBUG("ACK REQ: src=%s id=%u\n", print_ip(dp->src.s_addr), ntohs(ack_req->id));
-	write_lock_bh(&neigh_tbl.lock);
+	/* write_lock_bh(&neigh_tbl.lock); */
 	
-	neigh = __tbl_find(&neigh_tbl, &dp->src, crit_addr);
+	/* neigh = __tbl_find(&neigh_tbl, &dp->src, crit_addr); */
 
-	if (!neigh)
-		neigh = __neigh_create(dp->src, -1, ntohs(ack_req->id));
-	else 
+/* 	if (!neigh) */
+/* 		neigh = __neigh_create(dp->src, -1, ntohs(ack_req->id)); */
+/* 	else  */
 
-	if (!neigh)
-		return DSR_PKT_ERROR;
+/* 	if (!neigh) */
+/* 		return DSR_PKT_ERROR; */
 
-	neigh->ack_timer.expires = time_add_msec(neigh->rtt / 3);
-     	neigh->id_ack = ntohs(ack_req->id);
+/* 	neigh->ack_timer.expires = time_add_msec(neigh->rtt / 3); */
+/*      	neigh->id_ack = ntohs(ack_req->id); */
 
-	if (timer_pending(&neigh->ack_timer))
-		mod_timer(&neigh->ack_timer, neigh->ack_timer.expires);
-	else
-		add_timer(&neigh->ack_timer);
+/* 	if (timer_pending(&neigh->ack_timer)) */
+/* 		mod_timer(&neigh->ack_timer, neigh->ack_timer.expires); */
+/* 	else */
+/* 		add_timer(&neigh->ack_timer); */
 		
-	write_unlock_bh(&neigh_tbl.lock);
+/* 	write_unlock_bh(&neigh_tbl.lock); */
 
 	return DSR_PKT_NONE;
 }
@@ -250,23 +247,23 @@ int dsr_ack_opt_recv(struct dsr_ack_opt *ack)
 
 	DEBUG("ACK dst=%s src=%s id=%u\n", print_ip(ack->dst), print_ip(ack->src), ntohs(ack->id));
 
-	write_lock_bh(&neigh_tbl.lock);
+	/* write_lock_bh(&neigh_tbl.lock); */
 	
-	neigh = __tbl_find(&neigh_tbl, ack, crit_ack);
+/* 	neigh = __tbl_find(&neigh_tbl, ack, crit_ack); */
 
-	if (!neigh) {
-		DEBUG("No ACK REQ sent for this ACK??\n");
-		write_unlock_bh(&neigh_tbl.lock);
-		return DSR_PKT_NONE;
-	}
-	if (timer_pending(&neigh->ack_req_timer))
-		del_timer(&neigh->ack_req_timer);
+/* 	if (!neigh) { */
+/* 		DEBUG("No ACK REQ sent for this ACK??\n"); */
+/* 		write_unlock_bh(&neigh_tbl.lock); */
+/* 		return DSR_PKT_NONE; */
+/* 	} */
+/* 	if (timer_pending(&neigh->ack_req_timer)) */
+/* 		del_timer(&neigh->ack_req_timer); */
 	
-	neigh->last_ack_rx_time = jiffies;
-	neigh->id_req = ++ID;
-	neigh->reqs = 0;
+/* 	neigh->last_ack_rx_time = jiffies; */
+/* 	neigh->id_req = ++ID; */
+/* 	neigh->reqs = 0; */
 	
-	write_unlock_bh(&neigh_tbl.lock);
+/* 	write_unlock_bh(&neigh_tbl.lock); */
 
 	return DSR_PKT_NONE;
 }

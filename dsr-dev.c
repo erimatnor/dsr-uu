@@ -17,6 +17,7 @@
 #include "dsr-rtc.h"
 #include "dsr-srt.h"
 #include "send-buf.h"
+#include "maint-buf.h"
 
 /* Our dsr device */
 struct net_device *dsr_dev;
@@ -292,8 +293,10 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 				break;
 			}
 			/* Send packet */
-			dsr_dev_xmit(dp);
+			maint_buf_add(dp);
 
+			dsr_dev_xmit(dp);
+			
 			return 0;
 
 		} else {			

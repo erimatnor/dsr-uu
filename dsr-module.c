@@ -30,6 +30,8 @@
 #include "debug.h"
 #include "dsr-rtc.h"
 #include "dsr-ack.h"
+#include "maint-buf.h"
+#include "neigh.h"
 
 static char *ifname = NULL;
 static char *mackill = NULL;
@@ -172,6 +174,8 @@ static int dsr_ip_recv(struct sk_buff *skb)
 		prev_hop = dsr_srt_prev_hop(dp->srt);
 
 		dsr_arpset(prev_hop, &hw_addr, skb->dev);
+		
+		neigh_tbl_add(prev_hop, &hw_addr);
 	}
 
 	if (action & DSR_PKT_DROP || action & DSR_PKT_ERROR) {
@@ -191,6 +195,9 @@ static int dsr_ip_recv(struct sk_buff *skb)
 			action = DSR_PKT_NONE;
 		} else {
 			DEBUG("Forwarding (dev_queue_xmit)\n");
+			if (dp->data_len)
+				maint_buf_add(dp);
+
 			dsr_dev_xmit(dp);
 			return 0;
 		}
@@ -262,13 +269,6 @@ static int dsr_ip_recv(struct sk_buff *skb)
 			send_buf_set_verdict(SEND_BUF_SEND, dp->srt->src.s_addr);
 		}
 	}
-
-	/* Free source route. Should probably think of a better way to handle
-	 * source routes that are dynamically allocated. */
-/* 	if (dp->srt) { */
-/* 		DEBUG("Freeing source route\n"); */
-/* 		kfree(dp->srt); */
-/* 	} */
 
 	if (action & DSR_PKT_DELIVER) {
 		dsr_opts_remove(dp);
@@ -369,7 +369,7 @@ int dsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb)
 		memcpy(dest.sa_data , broadcast.sa_data, ETH_ALEN);
 	else {
 		/* Get hardware destination address */
-		if (dsr_get_hwaddr(dp->nxt_hop, &dest, skb->dev) < 0) {
+		if (neigh_tbl_get_hwaddr(dp->nxt_hop, &dest) < 0) {
 			DEBUG("Could not get hardware address for next hop %s\n", print_ip(dp->nxt_hop.s_addr));
 			return -1;
 		}
