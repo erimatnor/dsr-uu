@@ -172,14 +172,10 @@ static inline int do_init(void *pos, void *addr)
 
 void NSCLASS lc_garbage_collect(unsigned long data)
 {
-	DSR_WRITE_LOCK(&LC.lock);
-	
 	tbl_do_for_each(&LC.links, &LC, crit_expire);
 
-	if (!TBL_EMPTY(&LC.links))
+	if (!tbl_empty(&LC.links))
 		lc_garbage_collect_set();
-	
-	DSR_WRITE_UNLOCK(&LC.lock);
 }
 
 void NSCLASS lc_garbage_collect_set(void)

@@ -108,15 +108,12 @@ void NSCLASS neigh_tbl_garbage_timeout(unsigned long data)
 {
 	tbl_for_each_del(&neigh_tbl, NULL, crit_garbage);
 	
-	DSR_READ_LOCK(&neigh_tbl.lock);
 	
-	if (!TBL_EMPTY(&neigh_tbl)) {
+	if (!tbl_empty(&neigh_tbl)) {
 	/* 	garbage_timer.expires = TimeNow +  */
 /* 			MSECS_TO_TIMENOW(NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT); */
 	/* 	add_timer(&garbage_timer);	 */
 	}
-
-	DSR_READ_UNLOCK(&neigh_tbl.lock);
 }
 
 

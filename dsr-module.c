@@ -30,6 +30,7 @@
 #include "dsr-rreq.h"
 #include "maint-buf.h"
 #include "send-buf.h"
+#include "link-cache.h"
 
 static char *ifname = NULL;
 static char *mackill = NULL;
@@ -58,7 +59,8 @@ static char *confval_names[CONFVAL_TYPE_MAX] = { "Seconds (s)",
 						 "Microseconds (us)", 
 						 "Nanoseconds (ns)", 
 						 "Quanta", 
-						 "Binary" };
+						 "Binary",
+						 "Command"};
 
 /* Stolen from LUNAR <christian.tschudin@unibas.ch> */
 static int parse_mackill(void)
@@ -142,8 +144,8 @@ static int is_promisc_recv(struct sk_buff *skb)
 	dsr_node_lock(dsr_node);
 	if (dsr_node->slave_dev) {
 
-		DEBUG("dst=%s\n",print_eth(ethh->h_dest));
-		DEBUG("bc=%s\n",print_eth(bc));
+/* 		DEBUG("dst=%s\n",print_eth(ethh->h_dest)); */
+/* 		DEBUG("bc=%s\n",print_eth(bc)); */
 		
 		if (memcmp(ethh->h_dest, dsr_node->slave_dev->dev_addr,
 			   ETH_ALEN) == 0 ||
@@ -316,15 +318,23 @@ static int dsr_config_proc_write(struct file* file, const char* buffer,
   for (i = 0; i < CONFVAL_MAX; i++) {
 	  int n = strlen(confvals_def[i].name);
 	  
-	  if (strlen(cmd) - 2 <= n)
-		  continue;
-
 	  if (strncmp(cmd, confvals_def[i].name, n) == 0) {
 		  char *from, *to;
 		  unsigned int val, val_prev;
 		  
+		
+		  if (confvals_def[i].type == COMMAND) {
+			  if (i == FlushLinkCache)
+				  lc_flush();
+			  break;
+		  } 
+		  
+		  if (strlen(cmd) - 2 <= n)
+			  continue;
+
 		  from = strstr(cmd, "="); 
 		  from++; /* Exclude '=' */
+		   
 		  val_prev = ConfVal(i);
 		  val = simple_strtol(from, &to, 10); 
 

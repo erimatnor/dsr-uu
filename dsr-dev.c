@@ -234,7 +234,6 @@ static void __init dsr_dev_setup(struct net_device *dev)
 #endif
 }
 
-
 int dsr_dev_deliver(struct dsr_pkt *dp)
 {	
 	struct sk_buff *skb = NULL;

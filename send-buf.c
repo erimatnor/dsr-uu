@@ -119,7 +119,7 @@ int NSCLASS send_buf_enqueue_packet(struct dsr_pkt *dp, xmit_fct_t okfn)
 	struct timeval expires;
 	int res, empty = 0;
 	
-	if (TBL_EMPTY(&send_buf))
+	if (tbl_empty(&send_buf))
 		empty = 1;
 
 	e = send_buf_entry_create(dp, okfn);

@@ -70,17 +70,17 @@ void NSCLASS grat_rrep_tbl_timeout(unsigned long data)
 	
 	FREE(e);
 
+	if (tbl_empty(&grat_rrep_tbl))
+		return;
+	
 	DSR_READ_LOCK(&grat_rrep_tbl.lock);
 	
-	if (!TBL_EMPTY(&grat_rrep_tbl)) {
-		e = (struct grat_rrep_entry *)TBL_FIRST(&grat_rrep_tbl);
-
-		grat_rrep_tbl_timer.function = &NSCLASS grat_rrep_tbl_timeout;
-
-		set_timer(&grat_rrep_tbl_timer, &e->expires);
-
-		DSR_READ_UNLOCK(&grat_rrep_tbl.lock);
-	}	
+	e = (struct grat_rrep_entry *)TBL_FIRST(&grat_rrep_tbl);
+	
+	grat_rrep_tbl_timer.function = &NSCLASS grat_rrep_tbl_timeout;
+	
+	set_timer(&grat_rrep_tbl_timer, &e->expires);
+	
 	DSR_READ_UNLOCK(&grat_rrep_tbl.lock);
 }
 

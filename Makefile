@@ -62,11 +62,11 @@ PATCHLEVEL=$(shell grep ^PATCHLEVEL $(KERNEL_DIR)/Makefile | cut -d' ' -f 3)
 SUBLEVEL=$(shell grep ^SUBLEVEL $(KERNEL_DIR)/Makefile | cut -d' ' -f 3)
 #######
 
-KDEFS=-D__KERNEL__ -DMODULE $(DEFS) -mips2 -O2 -fno-pic -mno-abicalls -mlong-calls -G0 -msoft-float -DEXPORT_SYMTAB -DCONFIG_MODVERSIONS -DMODVERSIONS -include $(KERNEL_INC)/linux/modversions.h 
+KDEFS=-D__KERNEL__ -DMODULE $(DEFS) -DEXPORT_SYMTAB -DCONFIG_MODVERSIONS -DMODVERSIONS -include $(KERNEL_INC)/linux/modversions.h 
 
 KINC=-nostdinc $(shell $(CC) -print-search-dirs | sed -ne 's/install: \(.*\)/-I \1include/gp') -I$(KERNEL_INC)
 KCFLAGS=-Wall -fno-strict-aliasing -O2 $(KDEFS) $(KINC)
-MIPSDEFS=-mips2 $(KDEFS)
+MIPSDEFS=-mips2 -fno-pic -mno-abicalls -mlong-calls -G0 -msoft-float $(KDEFS)
 
 .PHONY: mips default depend clean ns
 
@@ -79,7 +79,7 @@ default: $(MODNAME).o $(RTC_TRG).o TODO
 endif
 
 mips:  
-	$(MAKE) default CC=$(MIPS_CC) LD=$(MIPS_LD) 
+	$(MAKE) default CC=$(MIPS_CC) LD=$(MIPS_LD) KDEFS="$(MIPSDEFS)"
 
 $(MODNAME).ko: $(SRC) Makefile
 	$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) MODVERDIR=$(PWD) modules

@@ -41,6 +41,7 @@ enum confval {
 #ifdef DEBUG
 	PrintDebug,
 #endif
+	FlushLinkCache,
 	PromiscOperation,
 	BroadCastJitter,
 	RouteCacheTimeout,
@@ -70,6 +71,7 @@ enum confval_type {
 	NANOSECONDS,
 	QUANTA,
 	BIN,
+	COMMAND,
 	CONFVAL_TYPE_MAX,
 };
 
@@ -86,6 +88,7 @@ static struct {
 #ifdef DEBUG
 	{ "PrintDebug", 1, BIN },
 #endif
+	{ "FlushLinkCache", 1, COMMAND },
 	{ "PromiscOperation", 1, BIN },
 	{ "BroadCastJitter", 10, MILLISECONDS },
 	{ "RouteCacheTimeout", 300, SECONDS },
@@ -249,6 +252,7 @@ static inline usecs_t confval_to_usecs(enum confval cv)
 		break;
 	case BIN:
 	case QUANTA:
+	case COMMAND:
 	case CONFVAL_TYPE_MAX:
 		break;
 	}

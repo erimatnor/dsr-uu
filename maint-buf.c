@@ -39,11 +39,6 @@ struct maint_entry {
 struct maint_buf_query {
 	struct in_addr *nxt_hop;
 	unsigned short *id;
-#ifdef NS2
-	DSRUU *a_;
-#else
-	DSRUUTimer *t;
-#endif
 };
 
 static inline int crit_addr_id_del(void *pos, void *data)
@@ -62,13 +57,6 @@ static inline int crit_addr_id_del(void *pos, void *data)
 #endif
 			dsr_pkt_free(m->dp);
 		}
-#ifdef NS2
-		if (m->timer_set)
-			q->a_->del_timer_sync(&q->a_->ack_timer);
-#else
-		if (m->timer_set) 
-			del_timer_sync(q->t);
-#endif		
 		return 1;
 	}
 	return 0;
@@ -77,9 +65,9 @@ static inline int crit_addr_id_del(void *pos, void *data)
 static inline int crit_addr_del(void *pos, void *data)
 {	
 	struct maint_entry *m = (struct maint_entry *)pos;
-	struct maint_buf_query *q = (struct maint_buf_query *)data;
+	struct in_addr *nxt_hop = (struct in_addr *)data;
 	
-	if (m->nxt_hop.s_addr == q->nxt_hop->s_addr) {
+	if (m->nxt_hop.s_addr == nxt_hop->s_addr) {
 		
 		if (m->dp) {
 #ifdef NS2
@@ -88,13 +76,6 @@ static inline int crit_addr_del(void *pos, void *data)
 #endif
 			dsr_pkt_free(m->dp);
 		}
-#ifdef NS2
-		if (m->timer_set)
-			q->a_->del_timer_sync(&q->a_->ack_timer);
-#else
-		if (m->timer_set) 
-			del_timer_sync(q->t);
-#endif		
 		return 1;
 	}
 	return 0;
@@ -173,7 +154,7 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 		return -1;
 	}		
 
-	if (TBL_EMPTY(&maint_buf))
+	if (tbl_empty(&maint_buf))
 		empty = 1;
 	
 	id = neigh_tbl_get_id(dp->nxt_hop);
@@ -211,8 +192,11 @@ void NSCLASS maint_buf_set_timeout(void)
 	usecs_t rto;
 	struct timeval tx_time, now, expires;
 	
+	if (tbl_empty(&maint_buf))
+		return;
+	
 	gettime(&now);
-
+		
 	DSR_WRITE_LOCK(&maint_buf.lock);
 	/* Get first packet in maintenance buffer */
 	m = (struct maint_entry *)TBL_FIRST(&maint_buf);
@@ -305,20 +289,14 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 
 int NSCLASS maint_buf_del_all(struct in_addr nxt_hop)
 {
-	struct maint_buf_query q;
 	int n;
-	q.nxt_hop = &nxt_hop;
-#ifdef NS2
-	q.a_ = this;
-#else
-	q.t = &ack_timer;
-#endif
-      	n = tbl_for_each_del(&maint_buf, &q, crit_addr_del);
-	if (!n)
-		return 0;
 
-	if (!TBL_EMPTY(&maint_buf) && !timer_pending(&ack_timer))
-		maint_buf_set_timeout();
+	if (timer_pending(&ack_timer))
+		del_timer_sync(&ack_timer);
+	
+      	n = tbl_for_each_del(&maint_buf, &nxt_hop, crit_addr_del);
+	
+       	maint_buf_set_timeout();
 	
 	return n;
 }
@@ -329,17 +307,14 @@ int NSCLASS maint_buf_del(struct in_addr nxt_hop, unsigned short id)
 	
 	q.id = &id;
 	q.nxt_hop = &nxt_hop;
-#ifdef NS2
-	q.a_ = this;
-#else
-	q.t = &ack_timer;
-#endif
-	/* Find the buffered packet to mark as acked */
-	if (!tbl_find_del(&maint_buf, &q, crit_addr_id_del))
-		return 0;
 
-	if (!TBL_EMPTY(&maint_buf) && !timer_pending(&ack_timer))
-		maint_buf_set_timeout();
+	if (timer_pending(&ack_timer))
+		del_timer_sync(&ack_timer);
+	
+	/* Find the buffered packet to mark as acked */
+	tbl_find_del(&maint_buf, &q, crit_addr_id_del);
+		
+	maint_buf_set_timeout();
 	
 	return 1;
 }
