@@ -12,7 +12,7 @@
 struct neighbor_info {
 	struct sockaddr hw_addr;
 	unsigned short id;
-	usecs_t rto;		/* Round Trip Timeout */
+	usecs_t rtt, rto;		/* RTT and Round Trip Timeout */
 	struct timeval last_ack_req;
 };
 
@@ -28,6 +28,8 @@ int neigh_tbl_del(struct in_addr neigh_addr);
 int neigh_tbl_query(struct in_addr neigh_addr,
 		    struct neighbor_info *neigh_info);
 int neigh_tbl_id_inc(struct in_addr neigh_addr);
+int neigh_tbl_set_rto(struct in_addr neigh_addr, struct neighbor_info *neigh_info);
+
 void neigh_tbl_garbage_timeout(unsigned long data);
 
 int neigh_tbl_init(void);

@@ -301,5 +301,6 @@ int NSCLASS dsr_ack_opt_recv(struct dsr_ack_opt *ack)
 	n = maint_buf_del_all_id(src, id);
 
 	DEBUG("Removed %d packets from maint buf\n", n);
+	
 	return DSR_PKT_NONE;
 }

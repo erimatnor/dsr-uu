@@ -13,24 +13,30 @@
 
 #define NEIGH_TBL_MAX_LEN 50
 
-#define DSRTV_SRTTBASE 0
-#define DSRTV_MIN 2
-#define DSRTV_REXMTMAX 128
-#define DSRTV_RTTDFLT 3
-#define TICK 2
+/* We calculate RTO in milliseconds */
+#define DSR_SRTTBASE 0
+#define DSR_SRTTDFLT 60
+#define DSR_MIN 20
+#define DSR_REXMTMAX 1280
+#define DSR_RTTDFLT 30
 #define PR_SLOWHZ 2
+
+#define RTT_SHIFT 3
+#define RTTVAR_SHIFT 2
 
 #define NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT 3000
 #define NEIGH_TBL_TIMEOUT 2000
-#define RTT_DEF  500000		/* usecs */
 
-#define DSRT_RANGESET(tv, value, tvmin, tvmax) { \
+#define DSR_RANGESET(tv, value, tvmin, tvmax) { \
         (tv) = (value); \
         if ((tv) < (tvmin)) \
             (tv) = (tvmin); \
         else if ((tv) > (tvmax)) \
             (tv) = (tvmax); \
 }
+
+#define DSR_REXMTVAL(val) \
+        (((val) >> RTT_SHIFT) + (val))
 
 #ifdef __KERNEL__
 static TBL(neigh_tbl, NEIGH_TBL_MAX_LEN);
@@ -46,7 +52,7 @@ struct neighbor {
 	struct sockaddr hw_addr;
 	unsigned short id;
 	struct timeval last_ack_req;
-	usecs_t t_rtt, t_srtt, t_rxtcur, t_rttmin, t_rttvar, jitter;	/* RTT in usec */
+	usecs_t t_srtt, t_rxtcur, t_rttmin, t_rttvar, jitter;	/* RTT in usec */
 };
 
 struct neighbor_query {
@@ -61,13 +67,14 @@ static inline int crit_addr(void *pos, void *query)
 
 	if (n->addr.s_addr == q->addr->s_addr) {
 		if (q->info) {
+			
 			q->info->id = n->id;
 			q->info->last_ack_req = n->last_ack_req;
 			memcpy(&q->info->hw_addr, &n->hw_addr,
 			       sizeof(struct sockaddr));
-
-			/* TODO: Calculate RTO */
-			q->info->rto = n->t_rtt;
+			
+			/* Return current RTO */
+			q->info->rto = n->t_rxtcur * 1000 / PR_SLOWHZ;
 		}
 		return 1;
 	}
@@ -82,6 +89,45 @@ static inline int crit_addr_id_inc(void *pos, void *addr)
 	if (n->addr.s_addr == a->s_addr) {
 		n->id++;
 		gettime(&n->last_ack_req);
+		return 1;
+	}
+	return 0;
+}
+
+static inline int rto_calc(void *pos, void *query)
+{
+	struct neighbor_query *q = (struct neighbor_query *)query;
+	struct neighbor *n = (struct neighbor *)pos;
+	
+	if (n->addr.s_addr == q->addr->s_addr) {
+		struct timeval now;
+		usecs_t rtt = q->info->rtt / 1000 * PR_SLOWHZ;
+		int delta;
+		
+		gettime(&now);
+		
+		/* TODO: Calculate RTO */
+		if (n->t_srtt != 0) {
+			delta = rtt - 1 - (n->t_srtt >> RTT_SHIFT);
+			
+			if ((n->t_srtt += delta) <= 0)
+				n->t_srtt = 1;
+			
+			if (delta < 0)
+				delta = -delta;
+			
+			delta -= (n->t_rttvar >> RTTVAR_SHIFT);
+			
+			if ((n->t_rttvar += delta) <= 0)
+				n->t_rttvar = 1;
+		} else {
+			n->t_srtt = rtt << RTT_SHIFT;
+			n->t_rttvar = rtt << (RTTVAR_SHIFT - 1);
+		}
+		
+		DSR_RANGESET(n->t_rxtcur, DSR_REXMTVAL(n->t_srtt),
+			     n->t_rttmin, DSR_REXMTMAX);
+		
 		return 1;
 	}
 	return 0;
@@ -113,10 +159,13 @@ static struct neighbor *neigh_tbl_create(struct in_addr addr,
 
 	neigh->id = id;
 	neigh->addr = addr;
-	neigh->t_srtt = DSRTV_SRTTBASE;
-	neigh->t_rttvar = 0;
-	neigh->t_rttmin = DSRTV_MIN;
-	neigh->t_rtt = RTT_DEF;
+	neigh->t_srtt = DSR_SRTTBASE;
+	neigh->t_rttvar = DSR_RTTDFLT * PR_SLOWHZ << 2;
+	neigh->t_rttmin = DSR_MIN;
+	DSR_RANGESET(neigh->t_rxtcur, 
+		     ((DSR_SRTTBASE >> 2) + (DSR_SRTTDFLT << 2)) >> 1, 
+		     DSR_MIN, DSR_REXMTMAX);
+
 	gettime(&neigh->last_ack_req);
 	memcpy(&neigh->hw_addr, hw_addr, sizeof(struct sockaddr));
 
@@ -171,29 +220,16 @@ int NSCLASS neigh_tbl_del(struct in_addr neigh_addr)
 	return tbl_for_each_del(&neigh_tbl, &neigh_addr, crit_addr);
 }
 
-/* int NSCLASS neigh_tbl_rtt_update(struct in_addr nxt_hop, int nticks) */
-/* { */
-/* 	struct neighbor *neigh; */
-/* 	int delta; */
-
-/* 	DSR_WRITE_LOCK(&neigh_tbl.lock); */
-
-/* 	neigh = (struct neighbor *)__tbl_find(&neigh_tbl, &nxt_hop, crit_addr); */
-
-/* 	if (!neigh) { */
-/* 		DSR_WRITE_UNLOCK(&neigh_tbl.lock); */
-/* 		return -1; */
-/* 	} */
-
-/* 	/\* Use TCP RTO estimation *\/ */
-/* 	delta = nticks - neigh->srtt; */
-
-/*        	neigh->srtt = neigh->srtt + (delta >> 3); */
-
-/* 	DSR_WRITE_UNLOCK(&neigh_tbl.lock); */
-
-/* 	return 0; */
-/* } */
+int NSCLASS 
+neigh_tbl_set_rto(struct in_addr neigh_addr, struct neighbor_info *neigh_info)
+{
+	struct neighbor_query q;
+	
+	q.addr = &neigh_addr;
+	q.info = neigh_info;
+	
+	return tbl_find_do(&neigh_tbl, &q, rto_calc);
+}
 
 int NSCLASS
 neigh_tbl_query(struct in_addr neigh_addr, struct neighbor_info *neigh_info)
@@ -208,7 +244,7 @@ neigh_tbl_query(struct in_addr neigh_addr, struct neighbor_info *neigh_info)
 
 int NSCLASS neigh_tbl_id_inc(struct in_addr neigh_addr)
 {
-	return in_tbl(&neigh_tbl, &neigh_addr, crit_addr_id_inc);
+	return tbl_find_do(&neigh_tbl, &neigh_addr, crit_addr_id_inc);
 }
 
 #ifdef __KERNEL__
@@ -221,7 +257,7 @@ static int neigh_tbl_print(char *buf)
 
 	len +=
 	    sprintf(buf, "# %-15s %-17s %-10s %-6s\n", "Addr", "HwAddr",
-		    "RTT (usec)", "Id" /*, "AckRxTime","AckTxTime" */ );
+		    "RTO (msec)", "Id" /*, "AckRxTime","AckTxTime" */ );
 
 	list_for_each(pos, &neigh_tbl.head) {
 		struct neighbor *neigh = (struct neighbor *)pos;
@@ -229,7 +265,7 @@ static int neigh_tbl_print(char *buf)
 		len += sprintf(buf + len, "  %-15s %-17s %-10lu %-6u\n",
 			       print_ip(neigh->addr),
 			       print_eth(neigh->hw_addr.sa_data),
-			       neigh->t_rtt, neigh->id);
+			       neigh->t_rxtcur, neigh->id);
 	}
 
 	DSR_READ_UNLOCK(&neigh_tbl.lock);

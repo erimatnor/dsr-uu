@@ -39,6 +39,7 @@ struct maint_entry {
 struct maint_buf_query {
 	struct in_addr *nxt_hop;
 	unsigned short *id;
+	usecs_t rtt;
 };
 
 static int maint_buf_print(struct tbl *t, char *buffer);
@@ -49,6 +50,14 @@ static inline int crit_addr_id_del(void *pos, void *data)
 	struct maint_buf_query *q = (struct maint_buf_query *)data;
 
 	if (m->nxt_hop.s_addr == q->nxt_hop->s_addr && m->id <= *(q->id)) {
+		struct timeval now;
+		
+		gettime(&now);
+		
+		/* Only update RTO if this was not a retransmission */
+		if (m->id == *(q->id) && m->rexmt == 0)
+			q->rtt = timeval_diff(&now, &m->tx_time);
+
 		if (m->dp) {
 #ifdef NS2
 			if (m->dp->p)
@@ -57,7 +66,7 @@ static inline int crit_addr_id_del(void *pos, void *data)
 #endif
 			dsr_pkt_free(m->dp);
 			return 1;
-		}
+		}	
 	}
 	return 0;
 }
@@ -323,12 +332,21 @@ int NSCLASS maint_buf_del_all_id(struct in_addr nxt_hop, unsigned short id)
 
 	q.id = &id;
 	q.nxt_hop = &nxt_hop;
+	q.rtt = 0;
 
 	if (timer_pending(&ack_timer))
 		del_timer_sync(&ack_timer);
 
 	/* Find the buffered packet to mark as acked */
 	n = tbl_for_each_del(&maint_buf, &q, crit_addr_id_del);
+	
+	if (q.rtt > 0) {
+		struct neighbor_info neigh_info;
+		
+		neigh_info.id = id;
+		neigh_info.rtt = q.rtt;
+		neigh_tbl_set_rto(nxt_hop, &neigh_info);
+	}
 
 	maint_buf_set_timeout();
 
@@ -343,8 +361,8 @@ static int maint_buf_print(struct tbl *t, char *buffer)
 
 	gettime(&now);
 
-	len = sprintf(buffer, "# %-15s %-6s %-6s %-2s %-15s %-15s\n",
-		      "NeighAddr", "Rexmt", "Id", "AR", "TxTime", "Expires");
+	len = sprintf(buffer, "# %-15s %-6s %-6s %-2s %-15s %-15s %-15s\n",
+		      "NeighAddr", "Rexmt", "Id", "AR", "RTO", "TxTime", "Expires");
 
 	DSR_READ_LOCK(&t->lock);
 
@@ -354,9 +372,10 @@ static int maint_buf_print(struct tbl *t, char *buffer)
 		if (e && e->dp)
 			len +=
 			    sprintf(buffer + len,
-				    "  %-15s %-6d %-6u %-2d %-15s %-15s\n",
+				    "  %-15s %-6d %-6u %-2d %-15u %-15s %-15s\n",
 				    print_ip(e->nxt_hop), e->rexmt, e->id,
-				    e->ack_req_sent, print_timeval(&e->tx_time),
+				    e->ack_req_sent, (unsigned int)e->rto, 
+				    print_timeval(&e->tx_time),
 				    print_timeval(&e->expires));
 	}
 
