@@ -33,10 +33,10 @@ struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt, int sleft)
 	struct in_addr prev_hop;
 	int n = srt->laddrs / sizeof(u_int32_t);
 	
-	if (sleft + 1 == n)
+	if (n - 1 == sleft)
 		prev_hop = srt->src;
-	else 
-		prev_hop = srt->addrs[n-sleft+1];
+	else
+		prev_hop = srt->addrs[n-2-(sleft)];
 
 	return prev_hop;
 }
@@ -112,7 +112,7 @@ struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt)
 {
 	struct dsr_srt_opt *srt_opt;
 	
-	if (len < DSR_SRT_OPT_LEN(srt))
+	if (len < (int)DSR_SRT_OPT_LEN(srt))
 		return NULL;
 
 	srt_opt = (struct dsr_srt_opt *)buf;
@@ -212,7 +212,7 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp)
 		return DSR_PKT_ERROR;
 	
 	/* We should add this source route info to the cache... */
-	n = (dp->srt_opt->length - 2) / sizeof(struct in_addr);
+/* 	n = (dp->srt_opt->length - 2) / sizeof(struct in_addr); */
 	
 	dp->srt = dsr_srt_new(dp->src, dp->dst, dp->srt_opt->length, 
 			      (char *)dp->srt_opt->addrs);
@@ -221,15 +221,16 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp)
 		DEBUG("Create source route failed\n");
 		return DSR_PKT_ERROR;
 	}
-	
+	n = dp->srt->laddrs / sizeof(struct in_addr);
+
 	DEBUG("SR: %s\n", print_srt(dp->srt));
 
 	dsr_rtc_add(dp->srt, ConfValToUsecs(RouteCacheTimeout), 0);
 	
 	if (dp->srt_opt->sleft == 0) {
-		dp->prv_hop = dsr_srt_prev_hop(dp->srt, n-1);
+		dp->prv_hop = dsr_srt_prev_hop(dp->srt, -1);
 			
-/* 		DEBUG("prev_hop=%s\n", print_ip(dp->prv_hop)); */
+		DEBUG("prev_hop=%s\n", print_ip(dp->prv_hop));
 		
 		neigh_tbl_add(dp->prv_hop, dp->mac.ethh);
 		

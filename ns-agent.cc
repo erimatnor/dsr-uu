@@ -76,7 +76,6 @@ int
 DSRUU::trace(const char *func, const char *fmt, ...)
 {
 	va_list args;
-	unsigned long flags;
 	int len;
 #define BUF_LEN 1024
 	static char buf[BUF_LEN];
@@ -111,7 +110,7 @@ DSRUU::trace(const char *func, const char *fmt, ...)
 int 
 DSRUU::arpset(struct in_addr addr, unsigned int mac_addr)
 {
-	ARPTable *arpt = ll_->arp_table();
+	// ARPTable *arpt = ll_->arp_table();
 	
 	// if (arpt->arplookup((nsaddr_t)mac_addr))
 // 		return 0;
@@ -152,7 +151,7 @@ DSRUU::arpset(struct in_addr addr, unsigned int mac_addr)
 // 	else
 // 		DEBUG("No ARP Table\n");
 
-	ll_->recv(p,0);
+	ll_->recv(p, 0);
 
 	return 1;
 }
@@ -194,7 +193,8 @@ DSRUU::ns_packet_create(struct dsr_pkt *dp)
 	if (!dp->p)
 		dp->p = allocpkt();
 
-	tot_len = IP_HDR_LEN + dsr_opts_len + dp->payload_len;
+	tot_len = IP_HDR_LEN +
+		dsr_opts_len + dp->payload_len;
 	
 	mh = HDR_MAC(dp->p);
 	cmh = HDR_CMN(dp->p);
@@ -285,7 +285,7 @@ DSRUU::ns_xmit(struct dsr_pkt *dp)
 	      iph->saddr(), iph->daddr(), cmh->next_hop_);
     
 	/* Set packet fields depending on packet type */
-	if (iph->daddr() == DSR_BROADCAST) {
+	if ((u_int32_t)iph->daddr() == DSR_BROADCAST) { 
 		/* Broadcast packet */
 		jitter = (ConfValToUsecs(BroadCastJitter) / 1000000) * 
 			Random::uniform();
@@ -323,7 +323,6 @@ void
 DSRUU::recv(Packet* p, Handler*)
 {
 	struct dsr_pkt *dp;
-	int action, res = -1;
 	struct hdr_cmn *cmh = hdr_cmn::access(p);
 
 	DEBUG("##########\n");
@@ -343,6 +342,7 @@ DSRUU::recv(Packet* p, Handler*)
 	default:
 		if (dp->src.s_addr == myaddr_.s_addr) {
 			DEBUG("Locally generated non DSR packet\n");
+			dp->payload_len += IP_HDR_LEN;
 			dsr_start_xmit(dp);
 		} else {
 			// This shouldn't really happen ?
@@ -364,18 +364,16 @@ DSRUU::tap(const Packet *p)
 	/* We need to make a copy since the original packet is "const" and is
 	 * not to be touched */
 
-	return;
-
 	Packet *p_copy = p->copy();
 
 	/* Do nothing for my own packets... */
-	if (iph->saddr() == myaddr_.s_addr)
+	if ((unsigned int)iph->saddr() == myaddr_.s_addr)
 		goto out;
 
 	next_hop.s_addr = cmh->next_hop_;
 
 	/* Do nothing for packets I am going to receive anyway */
-	if (iph->daddr() == myaddr_.s_addr ||
+	if ((unsigned int)iph->daddr() == myaddr_.s_addr ||
 	    next_hop.s_addr == myaddr_.s_addr)
 		goto out;
 	    

@@ -45,8 +45,8 @@ struct maint_buf_query {
 #endif
 };
 	
-static void maint_buf_set_timeout(void);
-static void maint_buf_timeout(unsigned long data);
+/* static void maint_buf_set_timeout(void); */
+/* static void maint_buf_timeout(unsigned long data); */
 
 static inline int crit_addr_id_del(void *pos, void *data)
 {	
@@ -210,14 +210,14 @@ void NSCLASS maint_buf_set_timeout(void)
 	DSR_WRITE_UNLOCK(&maint_buf.lock);
 
 	/* Check if this packet has already expired */
-	if (timeval_diff(&now, &tx_time) > rto) 
+	if (timeval_diff(&now, &tx_time) > (int)rto) 
 		maint_buf_timeout(0);
 	else {
-		expires = now;
+		expires = tx_time;
 		timeval_add_usecs(&expires, rto);
-		/* DEBUG("ACK Timer: exp=%ld.%06ld now=%ld.%06ld\n",  */
-/* 		      expires.tv_sec, expires.tv_usec,  */
-/* 		      now.tv_sec, now.tv_usec); */
+		DEBUG("ACK Timer: exp=%ld.%06ld now=%ld.%06ld\n",
+		      expires.tv_sec, expires.tv_usec,
+		      now.tv_sec, now.tv_usec);
 		
 		set_timer(&ack_timer, &expires);
 	}
@@ -237,6 +237,7 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 		DEBUG("Nothing in maint buf\n");
 		return;
 	}
+	m->rexmt++;
 
 	DEBUG("nxt_hop=%s id=%u rexmt=%d\n", 
 	      print_ip(m->nxt_hop), m->id, m->rexmt);
@@ -244,7 +245,7 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 	m->timer_set = 0;
 
 	/* Increase the number of retransmits */	
-	if (++m->rexmt >= ConfVal(MaxMaintRexmt)) {
+	if (m->rexmt >= ConfVal(MaxMaintRexmt)) {
 		DEBUG("MaxMaintRexmt reached, send RERR\n");
 		lc_link_del(my_addr(), m->nxt_hop);
 

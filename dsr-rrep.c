@@ -191,7 +191,7 @@ static struct dsr_rrep_opt *dsr_rrep_opt_add(char *buf, int len, struct dsr_srt 
 {
 	struct dsr_rrep_opt *rrep_opt;
 	
-	if (!buf || !srt || len < DSR_RREP_OPT_LEN(srt))
+	if (!buf || !srt || (unsigned int)len < DSR_RREP_OPT_LEN(srt))
 		return NULL;
 
 	rrep_opt = (struct dsr_rrep_opt *)buf;

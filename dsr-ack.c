@@ -20,7 +20,7 @@ struct dsr_ack_opt *dsr_ack_opt_add(char *buf, int len, struct in_addr src,
 {
 	struct dsr_ack_opt *ack = (struct dsr_ack_opt *)buf;
 	
-	if (len < DSR_ACK_HDR_LEN)
+	if (len < (int)DSR_ACK_HDR_LEN)
 		return NULL;
 	
 	ack->type = DSR_OPT_ACK;
@@ -113,7 +113,7 @@ static struct dsr_ack_req_opt *dsr_ack_req_opt_create(char *buf, int len,
 {
 	struct dsr_ack_req_opt *ack_req = (struct dsr_ack_req_opt *)buf;
 	
-	if (len < DSR_ACK_REQ_HDR_LEN)
+	if (len < (int)DSR_ACK_REQ_HDR_LEN)
 		return NULL;
 	
 	/* Build option */

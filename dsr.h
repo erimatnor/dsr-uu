@@ -25,7 +25,7 @@
 
 #ifndef NO_GLOBALS
 
-#define DSR_BROADCAST ((unsigned long int) 0xffffffff)
+#define DSR_BROADCAST ((unsigned int) 0xffffffff)
 #define IPPROTO_DSR 168 /* Is this correct? */
 #define IP_HDR_LEN 20
 #define DSR_OPTS_MAX_SIZE 100 /* This is used to reduce the MTU of the dsr

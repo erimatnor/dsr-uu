@@ -60,7 +60,7 @@ static inline char *print_srt(struct dsr_srt *srt)
 {
 #define BUFLEN 256
 	static char buf[BUFLEN];
-	int i, len;
+	unsigned int i, len;
 
 	if (!srt)
 		return NULL;

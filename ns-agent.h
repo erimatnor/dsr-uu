@@ -90,9 +90,6 @@ class DSRUU : public Tap, public Agent {
 	void ns_xmit(struct dsr_pkt *dp);
 	void ns_deliver(struct dsr_pkt *dp);
 
-/* 	void tap(const Packet *p); */
-	// tap out all data packets received at this host and promiscously snoop
-	// them for interesting tidbits
 	struct hdr_ip *	dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, 
 				     struct in_addr dst, int ip_len, 
 				     int tot_len, int protocol, int ttl);

@@ -111,18 +111,11 @@ struct dsr_pkt *dsr_pkt_alloc(Packet *p)
 			memcpy(dp->dsr_opts, dp->dh.raw, dsr_opts_len);
 			dp->dh.raw = dp->dsr_opts;
 			
-			/* We need to fake the payload since ns-2 actually often
-			 * do not send data */
-			if (DATA_PACKET((packet_t)dp->dh.opth->nh)) {
-				//printf("Setting payload_len\n");
-				//dp->payload_len = 1;
-				
-				//dp->payload;
-				dp->payload_len = cmh->size();
-			}
-		} else {
-
-		}
+		
+		} 
+	
+		dp->payload_len = cmh->size() - dsr_opts_len - IP_HDR_LEN;
+		printf("Payload=%d\n", dp->payload_len);
 		
 	}
 	return dp;

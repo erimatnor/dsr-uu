@@ -443,7 +443,7 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 	
 	if (dst_node->cost != LC_COST_INF) {
 		struct lc_node *d, *n;
-		struct lc_link *l;
+/* 		struct lc_link *l; */
 		int k = (dst_node->hops - 1);
 		int i = 0;
 		
@@ -497,7 +497,7 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 			d = d->pred;
 		}
 
-		if ((i + 1) != dst_node->hops)
+		if ((i + 1) != (int)dst_node->hops)
 			DEBUG("hop count ERROR i+1=%d hops=%d!!!\n", i + 1, 
 			       dst_node->hops);
 	}
@@ -569,6 +569,7 @@ void NSCLASS lc_flush(void)
 	DSR_WRITE_UNLOCK(&LC.lock);
 }
 
+#ifdef __KERNEL__
 static char *print_hops(unsigned int hops)
 {
 	static char c[18];
@@ -591,7 +592,6 @@ static char *print_cost(unsigned int cost)
 	return c;
 }
 
-#ifdef __KERNEL__
 
 static int lc_print(char *buf)
 {

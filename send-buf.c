@@ -52,7 +52,7 @@ static inline int crit_garbage(void *pos, void *n)
 	struct send_buf_entry *e = (struct send_buf_entry *)pos;
 	
 	if (timeval_diff(now, &e->qtime) >= 
-	    ConfValToUsecs(SendBufferTimeout)) {
+	    (int)ConfValToUsecs(SendBufferTimeout)) {
 		if (e->dp)
 			dsr_pkt_free(e->dp);
 		return 1;
