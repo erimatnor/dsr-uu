@@ -11,8 +11,12 @@ unsigned short ack_id = 0;
 
 static TBL(ack_tbl, ACK_TBL_MAX_LEN);
 
+#define ENTRY_TYPE_AREQ 0 
+#define EBTRY_TYPE_AREP 1
+
 struct ack_entry {
 	struct list_head l;
+	int type;
 	struct in_addr neigh;
 	unsigned short id;
 	struct timer_list timer;
@@ -86,6 +90,7 @@ int ack_tbl_add_unacked(struct in_addr neigh, int rtt)
 	if (!ae) 
 		return -1;
 
+	ae->type = ENTRY_TYPE_AREQ;
 	ae->neigh = neigh;
 	ae->id = ack_id++;
 	ae->rtt = rtt;
@@ -130,5 +135,7 @@ int dsr_ack_opt_recv(struct dsr_ack_opt *ack)
 		
 		return -1;
 	}
-	return 1;
+
+	
+	return 0;
 }
