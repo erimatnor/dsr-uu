@@ -4,6 +4,7 @@
 #include "neigh.h"
 #include "dsr-ack.h"
 #include "dsr-rtc.h"
+#include "dsr-rerr.h"
 
 #define MAINT_BUF_MAX_LEN 100
 #define MAX_REXMT 2
@@ -88,6 +89,8 @@ static void maint_buf_set_timeout(void)
 	
 	rto = neigh_tbl_get_rto(neigh_addr);
 
+	/* If the next packet has already expired for some reason we call the
+	 * timeout function immediatelly */
 	if (tx_time + rto < jiffies) {		
 		maint_buf_timeout(0);
 		return;
@@ -172,9 +175,12 @@ static void maint_buf_timeout(unsigned long data)
 	m->rexmt++;
 	
 	if (m->rexmt >= PARAM(MaxMaintRexmt)) {
-		DEBUG("Rexmt max reached, send RERR\n");
+		DEBUG("MaxMaintRexmt reached, send RERR\n");
 		lc_link_del(my_addr(), m->nxt_hop);
 		neigh_tbl_del(m->nxt_hop);
+
+		dsr_rerr_send(m->dp);
+
 		dsr_pkt_free(m->dp);
 		kfree(m);
 		return;

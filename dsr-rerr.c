@@ -59,6 +59,7 @@ int dsr_rerr_send(struct dsr_pkt *dp_trigg)
 	if (!dp_trigg || !dp_trigg->srt_opt)
 		return -1;
 	
+	DEBUG("Send RERR\n");
 	GET_SALVAGE(dp_trigg->srt_opt, salv);
 
 	if (salv == 0)
@@ -148,6 +149,11 @@ int dsr_rerr_send(struct dsr_pkt *dp_trigg)
 /* 		buf += (dp_trigg->ack_opt[i]->length + 2); */
 /* 	} */
 	
+	DEBUG("Send RERR err_src %s err_dst %s fin_dst %s\n", 
+	      print_ip(rerr_opt->err_src), 
+	      print_ip(rerr_opt->err_dst),
+	      print_ip(dp_trigg->dst.s_addr));
+
 	dsr_dev_xmit(dp);
 	
 	return 0;
