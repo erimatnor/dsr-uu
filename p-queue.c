@@ -67,12 +67,6 @@ static inline struct p_queue_entry *__p_queue_find_entry(p_queue_cmpfn cmpfn, un
 	return NULL;
 }
 
-static inline void __p_queue_dequeue_entry(struct p_queue_entry *entry)
-{
-	list_del(&entry->list);
-	queue_total--;
-}
-
 static inline struct p_queue_entry *__p_queue_find_dequeue_entry(p_queue_cmpfn cmpfn, unsigned long data)
 {
 	struct p_queue_entry *entry;
@@ -81,7 +75,9 @@ static inline struct p_queue_entry *__p_queue_find_dequeue_entry(p_queue_cmpfn c
 	if (entry == NULL)
 		return NULL;
 
-	__p_queue_dequeue_entry(entry);
+	list_del(&entry->list);
+	queue_total--;
+
 	return entry;
 }
 
@@ -133,8 +129,7 @@ int p_queue_enqueue_packet(dsr_pkt_t *dp, int (*okfn)(dsr_pkt_t *))
 		printk(KERN_ERR "ip_queue: OOM in p_queue_enqueue_packet()\n");
 		return -ENOMEM;
 	}
-
-	/* printk("enquing packet queue_len=%d\n", queue_total); */
+	
 	entry->okfn = okfn;
 	entry->dp = dp;
 	
@@ -144,6 +139,9 @@ int p_queue_enqueue_packet(dsr_pkt_t *dp, int (*okfn)(dsr_pkt_t *))
 	
 	if (status < 0)
 		goto err_out_unlock;
+
+	DEBUG("enquing packet for %s queue_len=%d\n", print_ip(dp->dst.s_addr),
+	      queue_total);
 
 	write_unlock_bh(&queue_lock);
 	return status;
@@ -186,7 +184,7 @@ int p_queue_set_verdict(int verdict, struct in_addr addr)
 	    entry = p_queue_find_dequeue_entry(dest_cmp, addr.s_addr);
 	    
 	    if (entry == NULL)
-		return pkts;
+		    break;
 	    
 	    /* Send an ICMP message informing the application that the
 	     * destination was unreachable. */
@@ -208,8 +206,9 @@ int p_queue_set_verdict(int verdict, struct in_addr addr)
 	    entry = p_queue_find_dequeue_entry(dest_cmp, addr.s_addr);
 	    
 	    if (entry == NULL) {
-		    DEBUG("No packets for dest %s\n", print_ip(addr.s_addr));
-		    return pkts;
+		    if (pkts == 0)
+			    DEBUG("No packets for dest %s\n", print_ip(addr.s_addr));
+		    break;
 	    }
 	    entry->dp->srt = dsr_rtc_find(entry->dp->dst);
 	    
@@ -220,16 +219,24 @@ int p_queue_set_verdict(int verdict, struct in_addr addr)
 		    kfree(entry);
 		    continue;
 	    }
-		    
+	    /* Set next hop address */
+	    if (entry->dp->srt->laddrs == 0) {
+		    entry->dp->nh.s_addr = entry->dp->srt->dst.s_addr;
+	    } else
+		    entry->dp->nh.s_addr = entry->dp->srt->addrs[0].s_addr;
+	    
 	    pkts++;
 	    
 	    /* Inject packet */
 	    entry->okfn(entry->dp);
+/* 	    dsr_dev_queue_xmit(entry->dp); */
+/* 	    kfree_skb(entry->dp->skb); */
+/* 	    dsr_pkt_free(entry->dp); */
 	    kfree(entry);
 	}
 	DEBUG("Sent %d queued pkts\n", pkts);
     }
-    return 0;
+    return pkts;
 }
 
 static int

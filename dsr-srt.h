@@ -48,9 +48,10 @@ typedef struct dsr_srt {
 
 char *print_srt(dsr_srt_t *srt);
 dsr_srt_t *dsr_srt_new(struct in_addr src, struct in_addr dst, 
-		       unsigned int length, u_int32_t *addrs);
+		       unsigned int length, char *addrs);
 dsr_srt_t *dsr_srt_new_rev(dsr_srt_t *srt);
 dsr_srt_opt_t *dsr_srt_opt_add(char *buf, int len, dsr_srt_t *srt);
 int dsr_srt_recv(struct dsr_pkt *dp);
+int dsr_srt_add(dsr_pkt_t *dp);
 
 #endif /* _DSR_SRT_H */

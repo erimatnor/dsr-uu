@@ -15,6 +15,8 @@
 #ifdef KERNEL26
 #include <linux/moduleparam.h>
 #endif
+#include <net/icmp.h>
+#include <net/xfrm.h>
 
 #include "dsr.h"
 #include "dsr-dev.h"
@@ -36,15 +38,16 @@ module_param(ifname, charp, 0);
 MODULE_PARM(ifname, "s");
 #endif
 
+
+
 static int kdsr_recv(struct sk_buff *skb)
 {
 	dsr_pkt_t *dp;
 	struct iphdr *iph;
-	int verdict, newlen;
+	int verdict, len;
 
-	DEBUG("received dsr packet\n");
-	
-	
+	DEBUG("Received DSR packet\n");
+		
 	iph = skb->nh.iph;
 		
 	if ((skb->len + (iph->ihl << 2)) < ntohs(iph->tot_len)) {
@@ -76,33 +79,57 @@ static int kdsr_recv(struct sk_buff *skb)
 			DEBUG("ttl=0, dropping!\n");
 			break;
 		}
-		
-		/* Must checksum be recalculated? */
-		ip_send_check(iph);
-		
 		dsr_dev_queue_xmit(dp);
 		
-		dsr_pkt_free(dp);
-		return 0;
+		break;
 	case DSR_PKT_DELIVER:
-		newlen = dsr_opts_remove(dp);
+		len = dsr_opts_remove(dp);
 		
-		if (newlen) {
-			DEBUG("Deliver to IP\n");
+		if (len) {
+			
+			DEBUG("Deliver to DSR device\n");
+			
 			/* Trim skb and deliver to IP layer again. */
-			skb_trim(skb, newlen);
-			ip_rcv(skb, skb->dev, NULL);
-		}
-		return 0;
+			if (!pskb_may_pull(skb, len))
+				return -1;
+
+			memmove(skb->mac.raw + len, skb->mac.raw, skb->dev->hard_header_len);
+			
+			skb->mac.raw = skb->mac.raw + len;
+			memcpy(skb->mac.ethernet->h_dest, dsr_dev->dev_addr, dsr_dev->addr_len);
+			skb->nh.raw = skb->data;
+			skb->protocol = htons(ETH_P_IP);
+			skb->pkt_type = PACKET_HOST;
+			
+			dsr_node->stats.rx_packets++;
+			dsr_node->stats.rx_bytes += skb->len;
+
+			skb->dev = dsr_dev;
+			dst_release(skb->dst);
+			skb->dst = NULL;
+#ifdef CONFIG_NETFILTER
+			nf_conntrack_put(skb->nfct);
+			skb->nfct = NULL;
+#ifdef CONFIG_NETFILTER_DEBUG
+			skb->nf_debug = 0;
+#endif
+#endif
+			netif_rx(skb);		
+			
+		} else
+			kfree_skb(skb);
+		break;
 	case DSR_PKT_SEND_ICMP:
 	case DSR_PKT_SRT_REMOVE:
 	case DSR_PKT_ERROR:
+		DEBUG("DSR_PKT_ERROR\n");
 	case DSR_PKT_DROP:
 	default:
-		dsr_pkt_free(dp);
 		kfree_skb(skb);
 		break;
 	}
+	
+	dsr_pkt_free(dp);
 	return 0;
 };
 

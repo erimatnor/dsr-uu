@@ -78,7 +78,7 @@ struct iphdr *dsr_build_ip(char *buf, int len, struct in_addr src,
 int dsr_opts_remove(dsr_pkt_t *dp)
 {
 	struct iphdr *iph;
-	int dsr_len;
+	int dsr_len, ip_len;
 	
 	if (!dp)
 		return -1;
@@ -92,20 +92,25 @@ int dsr_opts_remove(dsr_pkt_t *dp)
 	/* Update IP header */
 	iph = dp->skb->nh.iph;
 
+	ip_len = (iph->ihl << 2);
+
 	iph->protocol = dp->dh->nh;
 	iph->tot_len = htons(ntohs(iph->tot_len) - dsr_len);
+
 	ip_send_check(iph);
 
-	memcpy((char *)dp->dh, (char *)dp->dh + dsr_len, dp->len - dsr_len);
-	
+	/* Move IP header forward */
+	memmove((char *)iph + dsr_len, (char *)iph, ip_len);
+		
+	dp->data = dp->data + dsr_len;
 	dp->len -= dsr_len;
 	dp->dh = NULL;
 	dp->sopt = NULL;
 	dp->rreq = NULL;
 	dp->rrep = NULL;
 	
-	/* Return new length */
-	return dp->len;
+	/* Return bytes removed */
+	return dsr_len;
 }
 int dsr_recv(dsr_pkt_t *dp)
 {	
@@ -118,18 +123,21 @@ int dsr_recv(dsr_pkt_t *dp)
 	
 	dp->dh = (dsr_hdr_t *)dp->data;
 
-	dsr_len = ntohs(dp->dh->length);
+	dsr_len = ntohs(dp->dh->length) + DSR_OPT_HDR_LEN;
 	
 	if (dsr_len > dp->len) {
 		DEBUG("data to short, DSR header len=%d dh->length=%d!\n", 
 		      dp->len, dsr_len);
 		return -1;
 	}
-	
+
+
 	l = DSR_OPT_HDR_LEN;
 	dopt = DSR_OPT_HDR(dp->dh);
 	
-	while (l < dsr_len) {
+	DEBUG("Parsing DSR packet l=%d dsr_len=%d\n", l, dsr_len);
+
+	while (l < dsr_len && (dsr_len - l) > 2) {
 		DEBUG("len=%d dsr_len=%d l=%d\n", dp->len, dsr_len, l);
 		switch (dopt->type) {
 		case DSR_OPT_PADN:
@@ -175,54 +183,3 @@ int dsr_recv(dsr_pkt_t *dp)
 }
 
 
-int dsr_srt_add(dsr_pkt_t *dp)
-{
-	struct iphdr *iph;
-	struct sk_buff *skb, *nskb;
-	char *ndx;
-	int dsr_len;
-	
-	if (!dp || !dp->skb || !dp->srt)
-		return -1;
-	
-	skb = dp->skb;
-
-	/* Calculate extra space needed */
-	dsr_len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(dp->srt);
-	
-	/* Allocate new data space at head */
-	nskb = skb_copy_expand(skb, skb_headroom(skb),
-			       skb_tailroom(skb) + dsr_len, 
-			       GFP_ATOMIC);
-	
-	if (nskb == NULL) {
-		printk("Could not allocate new skb\n");
-		return -1;	
-	}
-	/* Set old owner */
-	if (skb->sk != NULL)
-		skb_set_owner_w(nskb, skb->sk);
-	
-	dev_kfree_skb(skb);
-	skb = nskb;
-	
-	skb_put(skb, dsr_len);
-	
-	/* Update IP header */
-	iph = skb->nh.iph;
-	
-	iph->tot_len = htons(skb->len - sizeof(struct ethhdr));
-	iph->protocol = IPPROTO_DSR;
-	
-	ip_send_check(iph);
-	
-	/* Get index to where the DSR header should go */
-	ndx = skb->mac.raw + sizeof(struct ethhdr) + (iph->ihl << 2);
-	memcpy(ndx + dsr_len, ndx, dsr_len);
-	
-	dsr_hdr_add(ndx, dsr_len, iph->protocol);
-	
-	dsr_srt_opt_add(ndx + DSR_OPT_HDR_LEN, dsr_len - DSR_OPT_HDR_LEN, dp->srt);
-
-	return 0;
-}

@@ -48,12 +48,6 @@ typedef struct dsr_hdr {
 #define DSR_OPT_HDR(dh) (dh->option)
 #define DSR_NEXT_OPT(dopt) ((dsr_opt_t *)((char *)dopt + dopt->length + 2))
 
-struct netdev_info {
-    struct in_addr ifaddr;
-    struct in_addr bcaddr;
-    int ifindex;
-};
-
 #define DSR_BROADCAST ((unsigned long int) 0xffffffff)
 #define IPPROTO_DSR 168 /* Is this correct? */
 #define IP_HDR_LEN 20
@@ -89,7 +83,17 @@ typedef struct dsr_pkt {
 #define DSR_PKT_DROP            5
 
 /* Local device info */
-extern struct netdev_info ldev_info;  /* defined in dsr-dev.c */
+//extern struct netdev_info ldev_info;  /* defined in dsr-dev.c */
+
+struct dsr_node {
+	struct net_device *dev;
+	struct net_device *slave_dev;
+	struct net_device_stats	stats;
+	struct in_addr ifaddr;
+	struct in_addr bcaddr;
+};
+extern struct net_device *dsr_dev;
+extern struct dsr_node *dsr_node;
 
 dsr_pkt_t *dsr_pkt_alloc(void);
 void dsr_pkt_free(dsr_pkt_t *dp);
@@ -97,7 +101,6 @@ void dsr_pkt_free(dsr_pkt_t *dp);
 struct iphdr *dsr_build_ip(char *buf, int len, struct in_addr src, 
 			   struct in_addr dst, int ttl);
 dsr_hdr_t *dsr_hdr_add(char *buf, int len, unsigned int protocol);
-int dsr_srt_add(dsr_pkt_t *dp);
 int dsr_recv(dsr_pkt_t *dp);
 int dsr_opts_remove(dsr_pkt_t *dp);
 

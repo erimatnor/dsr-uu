@@ -18,13 +18,13 @@
 #include "p-queue.h"
 
 /* Our dsr device */
-static struct net_device *dsr_dev;
-
+struct net_device *dsr_dev;
+struct dsr_node *dsr_node;
 /* Slave device (WiFi interface) */
-static struct net_device *basedev = NULL;
-static char *basedevname = NULL;
+//static struct net_device *basedev = NULL;
+//static char *basedevname = NULL;
 
-struct netdev_info ldev_info;
+//struct netdev_info ldev_info;
 static int dsr_dev_netdev_event(struct notifier_block *this,
 				unsigned long event, void *ptr);
 
@@ -32,12 +32,13 @@ static struct notifier_block dsr_dev_notifier = {
 	notifier_call: dsr_dev_netdev_event,
 };
 
-static int dsr_dev_set_ldev_info(struct net_device *dev) 
+static int dsr_dev_set_node_info(struct net_device *dev) 
 {
 	struct in_device *indev = NULL;
 	struct in_ifaddr **ifap = NULL;
 	struct in_ifaddr *ifa = NULL;
-	
+	struct dsr_node *dnode = dev->priv;
+
 	indev = in_dev_get(dev);
 	
 	if (indev) {
@@ -47,10 +48,8 @@ static int dsr_dev_set_ldev_info(struct net_device *dev)
 				break;
 		
 		if (ifa) {
-			if (basedev)
-				ldev_info.ifindex = basedev->ifindex;
-			ldev_info.ifaddr.s_addr = ifa->ifa_address;
-			ldev_info.bcaddr.s_addr = ifa->ifa_broadcast;
+			dnode->ifaddr.s_addr = ifa->ifa_address;
+			dnode->bcaddr.s_addr = ifa->ifa_broadcast;
 		}
 		in_dev_put(indev);
 	} else {
@@ -59,11 +58,13 @@ static int dsr_dev_set_ldev_info(struct net_device *dev)
 	}
 	return 1;
 }
+
 /* From kernel lunar */
 static int dsr_dev_netdev_event(struct notifier_block *this,
                               unsigned long event, void *ptr)
 {
         struct net_device *dev = (struct net_device *) ptr;
+	struct dsr_node *dnode = dsr_dev->priv;
 
 	if (!dev)
 		return NOTIFY_DONE;
@@ -75,14 +76,14 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 		break;
         case NETDEV_UP:
 		DEBUG("notifier up %s\n", dev->name);
-		if (basedev == NULL && dev->get_wireless_stats) {
-			basedev = dev;
-			basedevname = dev->name;
+		if (dnode->slave_dev == NULL && dev->get_wireless_stats) {
+			dev_hold(dev);
+			dnode->slave_dev = dev;
 			DEBUG("new dsr slave interface %s\n", dev->name);
 		} else if (dev == dsr_dev) {
 			int res;
 			
-			res = dsr_dev_set_ldev_info(dev);
+			res = dsr_dev_set_node_info(dev);
 
 			if (res < 0)
 				return NOTIFY_DONE;
@@ -93,11 +94,10 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 		break;
         case NETDEV_DOWN:
 		DEBUG("notifier down %s\n", dev->name);
-                if (dev == basedev) {
+                if (dev == dnode->slave_dev) {
                         DEBUG("dsr slave interface %s went away\n", dev->name);
-			basedev = NULL;
-			basedevname = NULL;
-			//netbox_dropL2if(dev->ifindex);
+			dev_put(dnode->slave_dev);
+			dnode->slave_dev = NULL;
                 }
                 break;
 
@@ -138,16 +138,20 @@ static int dsr_dev_open(struct net_device *dev)
 	netif_start_queue(dev);
         return 0;
 }
+
 static int dsr_dev_stop(struct net_device *dev)
 {
-/* 	if (basedev) { */
-/* 		int i = basedev->ifindex; */
-/* 		basedev = 0; */
-/* 		netbox_dropL2if(i); */
-/* 	} */
         netif_stop_queue(dev);
-
         return 0;
+}
+
+static void dsr_dev_uninit(struct net_device *dev)
+{
+	struct dsr_node *dnode = dev->priv;
+	if (dnode->slave_dev)
+		dev_put(dnode->slave_dev);
+	dev_put(dsr_dev);
+	dsr_node = NULL;
 }
 
 static void __init dsr_dev_setup(struct net_device *dev)
@@ -156,6 +160,7 @@ static void __init dsr_dev_setup(struct net_device *dev)
 	ether_setup(dev);
 	/* Initialize the device structure. */
 	dev->get_stats = dsr_dev_get_stats;
+	dev->uninit = dsr_dev_uninit;
 	dev->open = dsr_dev_open;
 	dev->stop = dsr_dev_stop;
 	dev->hard_start_xmit = dsr_dev_xmit;
@@ -190,38 +195,46 @@ int dsr_dev_build_hw_hdr(struct sk_buff *skb, struct sockaddr *dest)
  * source route already. */
 int dsr_dev_queue_xmit(dsr_pkt_t *dp)
 {
-	struct net_device_stats *stats = dsr_dev->priv;
+	struct dsr_node *dnode = dsr_dev->priv;
 	struct ethhdr *ethh;
 	struct sockaddr hw_addr;
 		
 	if (!dp)
 		return -1;
-	
-	ethh = dp->skb->mac.ethernet;
-	
-	switch (ntohs(ethh->h_proto)) {
-	case ETH_P_IP:	
-		
-		if (kdsr_get_hwaddr(dp->nh, &hw_addr, dp->skb->dev) < 0)
-			break;
-		
-		/* Build hw header */
-		if (dsr_dev_build_hw_hdr(dp->skb, &hw_addr) < 0)
-			break;
-		
-		/* Send packet */
-		dev_queue_xmit(dp->skb);
-		
-		stats->tx_packets++;
-		stats->tx_bytes+=dp->skb->data_len;
-		
-		/* We must free the DSR packet */
+
+	if (!dp->skb) {
 		dsr_pkt_free(dp);
-		return 0;
-	default:
-		DEBUG("Unkown packet type\n");
-	}
+		return -1;
+	}	
+
+	ethh = (struct ethhdr *)dp->skb->data;
 	
+	//dp->skb->dev = dnode->slave_dev;
+
+	if (kdsr_get_hwaddr(dp->nh, &hw_addr, dp->skb->dev) < 0)
+		goto out_err;
+	
+	DEBUG("Transmitting head=%d skb->data=%lu skb->nh.iph=%lu\n", skb_headroom(dp->skb), (unsigned long)dp->skb->data, (unsigned long)dp->skb->nh.iph);
+
+ 	/* Build hw header */ 
+	dp->skb->dev->rebuild_header(dp->skb);
+
+	memcpy(ethh->h_source, dp->skb->dev->dev_addr, dp->skb->dev->addr_len);
+
+	/* Send packet */
+	dev_queue_xmit(dp->skb);
+	
+	dnode->stats.tx_packets++;
+	dnode->stats.tx_bytes+=dp->skb->len;
+	
+	/* We must free the DSR packet */
+		
+	dsr_pkt_free(dp);
+	return 0;
+/* 	default: */
+/* 		DEBUG("Unkown packet type\n"); */
+/* 	} */
+ out_err:
 	DEBUG("Could not send packet, freeing...\n");
 	dev_kfree_skb(dp->skb);
 	dsr_pkt_free(dp);
@@ -231,9 +244,8 @@ int dsr_dev_queue_xmit(dsr_pkt_t *dp)
 /* Main receive function for packets originated in user space */
 static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 {
-	struct net_device_stats *stats = dev->priv;
+	struct dsr_node *dnode = (struct dsr_node *)dev->priv;
 	struct ethhdr *ethh;
-	struct net_device *slave_dev;
 	dsr_pkt_t *dp;
 	int res = 0;
 	
@@ -244,13 +256,15 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 	dp->len = skb->len;
 
 	ethh = (struct ethhdr *)skb->data;
-	
+
+	DEBUG("headroom=%d skb->data=%lu skb->nh.iph=%lu\n", skb_headroom(dp->skb), (unsigned long)dp->skb->data, (unsigned long)dp->skb->nh.iph);
+
 	switch (ntohs(ethh->h_proto)) {
 	case ETH_P_IP:
 		
-		slave_dev = dev_get_by_index(ldev_info.ifindex);
-		skb->dev = slave_dev;
-		dev_put(slave_dev);
+		/* slave_dev = dev_get_by_index(.ifindex); */
+		skb->dev = dnode->slave_dev;
+	/* 	dev_put(slave_dev); */
 		
 		dp->src.s_addr = skb->nh.iph->saddr;
 		dp->dst.s_addr = skb->nh.iph->daddr;
@@ -269,24 +283,30 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 			if (dsr_srt_add(dp) < 0)
 				break;
 			
-			if (kdsr_get_hwaddr(dp->dst, &hw_addr, skb->dev) < 0)
+			if (kdsr_get_hwaddr(dp->nh, &hw_addr, skb->dev) < 0)
 				break;
 			
-			/* Build hw header */
-			if (dsr_dev_build_hw_hdr(skb, &hw_addr) < 0)
-				break;
-			
+			dp->skb->dev->rebuild_header(dp->skb);
+
+			memcpy(ethh->h_source, skb->dev->dev_addr, skb->dev->addr_len);
+
 			/* Send packet */
 			dev_queue_xmit(skb);
 		
-			stats->tx_packets++;
-			stats->tx_bytes+=skb->len;
+			dnode->stats.tx_packets++;
+			dnode->stats.tx_bytes+=skb->len;
 			
 			/* We must free the DSR packet */
 			dsr_pkt_free(dp);
 		} else {			
-			p_queue_enqueue_packet(dp, dsr_dev_queue_xmit);
+			res = p_queue_enqueue_packet(dp, dsr_dev_queue_xmit);
 			
+			if (res < 0) {
+				DEBUG("Queueing failed!\n");
+				dsr_pkt_free(dp);
+				dev_kfree_skb(skb);
+				return -1;
+			}
 			res = dsr_rreq_send(dp->dst);
 			
 			if (res < 0)
@@ -303,40 +323,38 @@ static int dsr_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 
 static struct net_device_stats *dsr_dev_get_stats(struct net_device *dev)
 {
-	return dev->priv;
+	return &(((struct dsr_node*)dev->priv)->stats);
 }
 
 int __init dsr_dev_init(char *ifname)
 { 
 	int res = 0;	
 	struct net_device *dev = NULL;
+	struct dsr_node *dnode;
 
-	basedevname = ifname;
-	
-	dsr_dev = alloc_netdev(sizeof(struct net_device_stats),
+	dsr_dev = alloc_netdev(sizeof(struct dsr_node),
 			       "dsr%d", dsr_dev_setup);
 
 	if (!dsr_dev)
 		return -ENOMEM;
 
-	if (basedevname) {
-		dev = dev_get_by_name(basedevname);
+	dnode = dsr_node = (struct dsr_node *)dsr_dev->priv;
+
+	if (ifname) {
+		dev = dev_get_by_name(ifname);
 		if (!dev) {
-			DEBUG("device %s not found\n", basedevname);
+			DEBUG("device %s not found\n", ifname);
 			res = -1;
 			goto cleanup_netdev;
 		} 
 		
 		if (dev == dsr_dev) {
-			DEBUG("invalid base device %s\n", basedevname);
+			DEBUG("invalid base device %s\n", ifname);
 			res = -1;
 			dev_put(dev);
 			goto cleanup_netdev;
 		}		
-		basedev = dev;
-
-		if (dev)
-			dev_put(dev);
+		dnode->slave_dev = dev;
 	
 	} else {
 		read_lock(&dev_base_lock);
@@ -345,14 +363,14 @@ int __init dsr_dev_init(char *ifname)
 				break;
 		}
 		if (dev) {
-			basedev = dev;
-			basedevname = dev->name;
+			dev_hold(dev);
+			dnode->slave_dev = dev;
 			DEBUG("wireless interface is %s\n", dev->name);
 		}
 		read_unlock(&dev_base_lock);
 	}
 	
-	DEBUG("Setting %s as slave interface\n", basedev->name);
+	DEBUG("Setting %s as slave interface\n", dnode->slave_dev->name);
 
 	res = register_netdev(dsr_dev);
 
@@ -364,6 +382,7 @@ int __init dsr_dev_init(char *ifname)
 	if (res < 0)
 		goto cleanup_netdev_register;
 	
+	dev_hold(dsr_dev);
 	return res;
 	
  cleanup_netdev_register:
