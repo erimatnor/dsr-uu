@@ -134,7 +134,7 @@ int dsr_rreq_recv(dsr_pkt_t *dp)
 		int n;
 		/* struct net_device *dev = skb->dev; */
 		
-		eth = eth_hdr(dp->skb);
+		eth = (struct ethhdr *)dp->skb->mac.raw;
 		
 		memcpy(hw_addr.sa_data, eth->h_source, ETH_ALEN);
 		n = dp->srt->laddrs / sizeof(u_int32_t);

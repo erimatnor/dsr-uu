@@ -129,7 +129,7 @@ int dsr_rrep_recv(dsr_pkt_t *dp)
 		/* struct net_device *dev = skb->dev; */
 		struct ethhdr *eth;
 		
-		eth = eth_hdr(dp->skb);
+		eth = (struct ethhdr *)dp->skb->mac.raw;
 		
 		memcpy(hw_addr.sa_data, eth->h_source, ETH_ALEN);
 		/* Find the previous hop */
