@@ -6,13 +6,17 @@
 #include "debug.h"
 
 #define NEIGH_TBL_MAX_LEN 50
-#define MAX_AREQ_TX 2
+
+#define DSRTV_SRTTBASE 0
+#define DSRTV_MIN 2
+#define DSRTV_REXMTMAX
+#define TICK 2
 
 static TBL(neigh_tbl, NEIGH_TBL_MAX_LEN);
 
 #define NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT 3000 
 #define NEIGH_TBL_TIMEOUT 2000
-#define RTT_DEF 2000 /* usec */
+#define RTT_DEF 10000 /* usec */
 
 #define NEIGH_TBL_PROC_NAME "dsr_neigh_tbl"
 
@@ -21,7 +25,7 @@ struct neighbor {
 	struct in_addr addr;
 	struct sockaddr hw_addr;
 	unsigned short id;
-	int srtt, rttvar, jitter; /* RTT in usec */
+	int rtt, srtt, rttvar, jitter; /* RTT in usec */
 };
 
 static struct timer_list garbage_timer;
@@ -100,8 +104,8 @@ static void neigh_tbl_garbage_timeout(unsigned long data)
 	read_lock_bh(&neigh_tbl.lock);
 	
 	if (!TBL_EMPTY(&neigh_tbl)) {
-		garbage_timer.expires = jiffies + 
-			MSECS_TO_JIFFIES(NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT);
+	/* 	garbage_timer.expires = jiffies +  */
+/* 			MSECS_TO_JIFFIES(NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT); */
 		add_timer(&garbage_timer);	
 	}
 
@@ -126,7 +130,8 @@ static struct neighbor *neigh_tbl_create(struct in_addr addr,
 	neigh->id = id;
 	neigh->addr = addr;
 	neigh->srtt = DSRTV_SRTTBASE;
-	neigh->rttvar = 
+	neigh->rttvar = 0;
+	neigh->rtt = RTT_DEF;
 	memcpy(&neigh->hw_addr, hw_addr, sizeof(struct sockaddr));
 	
 /* 	garbage_timer.expires = jiffies + NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT / 1000*HZ; */
@@ -142,7 +147,7 @@ int neigh_tbl_add(struct in_addr neigh_addr, struct sockaddr *hw_addr)
 	if (in_tbl(&neigh_tbl, &neigh_addr, crit_addr))
 		return 0;
 
-	neigh = neigh_tbl_create(neigh_addr, hw_addr, 0);
+	neigh = neigh_tbl_create(neigh_addr, hw_addr, 1);
 
 	if (!neigh) {
 		DEBUG("Could not create new neighbor entry\n");
@@ -159,11 +164,6 @@ int neigh_tbl_del(struct in_addr neigh_addr)
 	return tbl_for_each_del(&neigh_tbl, &neigh_addr, crit_addr);
 }
 
-#define DSRTV_SRTTBASE 0
-#define DSRTV_MIN 2
-#define DSRTV_REXMTMAX
-#define TICK 2
-#define RTT_DEF 3 /* secs */
 int neigh_tbl_rtt_update(struct in_addr nxt_hop, int nticks)
 {
 	struct neighbor *neigh;
@@ -182,17 +182,18 @@ int neigh_tbl_rtt_update(struct in_addr nxt_hop, int nticks)
 	delta = nticks - neigh->srtt;
 	
        	neigh->srtt = neigh->srtt + (delta >> 3);
-	neigh->rttvar = neigh->rttvar + 
 
 	write_unlock_bh(&neigh_tbl.lock);
 
 	return 0;
 }
 
-int neigh_tbl_get_rto(struct in_addr nxt_hop)
+unsigned long neigh_tbl_get_rto(struct in_addr nxt_hop)
 {
-	int srtt, rttvar;
-	
+	struct neighbor *neigh;
+	int rtt, srtt, rttvar;
+	struct timeval t; 
+
 	read_lock_bh(&neigh_tbl.lock);
 
 	neigh = __tbl_find(&neigh_tbl, &nxt_hop, crit_addr);
@@ -202,13 +203,15 @@ int neigh_tbl_get_rto(struct in_addr nxt_hop)
 		return -1;
 	}
 	srtt = neigh->srtt;
-	rttvar neigh->rttvar;
-
-	read_unlock_bh(&neigh_tbl.lock);
-
-	rttvar
+	rttvar = neigh->rttvar;
+	rtt = neigh->rtt;
 	
-
+	read_unlock_bh(&neigh_tbl.lock);
+	
+	t.tv_sec = rtt / 1000000; 
+	t.tv_usec = rtt % 1000000; 
+	
+	return timeval_to_jiffies(&t);
 }
 
 int neigh_tbl_get_hwaddr(struct in_addr neigh_addr, struct sockaddr *hw_addr)
@@ -273,7 +276,7 @@ static int neigh_tbl_print(char *buf)
 		len += sprintf(buf+len, "  %-15s %-17s %-3d %-6u\n", 
 			       print_ip(neigh->addr.s_addr), 
 			       print_eth(neigh->hw_addr.sa_data),
-			       neigh->srtt, neigh->id);
+			       neigh->rtt, neigh->id);
 	}
     
 	read_unlock_bh(&neigh_tbl.lock);
@@ -301,7 +304,7 @@ int __init neigh_tbl_init(void)
 {
 	init_timer(&garbage_timer);
 	
-	garbage_timer.function = neigh_tbl_garbage_timeout;
+	garbage_timer.function = &neigh_tbl_garbage_timeout;
 
 	proc_net_create(NEIGH_TBL_PROC_NAME, 0, neigh_tbl_proc_info);
 	return 0;

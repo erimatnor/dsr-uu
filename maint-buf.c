@@ -81,7 +81,7 @@ int maint_buf_add(struct dsr_pkt *dp)
 {
 	struct maint_entry *me;
 	unsigned short id;
-	unsigned long tx_time;
+	unsigned long tx_time, rto;
 	
 	me = maint_entry_create(dp);
 	
@@ -101,10 +101,14 @@ int maint_buf_add(struct dsr_pkt *dp)
 	dsr_ack_req_opt_add(dp, id);
 		
 /* 	neigh_tbl_set_ack_req_timer(dp->nxt_hop); */
-
+	
+	rto = neigh_tbl_get_rto(dp->nxt_hop);
+	
 	if (!timer_pending(&ack_timer)) {
-		ack_timer.expires = tx_time + 10;
+		ack_timer.expires = tx_time + rto;
+		DEBUG("jiff=%lu exp=%lu\n", jiffies, ack_timer.expires);
 		add_timer(&ack_timer);
+	
 	}
 	
 	return 1;
@@ -112,7 +116,9 @@ int maint_buf_add(struct dsr_pkt *dp)
 static void maint_buf_timeout(unsigned long data)
 {
 	struct maint_entry *me;
-	unsigned long tx_time;
+	unsigned long tx_time, rto;
+	unsigned short id;
+	struct in_addr neigh_addr;
 	
 	me = tbl_detach_first(&maint_buf);
 	
@@ -135,23 +141,39 @@ static void maint_buf_timeout(unsigned long data)
 	} 
 	
 	me->tx_time = jiffies;
+	id = me->id;
+
 	tbl_add_tail(&maint_buf, &me->l);
-       
+	
 	read_lock_bh(&maint_buf.lock);
+	
+	dsr_ack_req_send(neigh_addr, id);
 
 	me = __tbl_find(&maint_buf, NULL, crit_none);
-	tx_time = me->tx_time;
 
-	if (tx_time + 10 <= jiffies) {		
+	if (!me) {
 		read_unlock_bh(&maint_buf.lock);
+		return;
+	}
+	tx_time = me->tx_time;
+	neigh_addr = me->nxt_hop;
+
+	read_unlock_bh(&maint_buf.lock);
+	
+	rto = neigh_tbl_get_rto(neigh_addr);
+
+	if (tx_time + rto < jiffies) {		
 		maint_buf_timeout(0);
 		return;
 	}
 
-	read_unlock_bh(&maint_buf.lock);
-	ack_timer.expires = tx_time + 10;
+	ack_timer.expires = tx_time + rto;
+
+	DEBUG("jiff=%lu exp=%lu\n", jiffies, ack_timer.expires);
+
 
 	add_timer(&ack_timer);
+
 	return;
 }
 

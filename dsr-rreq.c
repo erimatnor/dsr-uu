@@ -124,7 +124,7 @@ static inline int timer_remove(void *entry, void *data)
 	struct rreq_tbl_entry *e = entry;
 
 	if (timer_pending(&e->timer)) {
-		del_timer(&e->timer);
+		del_timer_sync(&e->timer);
 		return 1;
 	}
 	return 0;

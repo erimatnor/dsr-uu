@@ -16,5 +16,6 @@ void neigh_tbl_set_ack_req_timer(struct in_addr neigh_addr);
 int neigh_tbl_init(void);
 void neigh_tbl_cleanup(void);
 int neigh_tbl_rtt_update(struct in_addr nxt_hop, int rtt);
+unsigned long neigh_tbl_get_rto(struct in_addr nxt_hop);
 
 #endif /* _NEIGH_H */
