@@ -88,10 +88,11 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 		break;
         case NETDEV_UP:
 		DEBUG("notifier up %s\n", dev->name);
-		dsr_dev_lock(dnode);
 		if (dnode->slave_dev == NULL && dev->get_wireless_stats) {
 			dev_hold(dev);
+			dsr_dev_lock(dnode);
 			dnode->slave_dev = dev;
+			dsr_dev_unlock(dnode);
 			DEBUG("new dsr slave interface %s\n", dev->name);
 		} else if (dev == dsr_dev) {
 			int res;
@@ -101,20 +102,19 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 			if (res < 0)
 				return NOTIFY_DONE;
 		}
-		dsr_dev_unlock(dnode);
 		break;
         case NETDEV_UNREGISTER:
 		DEBUG("notifier unregister %s\n", dev->name);		
 		break;
         case NETDEV_DOWN:
 		DEBUG("notifier down %s\n", dev->name);
-		dsr_dev_lock(dnode);
                 if (dev == dnode->slave_dev) {
                         DEBUG("dsr slave interface %s went away\n", dev->name);
+			dsr_dev_lock(dnode);
 			dev_put(dnode->slave_dev);
 			dnode->slave_dev = NULL;
+			dsr_dev_unlock(dnode);
                 }
-		dsr_dev_unlock(dnode);
                 break;
 
         default:
