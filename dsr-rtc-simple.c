@@ -380,7 +380,6 @@ void __exit dsr_rtc_cleanup(void)
 	proc_net_remove(DSR_RTC_PROC_NAME);
 }
 
-EXPORT_SYMBOL(dsr_rtc_update);
 EXPORT_SYMBOL(dsr_rtc_add);
 EXPORT_SYMBOL(dsr_rtc_del);
 EXPORT_SYMBOL(dsr_rtc_find);

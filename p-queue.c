@@ -213,7 +213,7 @@ int p_queue_set_verdict(int verdict, unsigned long daddr)
 				break;
 			}
 		    
-			entry->dp.srt = dsr_rtc_find(entry->dp.dst);
+			entry->dp.srt = dsr_rtc_find(entry->dp.src, entry->dp.dst);
 		    
 			if (entry->dp.srt) {
 				

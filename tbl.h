@@ -65,7 +65,6 @@ static inline int __tbl_add(struct tbl *t, struct list_head *l, criteria_t crit)
 
 	len = ++t->len;
 
-
 	return len;
 }
 
@@ -109,9 +108,9 @@ static inline int __tbl_del(struct tbl *t, struct list_head *l)
 
 static inline void __tbl_do_for_each(struct tbl *t, void *data, do_t func)
 {
-	struct list_head *pos;
+	struct list_head *pos, *tmp;
     
-	list_for_each(pos, &t->head)
+	list_for_each_safe(pos, tmp, &t->head)
 		func(pos, data);
 }
 
@@ -139,6 +138,16 @@ static inline void *tbl_find_detach(struct tbl *t, void *id, criteria_t crit)
 
 	read_unlock_bh(&t->lock);
 	
+	return e;
+}
+
+static inline void *tbl_detach(struct tbl *t, struct list_head *l)
+{
+	void *e;
+	
+	write_lock_bh(&t->lock);
+	e = __tbl_detach(t, l);
+	write_unlock_bh(&t->lock);
 	return e;
 }
 

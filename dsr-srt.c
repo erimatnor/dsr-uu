@@ -79,6 +79,12 @@ struct dsr_srt *dsr_srt_new_rev(struct dsr_srt *srt)
 	return srt_rev;
 }
 
+void dsr_srt_del(struct dsr_srt *srt)
+{
+	kfree(srt);
+}
+
+
 dsr_srt_opt_t *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt)
 {
 	dsr_srt_opt_t *srt_opt;

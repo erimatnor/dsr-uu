@@ -1,10 +1,11 @@
 
-SRC=kdsr.c dsr-dev.c dsr-opt.c dsr-rreq.c dsr-rrep.c dsr-srt.c p-queue.c dsr-link-cache.c
+SRC=kdsr.c dsr-dev.c dsr-opt.c dsr-rreq.c dsr-rrep.c dsr-srt.c p-queue.c 
 
 DEFS=-DDEBUG 
 
 MODNAME=kdsr-m
-RTCNAME=kdsr-rtc-simple
+RTC_TRG=kdsr-link-cache
+RTC_SRC=dsr-link-cache.c
 
 ifneq (,$(findstring 2.6,$(KERNELRELEASE)))
 
@@ -13,8 +14,8 @@ EXTRA_CFLAGS += -DKERNEL26 $(DEFS)
 obj-m += $(MODNAME).o 
 $(MODNAME)-objs := $(SRC:%.c=%.o)
 
-obj-m += $(RTCNAME).o
-$(RTCNAME)-objs := dsr-rtc-simple.o
+obj-m += $(RTC_TRG).o
+$(RTC_TRG)-objs := $(RTC_SRC:%.c=%.o)
 
 else
 
@@ -40,16 +41,16 @@ KCFLAGS=-Wall -fno-strict-aliasing -O2 $(KDEFS) $(KINC)
 
 # Check for kernel version
 ifeq ($(PATCHLEVEL),6)
-default: $(MODNAME).ko $(RTCNAME).ko TODO
+default: $(MODNAME).ko $(RTC_TRG).ko TODO
 else 
 # Assume kernel 2.4
-default: $(MODNAME).o $(RTCNAME).o TODO
+default: $(MODNAME).o $(RTC_TRG).o TODO
 endif
 
 $(MODNAME).ko: $(SRC) Makefile
 	$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) MODVERDIR=$(PWD) modules
 
-$(RTCNAME).ko: dsr-rtc-simple.c
+$(RTC_TRG).ko: $(RTC_SRC) Makefile
 	$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) MODVERDIR=$(PWD) modules
 
 $(KOBJS): %.o: %.c Makefile
@@ -58,7 +59,7 @@ $(KOBJS): %.o: %.c Makefile
 $(MODNAME).o: $(KOBJS)
 	$(LD) -r $^ -o $@
 
-$(RTCNAME).o: dsr-rtc-simple.c
+$(RTC_SRC).o:
 	$(KCC) $(KCFLAGS) -c -o $@ $<
 
 depend:

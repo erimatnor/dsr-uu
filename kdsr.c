@@ -330,7 +330,6 @@ static int __init kdsr_init(void)
 		goto cleanup_p_queue;
 	}
 	rreq_tbl_init();
-	lc_init();
 
 	DEBUG("Setup finished res=%d\n", res);
 	return 0;
@@ -355,7 +354,6 @@ static void __exit kdsr_cleanup(void)
 	p_queue_cleanup();
 	dsr_dev_cleanup();
 	rreq_tbl_cleanup();
-	lc_cleanup();
 }
 
 module_init(kdsr_init);

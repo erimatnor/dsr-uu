@@ -37,10 +37,14 @@ typedef struct dsr_srt_opt {
 #define DSR_SRT_HDR_LEN sizeof(dsr_srt_opt_t)
 #define DSR_SRT_OPT_LEN(srt) (DSR_SRT_HDR_LEN + srt->laddrs)
 
+/* Flags */
+#define SRT_BIDIR 0x1
+
 /* Internal representation of a source route */
 struct dsr_srt {
 	struct in_addr src;
 	struct in_addr dst;
+	unsigned short flags;
 	unsigned int laddrs;  /* length in bytes if addrs */
 	struct in_addr addrs[0];  /* Intermediate nodes */
 };
@@ -54,5 +58,6 @@ char *dsr_srt_opt_make_room(struct dsr_srt *srt, struct sk_buff *skb, int len);
 dsr_srt_opt_t *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt);
 int dsr_srt_opt_recv(struct dsr_pkt *dp);
 int dsr_srt_add(struct dsr_pkt *dp, struct sk_buff *skb);
+void dsr_srt_del(struct dsr_srt *srt);
 
 #endif /* _DSR_SRT_H */

@@ -275,7 +275,7 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	switch (ntohs(ethh->h_proto)) {
 	case ETH_P_IP:
 	    
-		dp.srt = dsr_rtc_find(dp.dst);
+		dp.srt = dsr_rtc_find(dp.src, dp.dst);
 		
 		if (dp.srt) {
 
