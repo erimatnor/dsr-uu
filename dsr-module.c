@@ -13,7 +13,8 @@
 #include <net/ip.h>
 #include <net/dst.h>
 #include <net/neighbour.h>
-#include <linux/parser.h>
+#include <asm/uaccess.h>
+/* #include <linux/parser.h> */
 #include <linux/netfilter_ipv4.h>
 #ifdef KERNEL26
 #include <linux/moduleparam.h>
@@ -46,7 +47,7 @@ MODULE_PARM(ifname, "s");
 
 #define CONFIG_PROC_NAME "dsr_config"
 
-static int kdsr_arpset(struct in_addr addr, struct sockaddr *hw_addr, 
+static int dsr_arpset(struct in_addr addr, struct sockaddr *hw_addr, 
 		       struct net_device *dev)
 {
 	struct neighbour *neigh;
@@ -77,28 +78,28 @@ static int dsr_ip_recv(struct sk_buff *skb)
 		
 	memset(&dp, 0, sizeof(dp));
 	
-	dp.iph = skb->nh.iph;
+	dp.nh.iph = skb->nh.iph;
 		
-	if ((skb->len + (dp.iph->ihl << 2)) < ntohs(dp.iph->tot_len)) {
-		DEBUG("data to short according to IP header len=%d tot_len=%d!\n", skb->len + (dp.iph->ihl << 2), ntohs(dp.iph->tot_len));
+	if ((skb->len + (dp.nh.iph->ihl << 2)) < ntohs(dp.nh.iph->tot_len)) {
+		DEBUG("data to short according to IP header len=%d tot_len=%d!\n", skb->len + (dp.nh.iph->ihl << 2), ntohs(dp.nh.iph->tot_len));
 		kfree_skb(skb);
 		return -1;
 	}
 	
-	dp.opt_hdr = (struct dsr_opt_hdr *)skb->data;
-	dp.dsr_opts_len = ntohs(dp.opt_hdr->p_len) + DSR_OPT_HDR_LEN;
+	dp.dh.raw = skb->data;
+	dp.dsr_opts_len = ntohs(dp.dh.opth->p_len) + DSR_OPT_HDR_LEN;
 
 	dp.data = skb->data + dp.dsr_opts_len;
 	dp.data_len = skb->len - dp.dsr_opts_len;
 
 	/* Get IP stuff that we need */
-	dp.src.s_addr = dp.iph->saddr;
-	dp.dst.s_addr = dp.iph->daddr;
+	dp.src.s_addr = dp.nh.iph->saddr;
+	dp.dst.s_addr = dp.nh.iph->daddr;
 	
 	DEBUG("iph_len=%d iph_totlen=%d dsr_opts_len=%d data_len=%d\n", 
-	      (dp.iph->ihl << 2), ntohs(dp.iph->tot_len), dp.dsr_opts_len, dp.data_len);
+	      (dp.nh.iph->ihl << 2), ntohs(dp.nh.iph->tot_len), dp.dsr_opts_len, dp.data_len);
 	/* Process packet */
-	action = dsr_opt_recv(&dp);  /* Kernel panics here!!! */
+	action = dsr_opt_recv(&dp);
 
 	/* Add mac address of previous hop to the arp table */
 	if (dp.srt && skb->mac.raw) {
@@ -118,21 +119,21 @@ static int dsr_ip_recv(struct sk_buff *skb)
 		else
 			prev_hop.s_addr = dp.srt->addrs[n-1].s_addr;
 		
-		kdsr_arpset(prev_hop, &hw_addr, skb->dev);
+		dsr_arpset(prev_hop, &hw_addr, skb->dev);
 	}
 
 	/* Check action... */
 
-	if (action & DSR_PKT_SRT_REMOVE) {
-		DEBUG("DSR srt options remove!\n");
+	/* if (action & DSR_PKT_SRT_REMOVE) { */
+/* 		DEBUG("DSR srt options remove!\n"); */
 		
-	}
+/* 	} */
 	if (action & DSR_PKT_FORWARD) {
 		DEBUG("Forwarding %s", print_ip(dp.src.s_addr));
 		printk(" %s", print_ip(dp.dst.s_addr));		
 		printk(" nh %s\n", print_ip(dp.nxt_hop.s_addr));
 
-		if (dp.iph->ttl < 1) {
+		if (dp.nh.iph->ttl < 1) {
 			DEBUG("ttl=0, dropping!\n");
 			action = DSR_PKT_DROP;
 		} else {
@@ -199,8 +200,8 @@ static void dsr_ip_recv_err(struct sk_buff *skb, u32 info)
 
 
 
-static int kdsr_get_hwaddr(struct in_addr addr, struct sockaddr *hwaddr, 
-		    struct net_device *dev)
+static int dsr_get_hwaddr(struct in_addr addr, struct sockaddr *hwaddr, 
+			  struct net_device *dev)
 {	
 	struct neighbour *neigh;
 
@@ -219,15 +220,15 @@ static int kdsr_get_hwaddr(struct in_addr addr, struct sockaddr *hwaddr,
 	return -1;
 }
 
-struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp,
-				struct net_device *dev)
+struct sk_buff *dsr_skb_create(struct dsr_pkt *dp,
+			       struct net_device *dev)
 {
 	struct sk_buff *skb;
 	char *buf;
 	int ip_len;
 	int tot_len;
 	
-	ip_len = dp->iph->ihl << 2;
+	ip_len = dp->nh.iph->ihl << 2;
 	
 	tot_len = ip_len + dp->dsr_opts_len + dp->data_len;
 	
@@ -250,13 +251,14 @@ struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp,
 	/* Copy in all the headers in the right order */
 	buf = skb_put(skb, tot_len);
 
-	memcpy(buf, dp->iph, ip_len);
+	memcpy(buf, dp->nh.iph, ip_len);
 	
 	buf += ip_len;
 	
-	if (dp->dsr_opts_len && dp->opt_hdr) {
-		memcpy(buf, dp->opt_hdr, dp->dsr_opts_len);
+	if (dp->dsr_opts_len && dp->dh.opth) {
+		memcpy(buf, dp->dh.opth, dp->dsr_opts_len);
 		buf += dp->dsr_opts_len;
+		kfree(dp->dh.raw);
 	}
 
 	if (dp->data_len && dp->data)
@@ -265,7 +267,7 @@ struct sk_buff *kdsr_skb_create(struct dsr_pkt *dp,
 	return skb;
 }
 
-int kdsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb) 
+int dsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb) 
 {
 
 		
@@ -276,7 +278,7 @@ int kdsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb)
 		memcpy(dest.sa_data , broadcast.sa_data, ETH_ALEN);
 	else {
 		/* Get hardware destination address */
-		if (kdsr_get_hwaddr(dp->nxt_hop, &dest, skb->dev) < 0) {
+		if (dsr_get_hwaddr(dp->nxt_hop, &dest, skb->dev) < 0) {
 			DEBUG("Could not get hardware address for next hop %s\n", print_ip(dp->nxt_hop.s_addr));
 			return -1;
 		}
@@ -332,13 +334,12 @@ static int dsr_config_proc_write(struct file* file, const char* buffer,
 		  return -EFAULT;
 
 	  if (strncmp(cmd, params_def[i].name, n) >= 0) {
-		  substring_t sub_str;
+		  char *from, *to;
 		  int val = 0;
 		  
-		  sub_str.from = strstr(cmd, "=");
-		  sub_str.from++;  /* Exclude '=' */
-		  sub_str.to = cmd + count - 1; /* Exclude trailing '\n' */
-		  match_int(&sub_str, &val);
+		  from = strstr(cmd, "="); 
+		  from++; /* Exclude '=' */
+		  val = simple_strtol(from, &to, 10); 
 		  set_param(i, val);
 		  DEBUG("Setting %s to %d\n",  params_def[i].name, val);
 	  }
@@ -428,7 +429,7 @@ static int __init dsr_module_init(void)
 	if (res < 0) 
 		goto cleanup_rreq_tbl;
 
-	res = nf_register_hook(&dsr_pre_routing_hook);
+/* 	res = nf_register_hook(&dsr_pre_routing_hook); */
 
 	if (res < 0)
 		goto cleanup_neigh_tbl;
@@ -460,7 +461,7 @@ static int __init dsr_module_init(void)
 	proc_net_remove(CONFIG_PROC_NAME);
 #endif
  cleanup_nf_hook:
-	nf_unregister_hook(&dsr_pre_routing_hook);
+/* 	nf_unregister_hook(&dsr_pre_routing_hook); */
  cleanup_neigh_tbl:
 	neigh_tbl_cleanup();
  cleanup_rreq_tbl:
@@ -482,7 +483,7 @@ static void __exit dsr_module_cleanup(void)
 #else
 	inet_del_protocol(&dsr_inet_prot);
 #endif
-	nf_unregister_hook(&dsr_pre_routing_hook);
+/* 	nf_unregister_hook(&dsr_pre_routing_hook); */
 	send_buf_cleanup();
 	dsr_dev_cleanup();
 	rreq_tbl_cleanup();

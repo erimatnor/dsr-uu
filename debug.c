@@ -11,8 +11,8 @@
 #include <asm/io.h>
 
 /* Most of this is shamelessly stolen from the linux kernel log routines */
-
-#define DBG_LOG_BUF_LEN (1 << CONFIG_LOG_BUF_SHIFT)
+#define DBG_LOG_BUF_LEN	(16384)
+//#define DBG_LOG_BUF_LEN (1 << CONFIG_LOG_BUF_SHIFT)
 
 static spinlock_t dbg_logbuf_lock = SPIN_LOCK_UNLOCKED;
 
@@ -29,12 +29,14 @@ static unsigned long logged_chars; /* Number of chars produced since last read+c
 
 DECLARE_WAIT_QUEUE_HEAD(dbg_log_wait);
 
-int do_dbglog(int type, char __user * buf, int len)
+int do_dbglog(int type, char * buf, int len)
 {
 	unsigned long i, j, limit, count;
 	int do_clear = 0;
 	char c;
 	int error = 0;
+
+	printk(KERN_DEBUG "do_dbglog\n");
 
 	switch (type) {
 	case 0:		/* Close log */
@@ -55,6 +57,7 @@ int do_dbglog(int type, char __user * buf, int len)
 		if (error)
 			goto out;
 		i = 0;
+		printk(KERN_DEBUG "read\n");
 		spin_lock_irq(&dbg_logbuf_lock);
 		while (!error && (dbg_log_start != dbg_log_end) && i < len) {
 			c = DBG_LOG_BUF(dbg_log_start);
@@ -166,7 +169,7 @@ int dsr_vprintk(const char *func, const char *fmt, va_list args)
 	prefix_len = sprintf(printk_buf, "%s: ", func);
 	
 	/* Emit the output into the temporary buffer */
-	printed_len = vscnprintf(printk_buf+prefix_len, sizeof(printk_buf) - prefix_len, fmt, args);
+	printed_len = vsnprintf(printk_buf+prefix_len, sizeof(printk_buf) - prefix_len, fmt, args);
 
 	for (p = printk_buf; *p; p++)
 		dsr_emit_log_char(*p);
@@ -178,6 +181,8 @@ int dsr_printk(const char *func, const char *fmt, ...)
 {
 	va_list args;
 	int r;
+
+/* 	printk(KERN_DEBUG "%s\n", func); */
 
 	va_start(args, fmt);
 	r = dsr_vprintk(func, fmt, args);
@@ -191,6 +196,7 @@ EXPORT_SYMBOL(dsr_vprintk);
 
 static int dbg_log_open(struct inode * inode, struct file * file)
 {
+	printk(KERN_DEBUG "dbg_log_open\n");
 	return do_dbglog(1,NULL,0);
 }
 
@@ -200,9 +206,9 @@ static int dbg_log_release(struct inode * inode, struct file * file)
 	return 0;
 }
 
-static ssize_t dbg_log_read(struct file *file, char __user *buf,
-			 size_t count, loff_t *ppos)
+static ssize_t dbg_log_read(struct file *file, char  *buf, size_t count, loff_t *ppos)
 {
+	printk(KERN_DEBUG "dbg_log_read\n");
 	if ((file->f_flags & O_NONBLOCK) && !do_dbglog(6, NULL, 0))
 		return -EAGAIN;
 	return do_dbglog(2, buf, count);

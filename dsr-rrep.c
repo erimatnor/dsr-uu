@@ -185,113 +185,96 @@ static struct dsr_rrep_opt *dsr_rrep_opt_add(char *buf, int len, struct dsr_srt 
 	return rrep_opt;	
 }
 
-int dsr_rrep_create(struct dsr_pkt *dp, char *buf, int len)
-{
-	struct dsr_srt *srt_to_me;
-	struct dsr_pad1_opt *pad1_opt;
-
-	if (!dp || !dp->srt)
-		return -1;
-	
-	dp->iph = dsr_build_ip(buf, len, dp->src, dp->dst, 1);
-	
-	if (!dp->iph) {
-		DEBUG("Could not create IP header\n");
-		return -1;
-	}
-
-	buf += IP_HDR_LEN;
-	len -= IP_HDR_LEN;
-	
-	dp->dsr_opts_len = len;
-
-	dp->opt_hdr = dsr_opt_hdr_add(buf, len, 0);
-	
-	if (!dp->opt_hdr) {
-		DEBUG("Could not create DSR options header\n");
-		return -1;
-	}
-
-	buf += DSR_OPT_HDR_LEN;
-	len -= DSR_OPT_HDR_LEN;
-
-	srt_to_me = dsr_srt_new_rev(dp->srt);
-	
-	if (!srt_to_me)
-		return -1;
-	
-	
-	/* Add the source route option to the packet */
-	dp->srt_opt = dsr_srt_opt_add(buf, len, srt_to_me);
-
-	kfree(srt_to_me);
-
-	if (!dp->srt_opt) {
-		DEBUG("Could not create Source Route option header\n");
-		return -1;
-	}
-
-	buf += DSR_SRT_OPT_LEN(dp->srt);
-	len -= DSR_SRT_OPT_LEN(dp->srt);
-
-	dp->rrep_opt = dsr_rrep_opt_add(buf, len, dp->srt);
-	
-	if (!dp->rrep_opt) {
-		DEBUG("Could not create RREP option header\n");
-		return -1;
-	}
-
-	buf += DSR_RREP_OPT_LEN(dp->srt);
-	len -= DSR_RREP_OPT_LEN(dp->srt);
-	
-	pad1_opt = (struct dsr_pad1_opt *)buf;
-	pad1_opt->type = DSR_OPT_PAD1;
-	
-	return 0;
-}
-
-
 int dsr_rrep_send(struct dsr_srt *srt)
 {
 	struct dsr_pkt dp;
-	int len, res;
+	char ip_buf[IP_HDR_LEN];
 	char *buf;
-
+	struct dsr_srt *srt_to_me;
+	struct dsr_pad1_opt *pad1_opt;
+	int len;
+	
 	if (!srt) {
 		DEBUG("no source route!\n");
 		return -1;
 	}	
 	
 	memset(&dp, 0, sizeof(dp));
-	
+
+	len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) + DSR_RREP_OPT_LEN(srt) + DSR_OPT_PAD1_LEN;
+
 	dp.dst = srt->dst;
 	dp.src = my_addr();
 	dp.nxt_hop = dsr_srt_next_hop(srt);
 	dp.srt = srt;
+	dp.dsr_opts_len = len;
+	dp.data = NULL;
+	dp.data_len = 0;
 
-	len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) + DSR_RREP_OPT_LEN(srt) + DSR_OPT_PAD1_LEN;
+	
+	DEBUG("IP_HDR_LEN=%d DSR_OPT_HDR_LEN=%d DSR_SRT_OPT_LEN=%d DSR_RREP_OPT_LEN=%d DSR_OPT_PAD1_LEN=%d RREP len=%d\n", IP_HDR_LEN, DSR_OPT_HDR_LEN, DSR_SRT_OPT_LEN(srt), DSR_RREP_OPT_LEN(srt), DSR_OPT_PAD1_LEN, len);
+	
+	DEBUG("srt: %s\n", print_srt(srt));
+	
+	dp.nh.iph = dsr_build_ip(ip_buf, IP_HDR_LEN, IP_HDR_LEN + len, dp.src, dp.dst, 1);
+	
+	if (!dp.nh.iph) {
+		DEBUG("Could not create IP header\n");
+		return -1;
+	}
 	
 	buf = kmalloc(len, GFP_ATOMIC);
 	
 	if (!buf)
 		return -1;
 	
-	DEBUG("IP_HDR_LEN=%d DSR_OPT_HDR_LEN=%d DSR_SRT_OPT_LEN=%d DSR_RREP_OPT_LEN=%d DSR_OPT_PAD1_LEN=%d RREP len=%d\n", IP_HDR_LEN, DSR_OPT_HDR_LEN, DSR_SRT_OPT_LEN(srt), DSR_RREP_OPT_LEN(srt), DSR_OPT_PAD1_LEN, len);
+	dp.dh.opth = dsr_opt_hdr_add(buf, len, 0);
 	
+	if (!dp.dh.opth) {
+		DEBUG("Could not create DSR options header\n");
+		kfree(buf);
+		return -1;
+	}
+
+	buf += DSR_OPT_HDR_LEN;
+	len -= DSR_OPT_HDR_LEN;
+
+	srt_to_me = dsr_srt_new_rev(dp.srt);
 	
-	DEBUG("srt: %s\n", print_srt(srt));
+	if (!srt_to_me) {
+		kfree(dp.dh.raw);
+		return -1;
+	}
+	/* Add the source route option to the packet */
+	dp.srt_opt = dsr_srt_opt_add(buf, len, srt_to_me);
 
-	dp.data = NULL;
-	dp.data_len = 0;
+	kfree(srt_to_me);
 
-	res = dsr_rrep_create(&dp, buf, len);
+	if (!dp.srt_opt) {
+		DEBUG("Could not create Source Route option header\n");
+		kfree(dp.dh.raw);
+		return -1;
+	}
 
-	if (res < 0) {
-		DEBUG("Could not create RREP\n");
-	} else
-		dsr_dev_xmit(&dp);
+	buf += DSR_SRT_OPT_LEN(dp.srt);
+	len -= DSR_SRT_OPT_LEN(dp.srt);
+
+	dp.rrep_opt = dsr_rrep_opt_add(buf, len, dp.srt);
 	
-	kfree(buf);
+	if (!dp.rrep_opt) {
+		DEBUG("Could not create RREP option header\n");
+		kfree(dp.dh.raw);
+		return -1;
+	}
+
+	buf += DSR_RREP_OPT_LEN(dp.srt);
+	len -= DSR_RREP_OPT_LEN(dp.srt);
+	
+	pad1_opt = (struct dsr_pad1_opt *)buf;
+	pad1_opt->type = DSR_OPT_PAD1;
+	
+	dsr_dev_xmit(&dp);
+	
 	return 0;
 }
 

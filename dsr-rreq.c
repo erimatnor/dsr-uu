@@ -241,40 +241,6 @@ static struct dsr_rreq_opt *dsr_rreq_opt_add(char *buf, int len,
 	return rreq_opt;
 }
 
-int dsr_rreq_create(struct dsr_pkt *dp, struct in_addr target, int ttl, char *buf, int len)
-{
-	dp->iph = dsr_build_ip(buf, len, dp->src, dp->dst, ttl);
-	
-	if (!dp->iph) {
-		DEBUG("Could not create IP header\n");
-		return -1;
-	}
-	
-	buf += IP_HDR_LEN;
-	len -= IP_HDR_LEN;
-
-	dp->dsr_opts_len = len;
-
-	dp->opt_hdr = dsr_opt_hdr_add(buf, len, 0);
-	
-	if (!dp->opt_hdr) {
-		DEBUG("Could not create DSR opt header\n");
-		return -1;
-	}
-	
-	buf += DSR_OPT_HDR_LEN;
-	len -= DSR_OPT_HDR_LEN;
-	
-	dp->rreq_opt = dsr_rreq_opt_add(buf, len, target);
-
-	if (!dp->rreq_opt) {
-		DEBUG("Could not create RREQ opt\n");
-		return -1;
-	}
-	
-	return 0;
-}
-
 static inline int dsr_rreq_pending(struct in_addr target)
 {
 	return in_tbl(&rreq_tbl, &target, crit_pending);
@@ -293,32 +259,57 @@ static inline int dsr_rreq_duplicate(struct in_addr src, struct in_addr trg, uns
 int dsr_rreq_send(struct in_addr target, int ttl, unsigned long timeout)
 {
 	struct dsr_pkt dp;
-	int len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN;
-	char buf[len];
-	int res = 0;
+	char ip_buf[IP_HDR_LEN];
+	char *buf;
+	int len = DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN;
 	
 	if (dsr_rreq_pending(target)) {
 		DEBUG("RREQ recently sent for %s\n", print_ip(target.s_addr));
 		return 0;
 	}
 	memset(&dp, 0, sizeof(dp));
-	memset(buf, 0, len);
-	
+
 	dp.data = NULL; /* No data in this packet */
 	dp.data_len = 0;
 	dp.dst.s_addr = DSR_BROADCAST;
 	dp.nxt_hop.s_addr = DSR_BROADCAST;
-	
+	dp.dsr_opts_len = len;
 	dp.src = my_addr();
 
-	res = dsr_rreq_create(&dp, target, ttl, buf, len);
 	
-	if (res < 0) {
-		DEBUG("Could not create RREQ\n");
+	dp.nh.iph = dsr_build_ip(ip_buf, IP_HDR_LEN, IP_HDR_LEN + len, 
+				 dp.src, dp.dst, ttl);
+	
+	if (!dp.nh.iph) {
+		DEBUG("Could not create IP header\n");
+		return -1;
+	}
+
+	buf = kmalloc(len, GFP_ATOMIC);
+	
+	if (!buf)
+		return -1;
+	
+	dp.dh.opth = dsr_opt_hdr_add(buf, len, 0);
+	
+	if (!dp.dh.opth) {
+		DEBUG("Could not create DSR opt header\n");
+		kfree(buf);
 		return -1;
 	}
 	
-	dp.iph->ttl = ttl;
+	buf += DSR_OPT_HDR_LEN;
+	len -= DSR_OPT_HDR_LEN;
+	
+	dp.rreq_opt = dsr_rreq_opt_add(buf, len, target);
+
+	if (!dp.rreq_opt) {
+		DEBUG("Could not create RREQ opt\n");
+		kfree(dp.dh.raw);
+		return -1;
+	}
+	
+	dp.nh.iph->ttl = ttl;
 	
 	DEBUG("Sending RREQ for %s ttl=%d\n", print_ip(target.s_addr), ttl);
 
@@ -353,7 +344,7 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp)
 	if (dsr_rreq_duplicate(dp->src, trg, dp->rreq_opt->id))
 		return DSR_PKT_DROP;
 	
-	rreq_tbl_add(dp->src, dp->src, trg, dp->iph->ttl, dp->rreq_opt->id, 0);
+	rreq_tbl_add(dp->src, dp->src, trg, dp->nh.iph->ttl, dp->rreq_opt->id, 0);
 
 	dp->srt = dsr_srt_new(dp->src, myaddr,
 			      DSR_RREQ_ADDRS_LEN(dp->rreq_opt),
@@ -369,7 +360,7 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp)
 		
 		/* According to the draft, the dest addr in the IP header must
 		 * be updated with the target address */
-		dp->iph->daddr = dp->rreq_opt->target;
+		dp->nh.iph->daddr = dp->rreq_opt->target;
 	
 		DEBUG("srt: %s\n", print_srt(dp->srt));
 

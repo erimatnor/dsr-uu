@@ -48,9 +48,8 @@ static int dsr_dev_inetaddr_event(struct notifier_block *this,
 			dnode->bcaddr.s_addr = ifa->ifa_broadcast;
 			dsr_node_unlock(dnode);
 			
-			DEBUG("New ip=%s, ", 
-			      print_ip(ifa->ifa_address));
-			DEBUG("broadcast=%s\n",
+			DEBUG("New ip=%s broadcast=%s\n", 
+			      print_ip(ifa->ifa_address), 
 			      print_ip(ifa->ifa_broadcast));
 		}
 		break;
@@ -190,7 +189,7 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 	struct sk_buff *skb;
 	struct ethhdr *ethh;
 	
-	skb = kdsr_skb_create(dp, dsr_dev);
+	skb = dsr_skb_create(dp, dsr_dev);
 
 	if (!skb) {
 		DEBUG("Could not allocate skb\n");
@@ -224,7 +223,7 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 	struct sk_buff *skb;
 
 	dsr_node_lock(dsr_node);
-	skb = kdsr_skb_create(dp, dsr_node->slave_dev);
+	skb = dsr_skb_create(dp, dsr_node->slave_dev);
 	dsr_node_unlock(dsr_node);
 
 	if (!skb) {
@@ -233,7 +232,7 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 	}
        
 	/* Create hardware header */
-	if (kdsr_hw_header_create(dp, skb) < 0) {
+	if (dsr_hw_header_create(dp, skb) < 0) {
 		DEBUG("Could not create harware header\n");
 		kfree_skb(skb);
 		return -1;
@@ -265,9 +264,9 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	ethh = (struct ethhdr *)skb->data;
 	
-	dp.iph = skb->nh.iph;
-	dp.data = skb->data + dev->hard_header_len + (dp.iph->ihl << 2);
-	dp.data_len = skb->len - dev->hard_header_len - (dp.iph->ihl << 2);
+	dp.nh.iph = skb->nh.iph;
+	dp.data = skb->data + dev->hard_header_len + (dp.nh.iph->ihl << 2);
+	dp.data_len = skb->len - dev->hard_header_len - (dp.nh.iph->ihl << 2);
 	
 	dp.src.s_addr = skb->nh.iph->saddr;
 	dp.dst.s_addr = skb->nh.iph->daddr;
@@ -279,7 +278,7 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		
 		if (dp.srt) {
 
-			if (dsr_srt_add(&dp, skb) < 0) {
+			if (dsr_srt_add(&dp) < 0) {
 				DEBUG("Could not add source route\n");
 				break;
 			}

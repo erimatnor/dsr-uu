@@ -22,16 +22,22 @@ struct dsr_pkt {
 	struct in_addr src;   /* IP level data */
 	struct in_addr dst;
        	struct in_addr nxt_hop;
-	struct iphdr *iph;
-	int data_len;          
-	char *data;           /* Packet data (IP not included)*/
-	struct dsr_srt *srt; /* Source route */
-	/* These are pointers into the dsr options in the dsr header */
+	union {
+		struct iphdr *iph;
+		char *raw;
+	} nh;
+	union {
+		struct dsr_opt_hdr *opth;
+		char *raw;
+	} dh;   
 	int dsr_opts_len;
-	struct dsr_opt_hdr *opt_hdr;
 	struct dsr_srt_opt *srt_opt;
 	struct dsr_rreq_opt *rreq_opt;
-	struct dsr_rrep_opt *rrep_opt;
+	struct dsr_rrep_opt *rrep_opt;   
+	char *data;           /* Packet data (IP not included)*/
+	int data_len;
+	struct dsr_srt *srt; /* Source route */
+	/* These are pointers into the dsr options in the dsr header */
 };
 
 /* Packet actions: */

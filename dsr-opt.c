@@ -27,12 +27,12 @@ struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, int len, unsigned int protocol)
 	return opt_hdr;
 }
 
-struct iphdr *dsr_build_ip(char *buf, int len, struct in_addr src, 
-			   struct in_addr dst, int ttl)
+struct iphdr *dsr_build_ip(char *buf, int buflen, int totlen, 
+			   struct in_addr src, struct in_addr dst, int ttl)
 {
 	struct iphdr *iph;
 	
-	if (len < sizeof(struct iphdr))
+	if (buflen < sizeof(struct iphdr))
 		return NULL;
 	
 	iph = (struct iphdr *)buf;
@@ -40,7 +40,7 @@ struct iphdr *dsr_build_ip(char *buf, int len, struct in_addr src,
 	iph->version = IPVERSION;
 	iph->ihl = 5;
 	iph->tos = 0;
-	iph->tot_len = htons(len);
+	iph->tot_len = htons(totlen);
 	iph->id = 0;
 	iph->frag_off = 0;
 	iph->ttl = (ttl ? ttl : IPDEFTTL);
@@ -53,74 +53,74 @@ struct iphdr *dsr_build_ip(char *buf, int len, struct in_addr src,
 	return iph;
 }
 
-char *dsr_opt_make_room(struct dsr_pkt *dp, char *buf, int len, int buflen)
-{
+/* char *dsr_opt_make_room(struct dsr_pkt *dp, char *buf, int len) */
+/* { */
 	
-	if (!dp || !buf)
-		return NULL;
+/* 	if (!dp || !buf) */
+/* 		return NULL; */
 	
-	if (buflen < (dp->data_len + len)) {
-		DEBUG("Buffer too small!\n");
-		return NULL;
-	}
-	/* Move data (from after iph and up) towards tail */
-	memmove(buf + len, buf, dp->data_len);
-	/* Update the data pointer now that we moved the data */
-	dp->data = buf + len;
+/* /\* 	if (buflen < (dp->data_len + len)) { *\/ */
+/* /\* 		DEBUG("Buffer too small!\n"); *\/ */
+/* /\* 		return NULL; *\/ */
+/* /\* 	} *\/ */
+/* 	/\* Move data (from after iph and up) towards tail *\/ */
+/* 	memmove(buf + len, buf, dp->data_len); */
+/* 	/\* Update the data pointer now that we moved the data *\/ */
+/* 	dp->data = buf + len; */
 	
-	return buf;
-}
+/* 	return buf; */
+/* } */
 
-char *dsr_opt_make_room_skb(struct dsr_pkt *dp, struct sk_buff *skb, int len)
-{
-	char *dsr_opts;
+/* char *dsr_opt_make_room_skb(struct dsr_pkt *dp, struct sk_buff *skb, int len) */
+/* { */
+/* 	char *dsr_opts; */
 
-	if (!dp || !skb || !len)
-		return NULL;
+/* 	if (!dp || !skb || !len) */
+/* 		return NULL; */
 
-	DEBUG("Adding %d bytes to end of skb, skb->len=%d headroom=%d tailroom=%d\n", len, skb->len, skb_headroom(skb), skb_tailroom(skb));
+/* 	DEBUG("Adding %d bytes to end of skb, skb->len=%d headroom=%d tailroom=%d\n", len, skb->len, skb_headroom(skb), skb_tailroom(skb)); */
 
-	/* Check if there are already enough tailroom for doing
-	 * skb_put. That way it is not always necessary to create a new skb. */
+/* 	/\* Check if there are already enough tailroom for doing */
+/* 	 * skb_put. That way it is not always necessary to create a new skb. *\/ */
 
-	if (skb_tailroom(skb) >= len) {
-		DEBUG("Tailroom large enough\n");
-		skb_put(skb, len);
-	} else {
-		struct sk_buff *nskb;
+/* 	if (skb_tailroom(skb) >= len) { */
+/* 		DEBUG("Tailroom large enough\n"); */
+/* 		skb_put(skb, len); */
+/* 	} else { */
+/* 		struct sk_buff *nskb; */
 		
-		DEBUG("Not enough tailroom!!!, fix skb_copy_expand!!!\n");
-		return NULL;
+/* 		DEBUG("Not enough tailroom!!!, fix skb_copy_expand!!!\n"); */
+/* 		return NULL; */
 
-		/* Allocate new data space at head */
-		nskb = skb_copy_expand(skb, skb_headroom(skb),
-				       skb_tailroom(skb) + len,
-				       GFP_ATOMIC);
+/* 		/\* Allocate new data space at head *\/ */
+/* 		nskb = skb_copy_expand(skb, skb_headroom(skb), */
+/* 				       skb_tailroom(skb) + len, */
+/* 				       GFP_ATOMIC); */
 		
-		if (nskb == NULL) {
-			printk("Could not allocate new skb\n");
-			return NULL;
-		}
-		/* Set old owner */
-		if (skb->sk != NULL)
-			skb_set_owner_w(nskb, skb->sk);
+/* 		if (nskb == NULL) { */
+/* 			printk("Could not allocate new skb\n"); */
+/* 			return NULL; */
+/* 		} */
+/* 		/\* Set old owner *\/ */
+/* 		if (skb->sk != NULL) */
+/* 			skb_set_owner_w(nskb, skb->sk); */
 		
-		/* Move tail len bytes (add data space at end of skb) */
-		skb_put(nskb, len);
+/* 		/\* Move tail len bytes (add data space at end of skb) *\/ */
+/* 		skb_put(nskb, len); */
 		
-		kfree_skb(skb);
-		skb = nskb;
-	}
+/* 		kfree_skb(skb); */
+/* 		skb = nskb; */
+/* 	} */
 	
-	DEBUG("Moving %d amount of data\n", skb->tail - skb->h.raw - len);
+/* 	DEBUG("Moving %d amount of data\n", skb->tail - skb->h.raw - len); */
 	
-	dsr_opts = dsr_opt_make_room(dp, skb->h.raw, len, skb->tail - skb->h.raw);
-	skb->h.raw += len;
+/* 	dsr_opts = dsr_opt_make_room(dp, skb->h.raw, len/\* , skb->tail - skb->h.raw *\/); */
+/* 	skb->h.raw += len; */
 	
-	DEBUG("New skb->len=%d\n", skb->len);
+/* 	DEBUG("New skb->len=%d\n", skb->len); */
 
-	return dsr_opts;
-}
+/* 	return dsr_opts; */
+/* } */
 
 
 
@@ -134,14 +134,14 @@ int dsr_opts_remove(struct dsr_pkt *dp)
 
 	DEBUG("Removing DSR opts len=%d\n", dp->dsr_opts_len);
 	/* Update IP header */
-	ip_len = (dp->iph->ihl << 2);
+	ip_len = (dp->nh.iph->ihl << 2);
 
-	dp->iph->protocol = dp->opt_hdr->nh;
-	dp->iph->tot_len = htons(ip_len + dp->data_len);
+	dp->nh.iph->protocol = dp->dh.opth->nh;
+	dp->nh.iph->tot_len = htons(ip_len + dp->data_len);
 
-	ip_send_check(dp->iph);
+	ip_send_check(dp->nh.iph);
 
-	off = (char *)dp->opt_hdr;
+	off = (char *)dp->dh.opth;
 	
 	/* Move data */
 	memmove(off, off + dp->dsr_opts_len, dp->data_len);
@@ -149,7 +149,7 @@ int dsr_opts_remove(struct dsr_pkt *dp)
 	len = dp->dsr_opts_len;
 	dp->data = off;
 	dp->dsr_opts_len = 0;
-	dp->opt_hdr = NULL;
+	dp->dh.opth = NULL;
 	dp->srt_opt = NULL;
 	dp->rreq_opt = NULL;
 	dp->rrep_opt = NULL;
@@ -177,7 +177,7 @@ int dsr_opt_recv(struct dsr_pkt *dp)
 	dsr_len = dp->dsr_opts_len;
 	
 	l = DSR_OPT_HDR_LEN;
-	dopt = DSR_GET_OPT(dp->opt_hdr);
+	dopt = DSR_GET_OPT(dp->dh.opth);
 	
 	DEBUG("Parsing DSR packet l=%d dsr_len=%d\n", l, dsr_len);
 		

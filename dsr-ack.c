@@ -220,39 +220,40 @@ static int dsr_ack_send(struct neighbor *neigh)
 {
 	struct dsr_pkt dp;
 	struct dsr_ack_opt *ack_opt;
-	int len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_ACK_HDR_LEN;
-	char buffer[len];
-	char *buf = buffer;
+	int len = DSR_OPT_HDR_LEN + DSR_ACK_HDR_LEN;
+	char ip_buf[IP_HDR_LEN];
+	char *buf;
 
 	if (!neigh)
 		return -1;
 
 	memset(&dp, 0, sizeof(dp));
-	memset(buf, 0, len);
 	
 	dp.data = NULL; /* No data in this packet */
 	dp.data_len = 0;
 	dp.dst = neigh->addr;
 	dp.nxt_hop = neigh->addr;
-	
+	dp.dsr_opts_len = len;
 	dp.src = my_addr();
 
-	dp.iph = dsr_build_ip(buf, len, dp.src, dp.dst, 1);
+	dp.nh.iph = dsr_build_ip(ip_buf, IP_HDR_LEN, IP_HDR_LEN + len, 
+				 dp.src, dp.dst, 1);
 	
-	if (!dp.iph) {
+	if (!dp.nh.iph) {
 		DEBUG("Could not create IP header\n");
 		return -1;
 	}
 	
-	buf += IP_HDR_LEN;
-	len -= IP_HDR_LEN;
-
-	dp.dsr_opts_len = len;
-
-	dp.opt_hdr = dsr_opt_hdr_add(buf, len, 0);
+	buf = kmalloc(len, GFP_ATOMIC);
 	
-	if (!dp.opt_hdr) {
+	if (!buf)
+		return -1;
+
+	dp.dh.opth = dsr_opt_hdr_add(buf, len, 0);
+	
+	if (!dp.dh.opth) {
 		DEBUG("Could not create DSR opt header\n");
+		kfree(buf);
 		return -1;
 	}
 	
@@ -263,10 +264,11 @@ static int dsr_ack_send(struct neighbor *neigh)
 
 	if (!ack_opt) {
 		DEBUG("Could not create DSR ACK opt header\n");
+		kfree(dp.dh.raw);
 		return -1;
 	}
 	
-	dp.iph->ttl = 1;
+	dp.nh.iph->ttl = 1;
 
 	DEBUG("Sending ACK for %s\n", print_ip(neigh->addr.s_addr));
 	
@@ -321,39 +323,41 @@ static int dsr_ack_req_send(struct neighbor *neigh)
 {
 	struct dsr_pkt dp;
 	struct dsr_ack_req_opt *ack_req;
-	int len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_ACK_REQ_HDR_LEN;
-	char buffer[len];
-	char *buf = buffer;
+	int len = DSR_OPT_HDR_LEN + DSR_ACK_REQ_HDR_LEN;
+	char ip_buf[IP_HDR_LEN];
+	char *buf;
 	
 	if (!neigh)
 		return -1;
 	
 	memset(&dp, 0, sizeof(dp));
-	memset(buf, 0, len);
 	
 	dp.data = NULL; /* No data in this packet */
 	dp.data_len = 0;
 	dp.dst = neigh->addr;
 	dp.nxt_hop = neigh->addr;
-	
+	dp.dsr_opts_len = len;
 	dp.src = my_addr();
-
-	dp.iph = dsr_build_ip(buf, len, dp.src, dp.dst, 1);
 	
-	if (!dp.iph) {
+
+	dp.nh.iph = dsr_build_ip(ip_buf, IP_HDR_LEN, IP_HDR_LEN + len, 
+				 dp.src, dp.dst, 1);
+	
+	if (!dp.nh.iph) {
 		DEBUG("Could not create IP header\n");
 		return -1;
 	}
 	
-	buf += IP_HDR_LEN;
-	len -= IP_HDR_LEN;
-
-	dp.dsr_opts_len = len;
-
-	dp.opt_hdr = dsr_opt_hdr_add(buf, len, 0);
+	buf = kmalloc(len, GFP_ATOMIC);
 	
-	if (!dp.opt_hdr) {
+	if (!buf)
+		return -1;
+	
+	dp.dh.opth = dsr_opt_hdr_add(buf, len, 0);
+	
+	if (!dp.dh.opth) {
 		DEBUG("Could not create DSR opt header\n");
+		kfree(buf);
 		return -1;
 	}
 	
@@ -364,10 +368,9 @@ static int dsr_ack_req_send(struct neighbor *neigh)
 
 	if (!ack_req) {
 		DEBUG("Could not create ACK REQ opt\n");
+		kfree(dp.dh.raw);
 		return -1;
 	}
-	
-	dp.iph->ttl = 1;
 	
 	DEBUG("Sending ACK REQ for %s id=%u\n", print_ip(neigh->addr.s_addr), neigh->id_req);
 

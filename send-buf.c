@@ -136,7 +136,10 @@ int send_buf_enqueue_packet(struct dsr_pkt *dp, struct sk_buff *skb, int (*okfn)
 	entry->okfn = okfn;
 	entry->skb = skb;
 	memcpy(&entry->dp, dp, sizeof(struct dsr_pkt));
-	
+
+	entry->dp.nh.iph = dp->nh.iph;
+	entry->dp.data = dp->data;
+
 	write_lock_bh(&queue_lock);
 
 	status = __send_buf_enqueue_entry(entry);
@@ -219,7 +222,7 @@ int send_buf_set_verdict(int verdict, unsigned long daddr)
 				
 				DEBUG("Source route=%s\n", print_srt(entry->dp.srt));
 				
-				if (dsr_srt_add(&entry->dp, entry->skb) < 0) {
+				if (dsr_srt_add(&entry->dp) < 0) {
 					DEBUG("Could not add source route\n");
 				} else {
 					
