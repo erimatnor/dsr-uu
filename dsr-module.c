@@ -448,6 +448,19 @@ static unsigned int dsr_pre_routing_recv(unsigned int hooknum,
 					 const struct net_device *out,
 					 int (*okfn) (struct sk_buff *))
 {	
+	if (in && in->ifindex == get_slave_dev_ifindex() && 
+	    (*skb)->protocol == htons(ETH_P_IP) &&
+	    do_mackill((*skb)->mac.raw + ETH_ALEN)) {
+		return NF_DROP;
+	}
+	return NF_ACCEPT;	
+}
+static unsigned int dsr_ip_forward_recv(unsigned int hooknum,
+					struct sk_buff **skb,
+					const struct net_device *in,
+					const struct net_device *out,
+					int (*okfn) (struct sk_buff *))
+{	
 	struct iphdr *iph = (*skb)->nh.iph;
 	struct in_addr myaddr = my_addr();
 
@@ -457,10 +470,6 @@ static unsigned int dsr_pre_routing_recv(unsigned int hooknum,
 
 	/* 	DEBUG("IP packet on nf hook\n"); */
 
-		if (do_mackill((*skb)->mac.raw + ETH_ALEN)) {
-		/* 	DEBUG("Dropping pkt\n"); */
-			return NF_DROP;
-		}
 		if (iph && iph->protocol == IPPROTO_DSR && 
 		    iph->daddr != myaddr.s_addr && 
 		    iph->daddr != DSR_BROADCAST) {
@@ -486,6 +495,17 @@ static struct nf_hook_ops dsr_pre_routing_hook = {
 #endif
 	.pf		= PF_INET,
 	.hooknum	= NF_IP_PRE_ROUTING,
+	.priority	= NF_IP_PRI_FIRST,
+};
+
+static struct nf_hook_ops dsr_ip_forward_hook = {
+	
+	.hook		= dsr_ip_forward_recv,
+#ifdef KERNEL26
+	.owner		= THIS_MODULE,
+#endif
+	.pf		= PF_INET,
+	.hooknum	= NF_IP_FORWARD,
 	.priority	= NF_IP_PRI_FIRST,
 };
 
@@ -535,16 +555,22 @@ static int __init dsr_module_init(void)
 
 	if (res < 0) 
 		goto cleanup_rreq_tbl;
-
+	
 	res = nf_register_hook(&dsr_pre_routing_hook);
-
+	
 	if (res < 0)
 		goto cleanup_neigh_tbl;
+
+
+	res = nf_register_hook(&dsr_ip_forward_hook);
+	
+	if (res < 0)
+		goto cleanup_nf_hook2;
 
 	proc = create_proc_entry(CONFIG_PROC_NAME, S_IRUGO | S_IWUSR, proc_net);
 	
 	if (!proc)
-		goto cleanup_nf_hook;
+		goto cleanup_nf_hook1;
 	
 	proc->owner = THIS_MODULE;
 	proc->read_proc = dsr_config_proc_read;
@@ -568,7 +594,9 @@ static int __init dsr_module_init(void)
  cleanup_proc:
 	proc_net_remove(CONFIG_PROC_NAME);
 #endif
- cleanup_nf_hook:
+ cleanup_nf_hook1:
+	nf_unregister_hook(&dsr_ip_forward_hook);
+ cleanup_nf_hook2:
 	nf_unregister_hook(&dsr_pre_routing_hook);
  cleanup_neigh_tbl:
 	neigh_tbl_cleanup();
@@ -591,7 +619,9 @@ static void __exit dsr_module_cleanup(void)
 #else
 	inet_del_protocol(&dsr_inet_prot);
 #endif
+	proc_net_remove(CONFIG_PROC_NAME);
 	nf_unregister_hook(&dsr_pre_routing_hook);
+	nf_unregister_hook(&dsr_ip_forward_hook);
 	send_buf_cleanup();
 	dsr_dev_cleanup();
 	rreq_tbl_cleanup();

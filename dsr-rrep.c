@@ -265,9 +265,9 @@ int dsr_rrep_send(struct dsr_srt *srt_to_me)
 	buf += DSR_SRT_OPT_LEN(dp->srt);
 	len -= DSR_SRT_OPT_LEN(dp->srt);
 
-	dp->rrep_opt = dsr_rrep_opt_add(buf, len, dp->srt);
+	dp->rrep_opt[dp->num_rrep_opts++] = dsr_rrep_opt_add(buf, len, dp->srt);
 	
-	if (!dp->rrep_opt) {
+	if (!dp->rrep_opt[dp->num_rrep_opts-1]) {
 		DEBUG("Could not create RREP option header\n");
 		goto out_err;
 	}
@@ -288,7 +288,7 @@ int dsr_rrep_send(struct dsr_srt *srt_to_me)
 	return -1;
 }
 
-int dsr_rrep_opt_recv(struct dsr_pkt *dp)
+int dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 {
 	struct in_addr myaddr;
 	struct dsr_srt *rrep_opt_srt;
@@ -300,8 +300,8 @@ int dsr_rrep_opt_recv(struct dsr_pkt *dp)
 	myaddr = my_addr();
 	
 	rrep_opt_srt = dsr_srt_new(dp->dst, dp->src, 
-				   DSR_RREP_ADDRS_LEN(dp->rrep_opt), 
-				   (char *)dp->rrep_opt->addrs);
+				   DSR_RREP_ADDRS_LEN(rrep_opt), 
+				   (char *)rrep_opt->addrs);
 	
 	if (!rrep_opt_srt)
 		return DSR_PKT_ERROR;

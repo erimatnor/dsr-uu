@@ -18,9 +18,9 @@ struct dsr_ack_opt {
 	u_int32_t dst;
 };
 #define DSR_ACK_REQ_HDR_LEN sizeof(struct dsr_ack_req_opt)
-#define DSR_ACK_REQ_OPT_LEN sizeof(u_int16_t)
+#define DSR_ACK_REQ_OPT_LEN (DSR_ACK_REQ_HDR_LEN - 2)
 #define DSR_ACK_HDR_LEN sizeof(struct dsr_ack_opt)
-#define DSR_ACK_OPT_LEN 10
+#define DSR_ACK_OPT_LEN (DSR_ACK_HDR_LEN - 2)
 
 struct dsr_ack_req_opt *dsr_ack_req_opt_add(char *buf, int len, struct in_addr neigh, unsigned short id);
 int dsr_ack_add_ack_req(struct in_addr neigh);

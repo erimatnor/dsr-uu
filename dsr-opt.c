@@ -53,76 +53,6 @@ struct iphdr *dsr_build_ip(char *buf, int buflen, int totlen,
 	return iph;
 }
 
-/* char *dsr_opt_make_room(struct dsr_pkt *dp, char *buf, int len) */
-/* { */
-	
-/* 	if (!dp || !buf) */
-/* 		return NULL; */
-	
-/* /\* 	if (buflen < (dp->data_len + len)) { *\/ */
-/* /\* 		DEBUG("Buffer too small!\n"); *\/ */
-/* /\* 		return NULL; *\/ */
-/* /\* 	} *\/ */
-/* 	/\* Move data (from after iph and up) towards tail *\/ */
-/* 	memmove(buf + len, buf, dp->data_len); */
-/* 	/\* Update the data pointer now that we moved the data *\/ */
-/* 	dp->data = buf + len; */
-	
-/* 	return buf; */
-/* } */
-
-/* char *dsr_opt_make_room_skb(struct dsr_pkt *dp, struct sk_buff *skb, int len) */
-/* { */
-/* 	char *dsr_opts; */
-
-/* 	if (!dp || !skb || !len) */
-/* 		return NULL; */
-
-/* 	DEBUG("Adding %d bytes to end of skb, skb->len=%d headroom=%d tailroom=%d\n", len, skb->len, skb_headroom(skb), skb_tailroom(skb)); */
-
-/* 	/\* Check if there are already enough tailroom for doing */
-/* 	 * skb_put. That way it is not always necessary to create a new skb. *\/ */
-
-/* 	if (skb_tailroom(skb) >= len) { */
-/* 		DEBUG("Tailroom large enough\n"); */
-/* 		skb_put(skb, len); */
-/* 	} else { */
-/* 		struct sk_buff *nskb; */
-		
-/* 		DEBUG("Not enough tailroom!!!, fix skb_copy_expand!!!\n"); */
-/* 		return NULL; */
-
-/* 		/\* Allocate new data space at head *\/ */
-/* 		nskb = skb_copy_expand(skb, skb_headroom(skb), */
-/* 				       skb_tailroom(skb) + len, */
-/* 				       GFP_ATOMIC); */
-		
-/* 		if (nskb == NULL) { */
-/* 			printk("Could not allocate new skb\n"); */
-/* 			return NULL; */
-/* 		} */
-/* 		/\* Set old owner *\/ */
-/* 		if (skb->sk != NULL) */
-/* 			skb_set_owner_w(nskb, skb->sk); */
-		
-/* 		/\* Move tail len bytes (add data space at end of skb) *\/ */
-/* 		skb_put(nskb, len); */
-		
-/* 		kfree_skb(skb); */
-/* 		skb = nskb; */
-/* 	} */
-	
-/* 	DEBUG("Moving %d amount of data\n", skb->tail - skb->h.raw - len); */
-	
-/* 	dsr_opts = dsr_opt_make_room(dp, skb->h.raw, len/\* , skb->tail - skb->h.raw *\/); */
-/* 	skb->h.raw += len; */
-	
-/* 	DEBUG("New skb->len=%d\n", skb->len); */
-
-/* 	return dsr_opts; */
-/* } */
-
-
 
 int dsr_opts_remove(struct dsr_pkt *dp)
 {
@@ -156,8 +86,11 @@ int dsr_opts_remove(struct dsr_pkt *dp)
 	dp->dh.opth = NULL;
 	dp->srt_opt = NULL;
 	dp->rreq_opt = NULL;
-	dp->rrep_opt = NULL;
-	
+	memset(dp->rrep_opt, 0, sizeof(struct dsr_rrep_opt *) * MAX_RREP_OPTS);
+	memset(dp->rerr_opt, 0, sizeof(struct dsr_rerr_opt *) * MAX_RERR_OPTS);
+	memset(dp->ack_opt, 0, sizeof(struct dsr_ack_opt *) * MAX_ACK_OPTS);
+	dp->num_rrep_opts = dp->num_rerr_opts = dp->num_ack_opts = 0;
+
 	/* Return bytes removed */
 	return len;
 }
@@ -202,17 +135,25 @@ int dsr_opt_recv(struct dsr_pkt *dp)
 			break;
 		case DSR_OPT_RREP:
 			DEBUG("RREP opt:\n");
-			dp->rrep_opt = (struct dsr_rrep_opt *)dopt;
-			action |= dsr_rrep_opt_recv(dp);
+			if (dp->num_rrep_opts < MAX_RREP_OPTS) {
+				dp->rrep_opt[dp->num_rrep_opts++] = (struct dsr_rrep_opt *)dopt;
+				action |= dsr_rrep_opt_recv(dp, (struct dsr_rrep_opt *)dopt);
+			}
 			break;
-		case DSR_OPT_ERR:
+		case DSR_OPT_RERR:
 			DEBUG("RERR opt:");
+			if (dp->num_rerr_opts < MAX_RERR_OPTS) {
+				dp->rerr_opt[dp->num_rerr_opts++] = (struct dsr_rerr_opt *)dopt;
+			}
 			break;
 		case DSR_OPT_PREV_HOP:
 			break;
 		case DSR_OPT_ACK:
 			DEBUG("ACK opt:\n");
-			action |= dsr_ack_opt_recv((struct dsr_ack_opt *)dopt);
+			if (dp->num_ack_opts < MAX_ACK_OPTS) {
+				dp->ack_opt[dp->num_ack_opts++] = (struct dsr_ack_opt *)dopt;
+				action |= dsr_ack_opt_recv((struct dsr_ack_opt *)dopt);
+			}
 			break;
 		case DSR_OPT_SRT:
 			DEBUG("SRT opt:\n");

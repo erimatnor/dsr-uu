@@ -19,15 +19,18 @@ struct dsr_srt_opt {
 	u_int16_t res:4;
 	u_int16_t salv2:2;	
 #define SET_SALVAGE(sr, x) ( {  __u8 __x = (x); \
-                               sr->salv1 = (__x & 0x03 << 2); \
-                               sr->salv2 = (__x & 0x0c >> 2); })
+                               (sr)->salv1 = (__x & 0x03 << 2); \
+                               (sr)->salv2 = (__x & 0x0c >> 2); })
+#define GET_SALVAGE(sr, x) ( {  x = 0; })
+
 #elif defined (__BIG_ENDIAN_BITFIELD)
 	u_int16_t f:1;	
 	u_int16_t l:1;	
 	u_int16_t res:4;
 	u_int16_t salv:4;
 	u_int16_t sleft:6;
-#define SET_SALVAGE(sr, x) (sr->salv = x)	
+#define SET_SALVAGE(sr, x) ((sr)->salv = x)
+#define GET_SALVAGE(sr, x) (x = (sr)->salv)
 #else
 #error  "Please fix <asm/byteorder.h>"
 #endif

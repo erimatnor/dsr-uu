@@ -2,7 +2,6 @@
 
 #include "dsr.h"
 
-
 char *dsr_pkt_alloc_data(struct dsr_pkt *dp, int len)
 {	
 	if (!dp && len)

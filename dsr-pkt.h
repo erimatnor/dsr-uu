@@ -1,6 +1,10 @@
 #ifndef _DRS_PKT_H
 #define _DSR_PKT_H
 
+#define MAX_RREP_OPTS 10
+#define MAX_RERR_OPTS 10
+#define MAX_ACK_OPTS  10
+
 /* Internal representation of a packet. For portability */
 struct dsr_pkt {
 	struct in_addr src;   /* IP level data */
@@ -16,15 +20,17 @@ struct dsr_pkt {
 	} dh;   
 	int dsr_opts_len;
 	struct dsr_srt_opt *srt_opt;
-	struct dsr_rreq_opt *rreq_opt;
-	struct dsr_rrep_opt *rrep_opt;   
+	struct dsr_rreq_opt *rreq_opt; /* Can only be one */
+	struct dsr_rrep_opt *rrep_opt[MAX_RREP_OPTS];   
+	struct dsr_rerr_opt *rerr_opt[MAX_RERR_OPTS];   
+	struct dsr_ack_opt *ack_opt[MAX_ACK_OPTS];   
+	int num_rrep_opts, num_rerr_opts, num_ack_opts;
 	struct dsr_srt *srt; /* Source route */
 	char *data;           /* Packet data (IP not included)*/
 	int data_len;
-	struct sk_buff *skb;
 	char *dsr_data; /* DSR specific data */
 	int dsr_data_len;
-	/* These are pointers into the dsr options in the dsr header */
+	struct sk_buff *skb;
 };
 
 /* Packet actions: */

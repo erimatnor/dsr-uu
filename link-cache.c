@@ -59,12 +59,24 @@ struct lc_graph {
 
 static struct lc_graph LC;
 
+static inline void __lc_link_del(struct lc_link *link)
+{
+	/* Also free the nodes if they lack other links */
+	if (--link->src->links <= 0)
+		__tbl_del(&LC.nodes, &link->src->l);
+
+	if (--link->dst->links <= 0)
+		__tbl_del(&LC.nodes, &link->dst->l);
+
+	__tbl_del(&LC.links, &link->l);
+}
+
 static inline int crit_addr(void *pos, void *addr)
 {
 	struct in_addr *a = addr; 
 	struct lc_node *p = pos;
 	
-	if (p->addr.s_addr == a->s_addr)
+	if (p->addr.s_addr == a->s_addr) 
 		return 1;
 	return 0;
 }
@@ -85,8 +97,10 @@ static inline int crit_expire(void *pos, void *data)
 {
 	struct lc_link *link = pos;
 
-	if (link->expire < jiffies)
+	if (link->expire < jiffies) {
+		__lc_link_del(link);
 		return 1;
+	}
 	return 0;
 }
 
@@ -151,7 +165,8 @@ static void lc_garbage_collect_set(void);
 static void lc_garbage_collect(unsigned long data)
 {
 	write_lock_bh(&LC.lock);
-	tbl_for_each_del(&LC.links, NULL, crit_expire);
+	
+	tbl_do_for_each(&LC.links, NULL, crit_expire);
 
 	if (!TBL_EMPTY(&LC.links))
 		lc_garbage_collect_set();
@@ -201,6 +216,7 @@ static int __lc_link_tbl_add(struct lc_node *src, struct lc_node *dst,
 			     unsigned long timeout, int status, int cost)
 {	
 	struct lc_link *link;
+	int res;
 
 	if (!src || !dst)
 		return -1;
@@ -208,7 +224,6 @@ static int __lc_link_tbl_add(struct lc_node *src, struct lc_node *dst,
 	link = __lc_link_find(src->addr, dst->addr);
 	
 	if (!link) {
-		
 		link = kmalloc(sizeof(struct lc_link), GFP_ATOMIC);
 		
 		if (!link) {
@@ -222,7 +237,9 @@ static int __lc_link_tbl_add(struct lc_node *src, struct lc_node *dst,
 		      cost);
 		
 		__tbl_add(&LC.links, &link->l, crit_none);
-	}
+		res = 1;
+	} else
+		res = 0;
 	
 	link->src = src;
 	link->dst = dst;
@@ -230,7 +247,7 @@ static int __lc_link_tbl_add(struct lc_node *src, struct lc_node *dst,
 	link->cost = cost;
 	link->expire = jiffies + (timeout / 1000 * HZ);
 	
-	return 1;
+	return res;
 }
 
 int lc_link_add(struct in_addr src, struct in_addr dst, 
@@ -276,13 +293,14 @@ int lc_link_add(struct in_addr src, struct in_addr dst,
 			lc_garbage_collect_set();
 #endif
 		
-	} else
+	} else if (res < 0)
 		DEBUG("Could not add new link\n");
-
+	
 	write_unlock_bh(&LC.lock);
 
 	return 0;
 }
+
 
 int lc_link_del(struct in_addr src, struct in_addr dst)
 {
@@ -296,13 +314,18 @@ int lc_link_del(struct in_addr src, struct in_addr dst)
 		write_unlock_bh(&LC.lock);
 		return 0;
 	}	
+	
+	__lc_link_del(link);
 
-	/* Also free the nodes if they lack other links */
-	if (--link->src->links < 0)
-		__tbl_del(&LC.nodes, &link->src->l);
+	/* Assume bidirectional links for now */
+	link = __lc_link_find(dst, src);
 
-	if (--link->dst->links < 0)
-		__tbl_del(&LC.nodes, &link->dst->l);
+	if (!link) {
+		write_unlock_bh(&LC.lock);
+		return 0;
+	}	
+	
+	__lc_link_del(link);
 
 	write_unlock_bh(&LC.lock);
 	
@@ -411,7 +434,7 @@ struct dsr_srt *dsr_rtc_find(struct in_addr src, struct in_addr dst)
 	
 	DEBUG("Hops to %s: %u\n", print_ip(dst.s_addr), dst_node->hops);
 	
-	if (dst_node->hops != 0) {
+	if (dst_node->cost != LC_COST_INF) {
 		struct lc_node *n;
 		int i = 0;
 		

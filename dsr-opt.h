@@ -37,7 +37,7 @@ struct dsr_pad1_opt {
 #define DSR_OPT_PADN       0
 #define DSR_OPT_RREP       1
 #define DSR_OPT_RREQ       2
-#define DSR_OPT_ERR        3
+#define DSR_OPT_RERR       3
 #define DSR_OPT_PREV_HOP   5
 #define DSR_OPT_ACK       32
 #define DSR_OPT_SRT       96

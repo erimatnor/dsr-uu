@@ -73,7 +73,7 @@ int maint_buf_add(struct dsr_pkt *dp)
 		return -1;
 
 	if (tbl_add(&maint_buf, &me->l, crit_none) < 0) {
-		DEBUG("Buffer full!n");
+		DEBUG("Buffer full, dropping packet!n");
 		dsr_pkt_free(dp);
 		kfree(me);
 		return -1;

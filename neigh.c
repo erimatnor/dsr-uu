@@ -98,6 +98,8 @@ static inline int crit_addr_id_reset(void *entry, void *data)
 			
 			n->reqs = 0;
 			n->rtt = JIFFIES_TO_MSEC(jiffies - n->last_ack_req_tx_time);
+			if (n->rtt < 2)
+				n->rtt = 2;
 			DEBUG("New RTT=%u\n", n->rtt);
 		}
 		
@@ -171,7 +173,8 @@ void neigh_tbl_set_ack_req_timer(struct in_addr neigh_addr)
 	write_lock_bh(&neigh_tbl.lock);
 	
 	neigh = __tbl_find(&neigh_tbl, &neigh_addr, crit_addr);
-	
+	neigh->last_ack_req_tx_time = jiffies;
+
 	__neigh_tbl_set_ack_req_timer(neigh);
 
 	write_unlock_bh(&neigh_tbl.lock);
@@ -193,7 +196,9 @@ static void neigh_tbl_ack_req_timeout(unsigned long data)
 	if (++neigh->reqs >= MAX_AREQ_TX) {
 		lc_link_del(my_addr(), neigh->addr);
 		DEBUG("Send RERR!!!\n");
-	} else {	       
+		/* TODO: Salvage */
+	} else {
+		DEBUG("Resending ACK to %s\n", print_ip(neigh->addr.s_addr));
 		dsr_ack_req_send(neigh->addr, ++neigh->id_req);
 		__neigh_tbl_set_ack_req_timer(neigh);
 	}
