@@ -261,7 +261,7 @@ static int dsr_config_proc_read(char *buffer, char **start, off_t offset, int le
 	int i;
 	
 	for (i = 0; i < CONFVAL_MAX; i++)
-		len += sprintf(buffer+len, "%s=%u  %s\n", 
+		len += sprintf(buffer+len, "%s=%u %30s\n", 
 			       confvals_def[i].name, 
 			       get_confval(i), 
 			       confval_names[confvals_def[i].type]);

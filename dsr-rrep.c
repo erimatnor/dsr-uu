@@ -35,7 +35,7 @@ DSRUUTimer grat_rrep_tbl_timer;
 struct grat_rrep_entry {
 	list_t l;
 	struct in_addr src, prev_hop;
-	Time expire;
+	struct timeval expires;
 };
 
 
@@ -53,9 +53,9 @@ static inline int crit_query(void *pos, void *query)
 static inline int crit_time(void *pos, void *time)
 {
 	struct grat_rrep_entry *p = (struct grat_rrep_entry *)pos;
-	unsigned long *t = (unsigned long *)time;
+	struct timeval *t = (struct timeval *)time;
 
-	if (p->expire > *t)
+	if (timeval_diff(&p->expires, t) < 0)
 		return 1;
 
 	return 0;
@@ -72,10 +72,10 @@ void NSCLASS grat_rrep_tbl_timeout(unsigned long data)
 	
 	if (!TBL_EMPTY(&grat_rrep_tbl)) {
 		e = (struct grat_rrep_entry *)TBL_FIRST(&grat_rrep_tbl);
-#ifdef __KERNEL__
-		grat_rrep_tbl_timer.function = grat_rrep_tbl_timeout;
-#endif
-		grat_rrep_tbl_timer.expires = e->expire;
+
+		grat_rrep_tbl_timer.function = &NSCLASS grat_rrep_tbl_timeout;
+
+		grat_rrep_tbl_timer.expires = e->expires;
 		add_timer(&grat_rrep_tbl_timer);
 		DSR_READ_UNLOCK(&grat_rrep_tbl.lock);
 	}	
@@ -98,7 +98,7 @@ int NSCLASS grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop)
 
 	e->src = src;
 	e->prev_hop = prev_hop;
-	e->expire = time + SECONDS(GRAT_REPLY_HOLDOFF);
+	e->expires = time + SECONDS(GRAT_REPLY_HOLDOFF);
 	
 	if (timer_pending(&grat_rrep_tbl_timer))
 		del_timer(&grat_rrep_tbl_timer);
@@ -110,7 +110,7 @@ int NSCLASS grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop)
 #ifdef __KERNEL__
 		grat_rrep_tbl_timer.function = grat_rrep_tbl_timeout;
 #endif
-		grat_rrep_tbl_timer.expires = e->expire;
+		grat_rrep_tbl_timer.expiress = e->expires;
 		add_timer(&grat_rrep_tbl_timer);
 		DSR_READ_UNLOCK(&grat_rrep_tbl.lock);		
 	}
@@ -133,7 +133,7 @@ static int grat_rrep_tbl_print(char *buf)
 		len += sprintf(buf+len, "  %-15s %-15s %lu\n", 
 			       print_ip(e->src), 
 			       print_ip(e->prev_hop),
-			       e->expire ? ((e->expire - TimeNow) / HZ) : 0);
+			       e->expires ? ((e->expires - TimeNow) / HZ) : 0);
 	}
     
 	DSR_READ_UNLOCK(&grat_rrep_tbl.lock);

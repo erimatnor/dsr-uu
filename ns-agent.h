@@ -62,7 +62,6 @@ typedef dsr_opt_hdr hdr_dsr;
 
 #define IPDEFTTL 64
 
-
 struct hdr_test {
 	int data;
 	/* Packet header access functions */
@@ -95,9 +94,13 @@ class DSRUU : public Agent {
 	// them for interesting tidbits
 	struct hdr_ip *	dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, struct in_addr dst, int ip_len, int tot_len, int protocol, int ttl);
 	void add_timer (DSRUUTimer *t) { t->resched(t->expires); }
-	void mod_timer (DSRUUTimer *t, Time expires_) 
-		{ t->expires = expires_; t->resched(t->expires); }
+/* 	void mod_timer (DSRUUTimer *t, unsinged long expires_)  */
+/* 		{ t->expires = expires_ ; t->resched(t->expires); } */
 	void del_timer (DSRUUTimer *t) { t->cancel(); }
+	void timer_set(DSRUUTimer *t, struct timeval *expires) {
+		t->expires = expires->tv_sec + expires->tv_usec / 1000000l;
+		add_timer(t);
+	}
 	static const unsigned int get_confval(enum confval cv) 
 		{ return confvals[cv]; }
 	static const unsigned int set_confval(enum confval cv, unsigned int val)

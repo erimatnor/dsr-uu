@@ -29,8 +29,8 @@ struct maint_entry {
 	struct in_addr nxt_hop;
 	unsigned int rexmt;
 	unsigned short id;
-	Time tx_time;
-	Time rto;
+	struct timeval tx_time;
+	usecs_t rto;
 	int timer_set;
 	struct dsr_pkt *dp;
 };
@@ -107,7 +107,7 @@ static inline int crit_nxt_hop_rexmt(void *pos, void *nh)
 	
 	if (m->nxt_hop.s_addr == nxt_hop->s_addr) {
 		m->rexmt++;
-		m->tx_time = TimeNow;
+		do_gettimeofday(&m->tx_time);
 		return 1;
 	}
 	return 0;
@@ -131,7 +131,7 @@ static struct maint_entry *maint_entry_create(struct dsr_pkt *dp,
 		return NULL;
 	
 	m->nxt_hop = dp->nxt_hop;
-	m->tx_time = TimeNow;
+	do_gettimeofday(&m->tx_time);
 	m->rexmt = 0;
 	m->id = id;
 	m->rto = rto;
@@ -188,9 +188,11 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 void NSCLASS maint_buf_set_timeout(void)
 {
 	struct maint_entry *m;
-	Time tx_time, rto;
-	Time now = TimeNow;
+	unsigned long rto;
+	struct timeval tx_time, now;
 	
+	do_gettimeofday(&now);
+
 	DSR_WRITE_LOCK(&maint_buf.lock);
 	/* Get first packet in maintenance buffer */
 	m = (struct maint_entry *)__tbl_find(&maint_buf, NULL, crit_none);
@@ -200,22 +202,20 @@ void NSCLASS maint_buf_set_timeout(void)
 		DSR_WRITE_UNLOCK(&maint_buf.lock);
 		return;
 	}
-
+	
 	tx_time = m->tx_time;
 	rto = m->rto;
 	m->timer_set = 1;
 
 	DSR_WRITE_UNLOCK(&maint_buf.lock);
 	
-	DEBUG("now=%lu exp=%lu\n", now, tx_time + rto);
+/* 	DEBUG("now=%lu exp=%lu\n", now, tx_time + rto); */
 
 	/* Check if this packet has already expired */
-	if (now > tx_time + rto) 
+	if (timeval_diff(&now, &tx_time) > rto) 
 		maint_buf_timeout(0);
-	else {		
-		ack_timer.expires = tx_time + rto;
-		add_timer(&ack_timer);
-	}
+	else 
+		timer_set(&ack_timer, rto);
 }
 
 
@@ -254,7 +254,7 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 	} 
 	
 	/* Set new Transmit time */
-	m->tx_time = TimeNow;
+	do_gettimeofday(&m->tx_time);
 		
 	/* Send new ACK REQ */
 	dsr_ack_req_send(m->nxt_hop, m->id);
