@@ -28,9 +28,7 @@ static TBL(rreq_tbl, RREQ_TBL_MAX_LEN);
 static unsigned int rreq_seqno = 1;
 #endif
 
-#define RREQ_TTL_MAX 8
-
-#define STATE_LATENT        0
+#define STATE_IDLE          0
 #define STATE_IN_ROUTE_DISC 1
 
 struct rreq_tbl_entry {
@@ -138,47 +136,59 @@ static int rreq_tbl_print(struct tbl *t, char *buf)
 void NSCLASS rreq_tbl_timeout(unsigned long data)
 {
 	struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)data;
-	struct in_addr target;
 	struct timeval expires;
-	int ttl;
+/* 	int ttl; */
 	
 	if (!e)
 		return;
        
-	DSR_WRITE_LOCK(&rreq_tbl);
+	/* DSR_WRITE_LOCK(&rreq_tbl); */
 	
-	DEBUG("RREQ Resend Timeout for dst=%s\n", print_ip(e->node_addr));
+	tbl_detach(&rreq_tbl, &e->l);
 
-	/* Put at end of list */
-	__tbl_detach(&rreq_tbl, &e->l);
-	__tbl_add_tail(&rreq_tbl, &e->l);
-	
+	DEBUG("RREQ Timeout dst=%s timeout=%lu rexmts=%d \n", 
+	      print_ip(e->node_addr), e->timeout, e->num_rexmts);
+
 	if (e->num_rexmts >= ConfVal(MaxRequestRexmt)) {
 		DEBUG("MAX RREQs reached for %s\n", 
 		      print_ip(e->node_addr));
 
-		e->state = STATE_LATENT;
+		e->state = STATE_IDLE;
 
-		DSR_WRITE_UNLOCK(&rreq_tbl);
+/* 		DSR_WRITE_UNLOCK(&rreq_tbl); */
+		tbl_add_tail(&rreq_tbl, &e->l);
 		return;
 	}
 	
+	e->num_rexmts++;
+	
+	if (e->ttl == 1)
+		e->timeout = ConfValToUsecs(RequestPeriod); 
+	else
+		e->timeout *= 2; /* Double timeout */	
+
 	e->ttl *= 2; /* Double TTL */
-	e->num_rexmts++; 
-	e->timeout *= 2; /* Double timeout */	
+	
+	if (e->timeout > ConfValToUsecs(MaxRequestPeriod))
+		e->timeout = ConfValToUsecs(MaxRequestPeriod);
+	
 	gettime(&e->last_used);
 
-	target = e->node_addr;
-	ttl = e->ttl;
+/* 	target = e->node_addr; */
+/* 	ttl = e->ttl; */
 	
+	dsr_rreq_send(e->node_addr, e->ttl);
+
 	expires = e->last_used;
 	timeval_add_usecs(&expires, e->timeout);
+	
+	/* Put at end of list */
+	tbl_add_tail(&rreq_tbl, &e->l);
 
 	set_timer(e->timer, &expires);
 	
-	DSR_WRITE_UNLOCK(&rreq_tbl);
+/* 	DSR_WRITE_UNLOCK(&rreq_tbl); */
 	
-	dsr_rreq_send(target, ttl);
 }
 
 struct rreq_tbl_entry *NSCLASS __rreq_tbl_entry_create(struct in_addr node_addr)
@@ -190,7 +200,7 @@ struct rreq_tbl_entry *NSCLASS __rreq_tbl_entry_create(struct in_addr node_addr)
 	if (!e)
 		return NULL;
 
-	e->state = STATE_LATENT;
+	e->state = STATE_IDLE;
 	e->node_addr = node_addr;
 	e->ttl = 0;
 	memset(&e->tx_time, 0, sizeof(struct timeval));;
@@ -297,28 +307,25 @@ int NSCLASS rreq_tbl_route_discovery_cancel(struct in_addr dst)
 {
 	struct rreq_tbl_entry *e;
 
-	DSR_WRITE_LOCK(&rreq_tbl);
+/* 	DSR_WRITE_LOCK(&rreq_tbl); */
 	
-	e = (struct rreq_tbl_entry *)__tbl_find(&rreq_tbl, &dst, crit_addr);
+	e = (struct rreq_tbl_entry *)tbl_find_detach(&rreq_tbl, &dst, crit_addr);
 	
 	if (!e) {
 		DEBUG("%s not in RREQ table\n", print_ip(dst));
-		DSR_WRITE_UNLOCK(&rreq_tbl);
+	/* 	DSR_WRITE_UNLOCK(&rreq_tbl); */
 		return -1;
 	}
+	
+	if (e->state == STATE_IN_ROUTE_DISC)
+		del_timer_sync(e->timer);
 
-	if (e->state != STATE_IN_ROUTE_DISC)
-		return 0;
-
-	del_timer_sync(e->timer);
-
-	e->state = STATE_LATENT;
+	e->state = STATE_IDLE;
 	gettime(&e->last_used);
 
-	__tbl_detach(&rreq_tbl, &e->l);
-	__tbl_add_tail(&rreq_tbl, &e->l);
+	tbl_add_tail(&rreq_tbl, &e->l);
 	       
-	DSR_WRITE_UNLOCK(&rreq_tbl);
+/* 	DSR_WRITE_UNLOCK(&rreq_tbl); */
 
 	return 1;	
 }
@@ -355,7 +362,13 @@ int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
 	
 	gettime(&e->last_used);
 	e->ttl = ttl = TTL_START;
-	e->timeout = 1000000;
+	/* The draft does not actually specify how these Request Timeout values
+	 * should be used... ??? I am just guessing here. */
+	if (e->ttl == 1)
+		e->timeout = ConfValToUsecs(NonpropRequestTimeout); 
+	else
+		e->timeout = ConfValToUsecs(RequestPeriod); 
+
 	e->state = STATE_IN_ROUTE_DISC;
 	e->num_rexmts = 0;
 	
@@ -531,7 +544,7 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 
 	if (rreq_opt->target == myaddr.s_addr) {
 		
-		DEBUG("RREQ OPT for me\n");
+		DEBUG("RREQ OPT for me - Send RREP\n");
 		
 		/* According to the draft, the dest addr in the IP header must
 		 * be updated with the target address */

@@ -99,6 +99,8 @@ int NSCLASS dsr_ack_send(struct in_addr dst, unsigned short id)
 	
 	DEBUG("Sending ACK to %s id=%u\n", print_ip(dst), id);
 	
+	dp->flags |= PKT_XMIT_JITTER;
+
 	XMIT(dp);
 	
 	return 1;
@@ -272,7 +274,8 @@ int NSCLASS dsr_ack_opt_recv(struct dsr_ack_opt *ack)
 {
 	unsigned short id;
 	struct in_addr dst, src, myaddr;
-	
+	int n;
+
 	if (!ack)
 		return DSR_PKT_ERROR;
 
@@ -288,8 +291,9 @@ int NSCLASS dsr_ack_opt_recv(struct dsr_ack_opt *ack)
 		return DSR_PKT_ERROR;
 
 	/* Purge packets buffered for this next hop */
-	maint_buf_del(src, id);
+	n = maint_buf_del_all_id(src, id);
 
+	DEBUG("Removed %d packets from maint buf\n", n);
 	return DSR_PKT_NONE;
 }
 

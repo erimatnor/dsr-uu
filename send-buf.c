@@ -242,7 +242,7 @@ static int send_buf_get_info(char *buffer, char **start, off_t offset, int lengt
 
 	DSR_READ_LOCK(&send_buf.lock);
 
-	list_for_each_prev(p, &send_buf.head) {
+	list_for_each(p, &send_buf.head) {
 		struct send_buf_entry *e = (struct send_buf_entry *)p;
 		
 		if (e && e->dp)

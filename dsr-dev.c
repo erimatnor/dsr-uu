@@ -27,7 +27,7 @@
 /* Our dsr device */
 static struct net_device *dsr_dev;
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(2,4,20)
-/* dsr_node must be static on some older kernels, othewise it segfaults on
+/* dsr_node must be static on some older kernels, otherwise it segfaults on
  * module load */
 static struct dsr_node *dsr_node;
 #else

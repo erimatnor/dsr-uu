@@ -36,84 +36,58 @@ struct neighbor {
 	struct in_addr addr;
 	struct sockaddr hw_addr;
 	unsigned short id;
+	struct timeval last_ack_req;
 	usecs_t rtt, srtt, rttvar, jitter; /* RTT in usec */
 };
 
-struct hw_query {
-	struct in_addr *a;
-	struct sockaddr *hw;
+struct neighbor_query {
+	struct in_addr *addr;
+	struct neighbor_info *info;
 };
-struct id_query {
-	struct in_addr *a;
-	unsigned short *id;
-};
-struct rtt_query {
-	struct in_addr *a;
-	usecs_t *srtt;
-};
-		
-static inline int crit_addr(void *pos, void *addr)
+	
+static inline int crit_addr(void *pos, void *query)
+{
+	struct neighbor_query *q = (struct neighbor_query *)query; 
+	struct neighbor *n = (struct neighbor *)pos;
+	
+	if (n->addr.s_addr == q->addr->s_addr) {
+		if (q->info) {
+			q->info->id = n->id;
+			q->info->last_ack_req = n->last_ack_req;
+			memcpy(&q->info->hw_addr, &n->hw_addr, 
+			       sizeof(struct sockaddr));
+			
+			/* TODO: Calculate RTO */
+			q->info->rto = n->rtt;
+		}
+		return 1;
+	}
+	return 0;
+}
+
+static inline int crit_addr_id_inc(void *pos, void *addr)
 {
 	struct in_addr *a = (struct in_addr *)addr; 
-	struct neighbor *e = (struct neighbor *)pos;
+	struct neighbor *n = (struct neighbor *)pos;
 	
-	if (e->addr.s_addr == a->s_addr)
-		return 1;
-	return 0;
-}
-static inline int crit_addr_get_hwaddr(void *pos, void *data)
-{	
-	struct neighbor *e = (struct neighbor *)pos;
-	struct hw_query *q = (struct hw_query *)data;
-
-	if (e->addr.s_addr == q->a->s_addr) {
-		memcpy(q->hw, &e->hw_addr, sizeof(struct sockaddr));
+	if (n->addr.s_addr == a->s_addr) {
+		n->id++;
+		gettime(&n->last_ack_req);
 		return 1;
 	}
-	return 0;
-}
-static inline int crit_addr_get_id(void *pos, void *data)
-{
-	struct neighbor *e = (struct neighbor *)pos;
-	struct id_query *q = (struct id_query *)data;
-
-	if (e->addr.s_addr == q->a->s_addr) {
-		/* Increase id so it is always unique */
-		*(q->id) = ++e->id;
-		return 1;
-	}
-	return 0;
-}
-static inline int crit_addr_get_rtt(void *pos, void *data)
-{
-	struct neighbor *e = (struct neighbor *)pos;
-	struct rtt_query *q = (struct rtt_query *)data;
-
-	if (e->addr.s_addr == q->a->s_addr) {
-		*(q->srtt) = e->srtt;
-		return 1;
-	}
-	return 0;
-}
-
-
-static inline int crit_garbage(void *pos, void *foo)
-{
-	
-
 	return 0;
 }
 
 void NSCLASS neigh_tbl_garbage_timeout(unsigned long data)
 {
-	tbl_for_each_del(&neigh_tbl, NULL, crit_garbage);
+	/* tbl_for_each_del(&neigh_tbl, NULL, crit_garbage); */
 	
 	
-	if (!tbl_empty(&neigh_tbl)) {
+/* 	if (!tbl_empty(&neigh_tbl)) { */
 	/* 	garbage_timer.expires = TimeNow +  */
 /* 			MSECS_TO_TIMENOW(NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT); */
 	/* 	add_timer(&garbage_timer);	 */
-	}
+	/* } */
 }
 
 
@@ -136,6 +110,7 @@ static struct neighbor *neigh_tbl_create(struct in_addr addr,
 	neigh->srtt = DSRTV_SRTTBASE;
 	neigh->rttvar = 0;
 	neigh->rtt = RTT_DEF;
+	gettime(&neigh->last_ack_req);
 	memcpy(&neigh->hw_addr, hw_addr, sizeof(struct sockaddr));
 	
 /* 	garbage_timer.expires = TimeNow + NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT / 1000*HZ; */
@@ -151,8 +126,12 @@ int NSCLASS neigh_tbl_add(struct in_addr neigh_addr, struct ethhdr *ethh)
 {
 	struct sockaddr hw_addr;
 	struct neighbor *neigh;
+	struct neighbor_query q;
 	
-	if (in_tbl(&neigh_tbl, &neigh_addr, crit_addr))
+	q.addr = &neigh_addr;
+	q.info = NULL;
+
+	if (in_tbl(&neigh_tbl, &q, crit_addr))
 		return 0;
 #ifdef NS2 
 	/* This should probably be changed to lookup the MAC type
@@ -185,86 +164,45 @@ int NSCLASS neigh_tbl_del(struct in_addr neigh_addr)
 	return tbl_for_each_del(&neigh_tbl, &neigh_addr, crit_addr);
 }
 
-int NSCLASS neigh_tbl_rtt_update(struct in_addr nxt_hop, int nticks)
+/* int NSCLASS neigh_tbl_rtt_update(struct in_addr nxt_hop, int nticks) */
+/* { */
+/* 	struct neighbor *neigh; */
+/* 	int delta; */
+	
+/* 	DSR_WRITE_LOCK(&neigh_tbl.lock); */
+
+/* 	neigh = (struct neighbor *)__tbl_find(&neigh_tbl, &nxt_hop, crit_addr); */
+	
+/* 	if (!neigh) { */
+/* 		DSR_WRITE_UNLOCK(&neigh_tbl.lock); */
+/* 		return -1; */
+/* 	} */
+	
+/* 	/\* Use TCP RTO estimation *\/ */
+/* 	delta = nticks - neigh->srtt; */
+	
+/*        	neigh->srtt = neigh->srtt + (delta >> 3); */
+
+/* 	DSR_WRITE_UNLOCK(&neigh_tbl.lock); */
+
+/* 	return 0; */
+/* } */
+
+
+
+int NSCLASS neigh_tbl_query(struct in_addr neigh_addr, struct neighbor_info *neigh_info)
 {
-	struct neighbor *neigh;
-	int delta;
+	struct neighbor_query q;
 	
-	DSR_WRITE_LOCK(&neigh_tbl.lock);
-
-	neigh = (struct neighbor *)__tbl_find(&neigh_tbl, &nxt_hop, crit_addr);
+	q.addr = &neigh_addr;
+	q.info = neigh_info;
 	
-	if (!neigh) {
-		DSR_WRITE_UNLOCK(&neigh_tbl.lock);
-		return -1;
-	}
-	
-	/* Use TCP RTO estimation */
-	delta = nticks - neigh->srtt;
-	
-       	neigh->srtt = neigh->srtt + (delta >> 3);
-
-	DSR_WRITE_UNLOCK(&neigh_tbl.lock);
-
-	return 0;
+	return in_tbl(&neigh_tbl, &q, crit_addr);
 }
 
-long NSCLASS neigh_tbl_get_rto(struct in_addr nxt_hop)
+int NSCLASS neigh_tbl_id_inc(struct in_addr neigh_addr)
 {
-	struct neighbor *neigh;
-	int rtt, srtt, rttvar;
-
-	DSR_READ_LOCK(&neigh_tbl.lock);
-
-	neigh = (struct neighbor *)__tbl_find(&neigh_tbl, &nxt_hop, crit_addr);
-	
-	if (!neigh) {
-		DSR_READ_UNLOCK(&neigh_tbl.lock);
-		return -1;
-	}
-	srtt = neigh->srtt;
-	rttvar = neigh->rttvar;
-	rtt = neigh->rtt;
-	
-	DSR_READ_UNLOCK(&neigh_tbl.lock);
-
-	return rtt;
-}
-
-int NSCLASS neigh_tbl_get_hwaddr(struct in_addr neigh_addr, struct sockaddr *hw_addr)
-{
-	struct hw_query q;
-	
-	q.a = &neigh_addr;
-	q.hw = hw_addr;
-	
-	return in_tbl(&neigh_tbl, &q, crit_addr_get_hwaddr);
-}
-
-unsigned short NSCLASS neigh_tbl_get_id(struct in_addr neigh_addr)
-{
-	unsigned short id = 0;
-	struct id_query q;
-	
-	q.a = &neigh_addr;
-	q.id = &id;
-	
-	in_tbl(&neigh_tbl, &q, crit_addr_get_id);
-	
-	return id;
-}
-
-int NSCLASS neigh_tbl_get_rtt(struct in_addr neigh_addr)
-{
-	usecs_t srtt;
-	struct rtt_query q;
-	
-	q.a = &neigh_addr;
-	q.srtt = &srtt;
-	
-	in_tbl(&neigh_tbl, &q, crit_addr_get_rtt);
-	
-	return srtt;
+	return in_tbl(&neigh_tbl, &neigh_addr, crit_addr_id_inc);
 }
 
 #ifdef __KERNEL__

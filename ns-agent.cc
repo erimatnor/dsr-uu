@@ -95,7 +95,7 @@ DSRUU::trace(const char *func, const char *fmt, ...)
 	
 	buf[len-1] = '\0';
 
-//#define DBG_TO_STDOUT
+#define DBG_TO_STDOUT
 
 #ifdef DBG_TO_STDOUT
 	printf("%s\n", buf);
@@ -206,16 +206,16 @@ DSRUU::ns_packet_create(struct dsr_pkt *dp)
 	if (dp->dst.s_addr == DSR_BROADCAST) {
 		cmh->addr_type() = NS_AF_NONE;
 	} else {
-		struct sockaddr hw_addr;
+		struct neighbor_info neigh_info;
 		int mac_dst;
 		
-		if (!neigh_tbl_get_hwaddr(dp->nxt_hop, &hw_addr)) {
+		if (!neigh_tbl_query(dp->nxt_hop, &neigh_info)) {
 			DEBUG("No next hop MAC address in neigh_tbl\n");
 			Packet::free(dp->p);
 			return NULL;
 		}
 
-		ethtoint((char *)&hw_addr, &mac_dst);
+		ethtoint((char *)&neigh_info.hw_addr, &mac_dst);
 
 // 		DEBUG("Mac dst=%d\n", mac_dst);
 

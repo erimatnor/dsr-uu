@@ -90,7 +90,7 @@ static struct {
 #endif
 	{ "FlushLinkCache", 1, COMMAND },
 	{ "PromiscOperation", 1, BIN },
-	{ "BroadCastJitter", 10, MILLISECONDS },
+	{ "BroadCastJitter", 20, MILLISECONDS },
 	{ "RouteCacheTimeout", 300, SECONDS },
 	{ "SendBufferTimeout", 30, SECONDS },
 	{ "SendBufferSize", SEND_BUF_MAX_LEN, QUANTA },

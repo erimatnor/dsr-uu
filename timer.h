@@ -95,6 +95,21 @@ static inline void gettime(struct timeval *tv)
 }
 #endif /* NS2 */
 
+
+static inline char *print_timeval(struct timeval *tv)
+{
+	static char buf[56][56];
+	static int n = 0;
+
+	n = (n + 1) % 2;
+
+	snprintf(buf[n], sizeof(buf), "%ld:%ld:%03lu", tv->tv_sec / 60, 
+		 tv->tv_sec % 60, 
+		 tv->tv_usec / 1000);
+
+
+	return buf[n];
+}
 /* These functions may overflow (although unlikely)... Should probably be
  * improtved in the future */
 static inline long timeval_diff(struct timeval *tv1, struct timeval *tv2)

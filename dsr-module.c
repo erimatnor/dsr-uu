@@ -235,13 +235,13 @@ int dsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb)
 
 		
 	struct sockaddr broadcast = {AF_UNSPEC, {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
-	struct sockaddr dest;
+	struct neighbor_info neigh_info;
 	
 	if (dp->dst.s_addr == DSR_BROADCAST)
-		memcpy(dest.sa_data , broadcast.sa_data, ETH_ALEN);
+		memcpy(neigh_info.hw_addr.sa_data , broadcast.sa_data, ETH_ALEN);
 	else {
 		/* Get hardware destination address */
-		if (neigh_tbl_get_hwaddr(dp->nxt_hop, &dest) < 0) {
+		if (neigh_tbl_query(dp->nxt_hop, &neigh_info) < 0) {
 			DEBUG("Could not get hardware address for next hop %s\n", print_ip(dp->nxt_hop));
 			return -1;
 		}
@@ -249,7 +249,7 @@ int dsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb)
 	
 	if (skb->dev->hard_header) {
 		skb->dev->hard_header(skb, skb->dev, ETH_P_IP,
-				      dest.sa_data, 0, skb->len);
+				      neigh_info.hw_addr.sa_data, 0, skb->len);
 	} else {
 		DEBUG("Missing hard_header\n");
 		return -1;

@@ -73,7 +73,8 @@ struct dsr_pkt {
 /* Flags: */
 #define PKT_PROMISC_RECV 0x01
 #define PKT_REQUEST_ACK  0x02
-#define PKT_XMIT_JITTER  0x04
+#define PKT_PASSIVE_ACK  0x04
+#define PKT_XMIT_JITTER  0x08
 
 /* Packet actions: */
 #define DSR_PKT_NONE           1
