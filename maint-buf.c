@@ -20,140 +20,69 @@ struct maint_entry {
 	unsigned long tx_time;
 	struct dsr_pkt *dp;
 };
+static void maint_buf_timeout(unsigned long data);
 
-static inline int crit_nxt_hop_del(void *pos, void *nh)
-{
-	struct in_addr *nxt_hop = nh; 
-	struct maint_entry *p = pos;
+static inline int crit_nxt_hop_id(void *pos, void *data)
+{	
+	struct maint_entry *m = pos;
+	struct {
+		struct in_addr *nxt_hop;
+		unsigned short *id;
+	} *d;
 	
-	if (p->nxt_hop.s_addr == nxt_hop->s_addr
-		) {
-		if (p->dp)
-			dsr_pkt_free(p->dp);
-		/* TODO: Salvage or send RERR ? */
+	d = data;
+
+	if (!d)
+		return 0;
+	
+	if (m->nxt_hop.s_addr == d->nxt_hop->s_addr &&
+	    m->id == *(d->id))
 		return 1;
-	}
+
 	return 0;
+}
+static inline int crit_free_pkt(void *pos, void *foo)
+{
+	struct maint_entry *m = pos;
+	
+	if (m->dp)
+		dsr_pkt_free(m->dp);
+	return 1;
 }
 
 static inline int crit_nxt_hop_rexmt(void *pos, void *nh)
 {
 	struct in_addr *nxt_hop = nh; 
-	struct maint_entry *p = pos;
+	struct maint_entry *m = pos;
 	
-	if (p->nxt_hop.s_addr == nxt_hop->s_addr) {
-		p->rexmt++;
-		p->tx_time = jiffies;
+	if (m->nxt_hop.s_addr == nxt_hop->s_addr) {
+		m->rexmt++;
+		m->tx_time = jiffies;
 		return 1;
 	}
 	return 0;
 }
 
-static struct maint_entry *maint_entry_create(struct dsr_pkt *dp)
+static void maint_buf_set_timeout(void)
 {
-	struct maint_entry *me;
-	unsigned short id;
-	
-	id = neigh_tbl_get_id(dp->nxt_hop);
-	
-	if (!id) {
-		DEBUG("Could not get request id for %s\n", print_ip(dp->nxt_hop.s_addr));
-		return NULL;		
-	}
-	
-	me = kmalloc(sizeof(struct maint_entry), GFP_ATOMIC);
-
-	if (!me) {
-		DEBUG("Could not allocate maintenance buf entry\n");
-		return NULL;
-	}
-	
-	me->nxt_hop = dp->nxt_hop;
-	me->tx_time = jiffies;
-	me->rexmt = 0;
-	me->id = id;
-	me->dp = dsr_pkt_alloc(skb_copy(dp->skb, GFP_ATOMIC));
-
-	return me;
-}
-
-int maint_buf_add(struct dsr_pkt *dp)
-{
-	struct maint_entry *me;
-	unsigned short id;
-	unsigned long tx_time, rto;
-	
-	me = maint_entry_create(dp);
-	
-	if (!me)
-		return -1;
-
-	id = me->id;
-	tx_time = me->tx_time;
-	
-	if (tbl_add_tail(&maint_buf, &me->l) < 0) {
-		DEBUG("Buffer full, dropping packet!\n");
-		dsr_pkt_free(dp);
-		kfree(me);
-		return -1;
-	}
-
-	dsr_ack_req_opt_add(dp, id);
-		
-	rto = neigh_tbl_get_rto(dp->nxt_hop);
-	
-	if (!timer_pending(&ack_timer)) {
-		ack_timer.expires = tx_time + rto;
-		DEBUG("jiff=%lu exp=%lu\n", jiffies, ack_timer.expires);
-		add_timer(&ack_timer);
-	}
-	
-	return 1;
-}
-static void maint_buf_timeout(unsigned long data)
-{
-	struct maint_entry *me;
-	unsigned long tx_time, rto;
-	unsigned short id;
+	struct maint_entry *m;
 	struct in_addr neigh_addr;
-	
-	me = tbl_detach_first(&maint_buf);
-	
-	if (!me) {
-		DEBUG("Nothing in maint buf\n");
-		return;
-	}
-	
-	DEBUG("ACK REQ timeout\n");
+	unsigned long tx_time, rto;
 
-	me->rexmt++;
-	
-	if (me->rexmt >= PARAM(MaxMaintRexmt)) {
-		DEBUG("Rexmt max reached, send RERR\n");
-		lc_link_del(my_addr(), me->nxt_hop);
-		neigh_tbl_del(me->nxt_hop);
-		dsr_pkt_free(me->dp);
-		kfree(me);
+	if (timer_pending(&ack_timer))
 		return;
-	} 
-	
-	me->tx_time = jiffies;
-	id = me->id;
 
-	tbl_add_tail(&maint_buf, &me->l);
-	
 	read_lock_bh(&maint_buf.lock);
-	
-	dsr_ack_req_send(me->nxt_hop, id);
 
-	me = __tbl_find(&maint_buf, NULL, crit_none);
+	m = __tbl_find(&maint_buf, NULL, crit_none);
 
-	if (!me) {
+	if (!m) {
 		read_unlock_bh(&maint_buf.lock);
 		return;
 	}
-	tx_time = me->tx_time;
-	neigh_addr = me->nxt_hop;
+	
+	tx_time = m->tx_time;
+	neigh_addr = m->nxt_hop;
 
 	read_unlock_bh(&maint_buf.lock);
 	
@@ -168,34 +97,136 @@ static void maint_buf_timeout(unsigned long data)
 	DEBUG("jiff=%lu exp=%lu\n", jiffies, ack_timer.expires);
 
 	add_timer(&ack_timer);
+}
+
+static struct maint_entry *maint_entry_create(struct dsr_pkt *dp)
+{
+	struct maint_entry *m;
+	unsigned short id;
+	
+	id = neigh_tbl_get_id(dp->nxt_hop);
+	
+	if (!id) {
+		DEBUG("Could not get request id for %s\n", 
+		      print_ip(dp->nxt_hop.s_addr));
+		return NULL;		
+	}
+	
+	m = kmalloc(sizeof(struct maint_entry), GFP_ATOMIC);
+
+	if (!m) {
+		DEBUG("Could not allocate maintenance buf entry\n");
+		return NULL;
+	}
+	
+	m->nxt_hop = dp->nxt_hop;
+	m->tx_time = jiffies;
+	m->rexmt = 0;
+	m->id = id;
+	m->dp = dsr_pkt_alloc(skb_copy(dp->skb, GFP_ATOMIC));
+
+	return m;
+}
+
+int maint_buf_add(struct dsr_pkt *dp)
+{
+	struct maint_entry *m;
+	unsigned short id;
+	
+	m = maint_entry_create(dp);
+	
+	if (!m)
+		return -1;
+	
+	id = m->id;
+
+	if (tbl_add_tail(&maint_buf, &m->l) < 0) {
+		DEBUG("Buffer full, dropping packet!\n");
+		dsr_pkt_free(dp);
+		kfree(m);
+		return -1;
+	}
+	
+	dsr_ack_req_opt_add(dp, id);
+
+	if (!timer_pending(&ack_timer))
+	    maint_buf_set_timeout();
+
+	return 1;
+}
+static void maint_buf_timeout(unsigned long data)
+{
+	struct maint_entry *m;
+	
+	m = tbl_detach_first(&maint_buf);
+	
+	if (!m) {
+		DEBUG("Nothing in maint buf\n");
+		return;
+	}
+	
+	DEBUG("nxt_hop=%s id=%u rexmt=%d\n", 
+	      print_ip(m->nxt_hop.s_addr), m->id, m->rexmt);
+
+	/* Increase the number of retransmits */
+	m->rexmt++;
+	
+	if (m->rexmt >= PARAM(MaxMaintRexmt)) {
+		DEBUG("Rexmt max reached, send RERR\n");
+		lc_link_del(my_addr(), m->nxt_hop);
+		neigh_tbl_del(m->nxt_hop);
+		dsr_pkt_free(m->dp);
+		kfree(m);
+		return;
+	} 
+	
+	/* Set new Transmit time */
+	m->tx_time = jiffies;
+		
+	/* Send new ACK REQ */
+	dsr_ack_req_send(m->nxt_hop, m->id);
+	
+	/* Add at end of buffer */
+	tbl_add_tail(&maint_buf, &m->l);
+	
+	maint_buf_set_timeout();
 
 	return;
 }
 
 int maint_buf_del(struct in_addr nxt_hop, unsigned short id)
 {
-	struct maint_entry *me;
-	unsigned long tx_time = 0;
-
-	DEBUG("Emptying maint_buf for next hop %s\n", print_ip(nxt_hop.s_addr));
+	struct maint_entry *m;
+	struct {
+		struct in_addr *nxt_hop;
+		unsigned short *id;
+	} d;
+	
+	/* Disable timer in case we remove the packet that is first in the
+	 * queue */
 	if (timer_pending(&ack_timer))
 		del_timer_sync(&ack_timer);
 	
-	tbl_for_each_del(&maint_buf, &nxt_hop, crit_nxt_hop_del);
+	d.id = &id;
+	d.nxt_hop = &nxt_hop;
 
-	read_lock_bh(&maint_buf.lock);
+	/* Find the buffered packet to delete */
+	m = tbl_find_detach(&maint_buf, &d, crit_nxt_hop_id);
 
-	me = __tbl_find(&maint_buf, NULL, crit_none);
+	if (!m)
+		return 0;
 	
-	if (me)
-		tx_time = me->tx_time;
+	if (m->dp)
+		dsr_pkt_free(m->dp);
 	
-	read_unlock_bh(&maint_buf.lock);
+	kfree(m);
 	
-	if (tx_time)
-		add_timer(&ack_timer);
-	
-	return 0;
+	DEBUG("Removed pkt id=%u next hop %s\n", id, print_ip(nxt_hop.s_addr));
+
+	/* Set the new timeout */
+	maint_buf_set_timeout();
+
+	return 1;
 }
 
 void maint_buf_rexmt(struct in_addr nxt_hop)
@@ -217,5 +248,5 @@ int maint_buf_init(void)
 void maint_buf_cleanup(void)
 {
 	del_timer_sync(&ack_timer);
-	tbl_flush(&maint_buf, crit_none);
+	tbl_flush(&maint_buf, crit_free_pkt);
 }

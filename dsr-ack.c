@@ -10,10 +10,6 @@
 #include "neigh.h"
 #include "maint-buf.h"
 
-unsigned short ID = 0;
-
-#define ACK_TBL_MAX_LEN 24
-#define MAX_AREQ_TX 2
 
 /* int dsr_send_ack_req(struct in_addr, unsigned short id); */
 
@@ -99,7 +95,7 @@ int dsr_ack_send(struct in_addr dst, unsigned short id)
 		goto out_err;
 	}
 	
-	DEBUG("Sending ACK for %s\n", print_ip(dst.s_addr));
+	DEBUG("Sending ACK to %s id=%u\n", print_ip(dst.s_addr), id);
 	
 	dsr_dev_xmit(dp);
 	
@@ -257,8 +253,6 @@ int dsr_ack_req_opt_recv(struct dsr_pkt *dp, struct dsr_ack_req_opt *ack_req_opt
 	DEBUG("ACK REQ: src=%s id=%u\n", 
 	      print_ip(dp->src.s_addr), id);
 		
-/* 	dsr_ack_send(dp->src, id); */
-
 	return DSR_PKT_SEND_ACK;
 }
 
