@@ -69,7 +69,7 @@ struct dsr_opt *dsr_opt_find_opt(struct dsr_pkt *dp, int type)
 		if (type == dopt->type)
 			return dopt;
 		
-		l = l + dopt->length + 2;
+		l += dopt->length + 2;
 		dopt = DSR_GET_NEXT_OPT(dopt);
 	}
 	return NULL;
@@ -192,7 +192,7 @@ int NSCLASS dsr_opt_recv(struct dsr_pkt *dp)
 		default:
 			DEBUG("Unknown DSR option type=%d\n", dopt->type);
 		}
-		l = l + dopt->length + 2;
+		l += dopt->length + 2;
 		dopt = DSR_GET_NEXT_OPT(dopt);
 	}
 	return action;

@@ -26,7 +26,11 @@
 #ifndef NO_GLOBALS
 
 #define DSR_BROADCAST ((unsigned int) 0xffffffff)
+#ifdef NS2
+#define IPPROTO_DSR PT_DSR
+#else
 #define IPPROTO_DSR 168 /* Is this correct? */
+#endif
 #define IP_HDR_LEN 20
 #define DSR_OPTS_MAX_SIZE 100 /* This is used to reduce the MTU of the dsr
 			       * device so that packets are not too big after

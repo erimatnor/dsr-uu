@@ -21,7 +21,7 @@
 
 #define NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT 3000 
 #define NEIGH_TBL_TIMEOUT 2000
-#define RTT_DEF  200000 /* usecs */
+#define RTT_DEF  500000 /* usecs */
 
 #ifdef __KERNEL__
 static TBL(neigh_tbl, NEIGH_TBL_MAX_LEN);

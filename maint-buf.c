@@ -56,8 +56,13 @@ static inline int crit_addr_id_del(void *pos, void *data)
 	if (m->nxt_hop.s_addr == q->nxt_hop->s_addr &&
 	    m->id == *(q->id)) {
 		
-		if (m->dp)
+		if (m->dp) {
+#ifdef NS2
+			if (m->dp->p)
+				Packet::free(m->dp->p);
+#endif
 			dsr_pkt_free(m->dp);
+		}
 #ifdef NS2
 		if (m->timer_set)
 			q->a_->del_timer_sync(&q->a_->ack_timer);
@@ -77,8 +82,13 @@ static inline int crit_addr_del(void *pos, void *data)
 	
 	if (m->nxt_hop.s_addr == q->nxt_hop->s_addr) {
 		
-		if (m->dp)
+		if (m->dp) {
+#ifdef NS2
+			if (m->dp->p)
+				Packet::free(m->dp->p);
+#endif
 			dsr_pkt_free(m->dp);
+		}
 #ifdef NS2
 		if (m->timer_set)
 			q->a_->del_timer_sync(&q->a_->ack_timer);
@@ -95,8 +105,13 @@ static inline int crit_free_pkt(void *pos, void *foo)
 {
 	struct maint_entry *m = (struct maint_entry *)pos;
 	
-	if (m->dp)
+	if (m->dp) {
+#ifdef NS2
+		if (m->dp->p)
+			Packet::free(m->dp->p);
+#endif
 		dsr_pkt_free(m->dp);
+	}
 	return 1;
 }
 
@@ -137,7 +152,8 @@ static struct maint_entry *maint_entry_create(struct dsr_pkt *dp,
 	m->rto = rto;
 	m->timer_set = 0;
 #ifdef NS2
-	m->dp = dsr_pkt_alloc(NULL);
+	if (dp->p)
+		m->dp = dsr_pkt_alloc(dp->p->copy());
 #else
 	m->dp = dsr_pkt_alloc(skb_copy(dp->skb, GFP_ATOMIC));
 #endif
@@ -246,15 +262,25 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 
 	/* Increase the number of retransmits */	
 	if (m->rexmt >= ConfVal(MaxMaintRexmt)) {
+		int n;
 		DEBUG("MaxMaintRexmt reached, send RERR\n");
 		lc_link_del(my_addr(), m->nxt_hop);
 
 /* 		neigh_tbl_del(m->nxt_hop); */
 
+		DEBUG("Deleted %d packets from maint_buf\n", n);
+
 		dsr_rerr_send(m->dp, m->nxt_hop);
 
-		if (m->dp)
+		if (m->dp) {
+#ifdef NS2
+			if (m->dp->p)
+				Packet::free(m->dp->p);
+#endif
 			dsr_pkt_free(m->dp);
+		}
+		n = maint_buf_del_all(m->nxt_hop);
+
 		FREE(m);
 		goto out;
 	} 
@@ -276,21 +302,21 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 int NSCLASS maint_buf_del_all(struct in_addr nxt_hop)
 {
 	struct maint_buf_query q;
-
+	int n;
 	q.nxt_hop = &nxt_hop;
 #ifdef NS2
 	q.a_ = this;
 #else
 	q.t = &ack_timer;
 #endif
-      	/* Find the buffered packet to mark as acked */
-	if (!tbl_for_each_del(&maint_buf, &q, crit_addr_del))
+      	n = tbl_for_each_del(&maint_buf, &q, crit_addr_del);
+	if (!n)
 		return 0;
 
 	if (!TBL_EMPTY(&maint_buf) && !timer_pending(&ack_timer))
 		maint_buf_set_timeout();
 	
-	return 1;
+	return n;
 }
 
 int NSCLASS maint_buf_del(struct in_addr nxt_hop, unsigned short id)

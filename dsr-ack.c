@@ -255,6 +255,9 @@ int NSCLASS dsr_ack_req_opt_recv(struct dsr_pkt *dp, struct dsr_ack_req_opt *ack
 
 	id = ntohs(ack_req_opt->id);
 
+	if (!dp->srt_opt) 
+		dp->prv_hop = dp->src;
+
 	DEBUG("src=%s prv=%s id=%u\n",
 	      print_ip(dp->src),
 	      print_ip(dp->prv_hop), id);

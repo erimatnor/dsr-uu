@@ -64,6 +64,11 @@ struct cheapest_node {
 	struct lc_node *n;
 };
 
+#ifdef NS2
+static char lc_print_buf[2048];
+#endif
+static int lc_print(struct lc_graph *LC, char *buf);
+
 static inline void __lc_link_del(struct lc_graph *lc, struct lc_link *link)
 {
 	/* Also free the nodes if they lack other links */
@@ -116,7 +121,7 @@ static inline int do_lowest_cost(void *pos, void *data)
 	struct lc_node *n = (struct lc_node *)pos;
 	struct cheapest_node *cn = (struct cheapest_node *)data;
 
-	if (!cn->n || n->cost < cn->n->cost) {
+	if (n->cost != LC_COST_INF && (!cn->n || n->cost < cn->n->cost)) {
 		cn->n = n;		
 	}
 	return 0;
@@ -317,6 +322,9 @@ int NSCLASS lc_link_add(struct in_addr src, struct in_addr dst,
 		DEBUG("Could not add new link\n");
 	
 	DSR_WRITE_UNLOCK(&LC.lock);
+	
+/* 	lc_print(&LC, lc_print_buf); */
+/* 	DEBUG("\n%s\n", lc_print_buf); */
 
 	return 0;
 }
@@ -348,6 +356,9 @@ int NSCLASS lc_link_del(struct in_addr src, struct in_addr dst)
 	
 	__lc_link_del(&LC, link);
 
+	
+/* 	lc_print(&LC, lc_print_buf); */
+/* 	DEBUG("\n%s\n", lc_print_buf); */
  out:
 	LC.src = NULL;
 	DSR_WRITE_UNLOCK(&LC.lock);
@@ -426,7 +437,11 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 {
 	struct dsr_srt *srt = NULL;
 	struct lc_node *dst_node;
+
 	
+	if (src.s_addr == dst.s_addr)
+		return NULL;
+
 	DSR_WRITE_LOCK(&LC.lock);
 	
 /* 	if (!LC.src || LC.src->addr.s_addr != src.s_addr) */
@@ -438,10 +453,13 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 		DEBUG("%s not found\n", print_ip(dst));
 		goto out;
 	}
-	
+
+/* 	lc_print(&LC, lc_print_buf); */
+/* 	DEBUG("Find SR to node %s\n%s\n", print_ip(dst_node->addr), lc_print_buf); */
+
 /* 	DEBUG("Hops to %s: %u\n", print_ip(dst), dst_node->hops); */
 	
-	if (dst_node->cost != LC_COST_INF) {
+	if (dst_node->cost != LC_COST_INF && dst_node->pred) {
 		struct lc_node *d, *n;
 /* 		struct lc_link *l; */
 		int k = (dst_node->hops - 1);
@@ -457,13 +475,6 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 		srt->dst = dst;
 		srt->src = src;		
 		srt->laddrs = k * sizeof(struct in_addr);
-
-		if (!dst_node->pred) {
-			FREE(srt);
-			srt = NULL;
-			DEBUG("Predecessor was NULL\n");
-			goto out;			
-		}
 			
 	/* 	l = __lc_link_find(&LC.links, dst_node->pred->addr, dst_node->addr); */
 		
@@ -480,7 +491,7 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 		
 		/* Fill in the source route by traversing the nodes starting
 		 * from the destination predecessor */
-		for (n = dst_node->pred; n && (n != n->pred) && n->pred; n = n->pred) {
+		for (n = dst_node->pred; (n != n->pred); n = n->pred) {
 			
 		/* 	l = __lc_link_find(&LC.links, n->addr, d->addr); */
 
@@ -494,12 +505,15 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 /* 			} */
 			srt->addrs[k-i-1] = n->addr;
 			i++;
-			d = d->pred;
+			d = n;
 		}
 
-		if ((i + 1) != (int)dst_node->hops)
+		if ((i + 1) != (int)dst_node->hops) {
 			DEBUG("hop count ERROR i+1=%d hops=%d!!!\n", i + 1, 
 			       dst_node->hops);
+			FREE(srt);
+			srt = NULL;
+		}
 	}
  out:
 	DSR_WRITE_UNLOCK(&LC.lock);
@@ -568,8 +582,6 @@ void NSCLASS lc_flush(void)
 	
 	DSR_WRITE_UNLOCK(&LC.lock);
 }
-
-#ifdef __KERNEL__
 static char *print_hops(unsigned int hops)
 {
 	static char c[18];
@@ -593,11 +605,14 @@ static char *print_cost(unsigned int cost)
 }
 
 
-static int lc_print(char *buf)
+static int lc_print(struct lc_graph *LC, char *buf)
 {
 	list_t *pos;
 	int len = 0;
 	struct timeval now;
+
+	if (!LC)
+		return 0;
 
 	gettime(&now);
 
@@ -605,7 +620,7 @@ static int lc_print(char *buf)
     
 	len += sprintf(buf, "# %-15s %-15s %-4s Timeout\n", "Src Addr", "Dst Addr", "Cost");
 
-	list_for_each(pos, &LC.links.head) {
+	list_for_each(pos, &LC->links.head) {
 		struct lc_link *link = (struct lc_link *)pos;
 		
 		len += sprintf(buf+len, "  %-15s %-15s %-4u %lu\n", 
@@ -617,7 +632,7 @@ static int lc_print(char *buf)
     
 	len += sprintf(buf+len, "\n# %-15s %-4s %-4s %-5s %12s %12s\n", "Addr", "Hops", "Cost", "Links", "This", "Pred");
 
-	list_for_each(pos, &LC.nodes.head) {
+	list_for_each(pos, &LC->nodes.head) {
 		struct lc_node *n = (struct lc_node *)pos;
 		
 		len += sprintf(buf+len, "  %-15s %4s %4s %5u %12lX %12lX\n", 
@@ -633,6 +648,10 @@ static int lc_print(char *buf)
 	return len;
 
 }
+
+
+
+#ifdef __KERNEL__
 
 static int lc_proc_info(char *buffer, char **start, off_t offset, int length)
 {

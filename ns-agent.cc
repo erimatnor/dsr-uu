@@ -99,6 +99,8 @@ DSRUU::trace(const char *func, const char *fmt, ...)
 
 #ifdef DBG_TO_STDOUT
 	printf("%s\n", buf);
+	       
+	fflush(stdout);
 #else	
  	sprintf(trace_->pt_->buffer(), "%s", buf);
 
@@ -107,7 +109,7 @@ DSRUU::trace(const char *func, const char *fmt, ...)
 	return len;
 }
 
-int 
+int
 DSRUU::arpset(struct in_addr addr, unsigned int mac_addr)
 {
 	// ARPTable *arpt = ll_->arp_table();
@@ -157,7 +159,7 @@ DSRUU::arpset(struct in_addr addr, unsigned int mac_addr)
 }
 
 
-struct hdr_ip *	DSRUU::dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, 
+struct hdr_ip *DSRUU::dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, 
 				    struct in_addr dst, int ip_len, 
 				    int tot_len, int protocol, int ttl)
 {
@@ -258,10 +260,6 @@ DSRUU::ns_xmit(struct dsr_pkt *dp)
 	struct hdr_ip *iph; 
 	double jitter = 0.0;
 	
-	if ((DATA_PACKET(dp->dh.opth->nh) || dp->dh.opth->nh == PT_PING) && 
-	    ConfVal(UseNetworkLayerAck))
-		maint_buf_add(dp);
-	
 	p = ns_packet_create(dp);
 
 	if (!p) {
@@ -270,7 +268,11 @@ DSRUU::ns_xmit(struct dsr_pkt *dp)
 			drop(dp->p, DROP_RTR_TTL); /* Should change reason */	
 		goto out;
 	}	
-
+	
+	if ((DATA_PACKET(dp->dh.opth->nh) || dp->dh.opth->nh == PT_PING) && 
+	    ConfVal(UseNetworkLayerAck))
+		maint_buf_add(dp);
+	
 	iph = HDR_IP(p);
 	cmh = HDR_CMN(p);
     
@@ -292,7 +294,6 @@ DSRUU::ns_xmit(struct dsr_pkt *dp)
 	}
 		
 	Scheduler::instance().schedule(ll_, p, jitter);
-
  out:
 	dsr_pkt_free(dp);
 }

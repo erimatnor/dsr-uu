@@ -25,7 +25,7 @@ static struct dsr_rerr_opt *dsr_rerr_opt_add(char *buf, int len,
 {
 	struct dsr_rerr_opt *rerr_opt;
 
-	if (!buf || len < DSR_RERR_HDR_LEN)
+	if (!buf || len < (int)DSR_RERR_HDR_LEN)
 		return NULL;
 
 	
@@ -59,7 +59,6 @@ static struct dsr_rerr_opt *dsr_rerr_opt_add(char *buf, int len,
 int NSCLASS dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 {
 	struct dsr_pkt *dp;
-	struct dsr_srt *srt;
 	struct dsr_rerr_opt *rerr_opt;
 	struct in_addr dst, err_src, err_dst;
 	char *buf;
@@ -70,12 +69,13 @@ int NSCLASS dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 
 	dp_trigg->srt_opt = (struct dsr_srt_opt *)dsr_opt_find_opt(dp_trigg, DSR_OPT_SRT);
 
+
 	if (!dp_trigg->srt_opt) {
 		DEBUG("Could not find source route option\n");
 		return -1;
 	}
-
-	DEBUG("Send RERR\n");
+	
+	printf("Send RERR\n");
 
 	GET_SALVAGE(dp_trigg->srt_opt, salv);
 
@@ -84,14 +84,6 @@ int NSCLASS dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 	else
 		dst.s_addr = dp_trigg->srt_opt->addrs[1];
 	
-	srt = dsr_rtc_find(my_addr(), dst);
-	
-	if (!srt) {
-		DEBUG("No source route to %s\n", print_ip(dst));
-		return -1;
-	}
-	
-	len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) + DSR_RERR_HDR_LEN + 4;
 
 	/* Also count in RERR opts in trigger packet */
 /* 	for (i = 0; i < dp_trigg->num_rerr_opts; i++) { */
@@ -108,26 +100,36 @@ int NSCLASS dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 		DEBUG("Could not allocate DSR packet\n");
 		return -1;
 	}
+
+	dp->srt = dsr_rtc_find(my_addr(), dst);
+
+	if (!dp->srt) {
+		DEBUG("No source route to %s\n", print_ip(dst));
+		return -1;
+	}
+	
+
+	len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(dp->srt) + DSR_RERR_HDR_LEN + 4;
+
+	DEBUG("opt_len=%d SR: %s\n", len, print_srt(dp->srt));
 	n = dp->srt->laddrs / sizeof(struct in_addr);
 	dp->src = my_addr();
 	dp->dst = dst;
-	dp->srt = srt;
-
 	dp->nxt_hop = dsr_srt_next_hop(dp->srt, n);
-
-	buf = dsr_pkt_alloc_opts(dp, len);
-
-	if (!buf)
-		goto out_err;	
-
+	
 	dp->nh.iph = dsr_build_ip(dp, dp->src, dp->dst, IP_HDR_LEN, 
 				  IP_HDR_LEN + len, IPPROTO_DSR, IPDEFTTL);
-
+	
 	if (!dp->nh.iph) {
 		DEBUG("Could not create IP header\n");
 		goto out_err;
 	}
 
+	buf = dsr_pkt_alloc_opts(dp, len);
+
+	if (!buf)
+		goto out_err;	
+	
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, DSR_NO_NEXT_HDR_TYPE);
 	
 	if (!dp->dh.opth) {
