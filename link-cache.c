@@ -107,8 +107,8 @@ static inline int crit_expire(void *pos, void *data)
 	
 	gettime(&now);
 	
-	printf("ptr=0x%x exp_ptr=0x%x now_ptr=0x%x %s<->%s\n", (unsigned int)link, (unsigned int)&link->expires, (unsigned int)&now, print_ip(link->src->addr), print_ip(link->dst->addr));
-	fflush(stdout);
+	/* printf("ptr=0x%x exp_ptr=0x%x now_ptr=0x%x %s<->%s\n", (unsigned int)link, (unsigned int)&link->expires, (unsigned int)&now, print_ip(link->src->addr), print_ip(link->dst->addr)); */
+/* 	fflush(stdout); */
 
 	if (timeval_diff(&link->expires, &now) <= 0) {
 		__lc_link_del(lc, link);
@@ -177,10 +177,10 @@ void NSCLASS lc_garbage_collect(unsigned long data)
 
 	lc_print(&LC, buf);
 
-	printf("#node %d\n%s\n", this->myaddr_.s_addr, buf);
-	fflush(stdout);
-	printf("#end\n");
-	fflush(stdout);
+/* 	printf("#node %d\n%s\n", this->myaddr_.s_addr, buf); */
+/* 	fflush(stdout); */
+/* 	printf("#end\n"); */
+/* 	fflush(stdout); */
 
 	tbl_do_for_each(&LC.links, &LC, crit_expire);
 
@@ -405,7 +405,7 @@ void NSCLASS __dijkstra(struct in_addr src)
 {	
 	TBL(S, LC_NODES_MAX);
 	struct lc_node *src_node, *u;
-	char buf[20000];
+/* 	char buf[20000]; */
 	int i = 0;
 
 	if (TBL_EMPTY(&LC.nodes)) {
@@ -422,12 +422,12 @@ void NSCLASS __dijkstra(struct in_addr src)
 	
 	while ((u = __dijkstra_find_lowest_cost_node(&LC.nodes))) {
 	       
-		printf("#%d:\n", i);
-		fflush(stdout);
-		lc_print(&LC, buf);
-		printf("%s\n", buf);
-		fflush(stdout);
-		tbl_detach(&LC.nodes, &u->l);
+	/* 	printf("#%d:\n", i); */
+/* 		fflush(stdout); */
+/* 		lc_print(&LC, buf); */
+/* 		printf("%s\n", buf); */
+/* 		fflush(stdout); */
+/* 		tbl_detach(&LC.nodes, &u->l); */
 		
 		/* Add to S */
 		tbl_add_tail(&S, &u->l);

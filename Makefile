@@ -79,15 +79,18 @@ default: $(MODNAME).o $(RTC_TRG).o TODO
 endif
 
 mips:  
+	@echo "Compiling for MIPS"
 	$(MAKE) default CC=$(MIPS_CC) LD=$(MIPS_LD) KDEFS="$(MIPSDEFS)"
 
 $(MODNAME).ko: $(SRC) Makefile
+	@echo "Compiling for $(PWD)"
 	$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) MODVERDIR=$(PWD) modules
 
 $(RTC_TRG).ko: $(RTC_SRC) Makefile
 	$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) MODVERDIR=$(PWD) modules
 
 $(KOBJS): %.o: %.c Makefile
+	@echo "Compiling for $(PWD)"
 	$(CC) $(KCFLAGS) -c -o $@ $<
 
 $(MODNAME).o: $(KOBJS)
