@@ -283,7 +283,7 @@ int __init rreq_tbl_init(void)
 	return 0;
 }
 
-static inline int timer_remove(void *entry)
+static inline int timer_remove(void *entry, void *data)
 {
 	struct rreq_tbl_entry *e = entry;
 
