@@ -4,7 +4,10 @@
 #ifdef NS2
 #include <packet.h>
 #include <ip.h>
+#else
+#include <linux/in.h>
 #endif
+
 
 #define MAX_RREP_OPTS 10
 #define MAX_RERR_OPTS 10

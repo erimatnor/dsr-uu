@@ -252,5 +252,5 @@ void __exit dbg_cleanup(void)
 	proc_net_remove("dsr_dbg");
 }
 
-EXPORT_SYMBOL(trace);
-EXPORT_SYMBOL(dsr_vprintk);
+/* EXPORT_SYMBOL(trace); */
+/* EXPORT_SYMBOL(dsr_vprintk); */

@@ -2,6 +2,7 @@
 #define _DSR_DEV_H
 
 #include <linux/netdevice.h>
+#include <linux/init.h>
 
 #include "dsr.h"
 #include "dsr-pkt.h"

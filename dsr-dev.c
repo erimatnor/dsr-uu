@@ -200,7 +200,7 @@ static void dsr_dev_uninit(struct net_device *dev)
 	dsr_node = NULL;
 }
 
-static void __init dsr_dev_setup(struct net_device *dev)
+static int __init dsr_dev_setup(struct net_device *dev)
 {
 	/* Fill in device structure with ethernet-generic values. */
 	ether_setup(dev);
@@ -223,6 +223,8 @@ static void __init dsr_dev_setup(struct net_device *dev)
 	SET_MODULE_OWNER(dev);
 	//random_ether_addr(dev->dev_addr);
 	get_random_bytes(dev->dev_addr, 6);
+	
+	return 0;
 }
 
 
@@ -361,9 +363,14 @@ int __init dsr_dev_init(char *ifname)
 	int res = 0;	
 	struct dsr_node *dnode;
 
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,4,20)
+	dsr_dev = init_etherdev(NULL, sizeof(struct dsr_node));
+	dev_alloc_name(dsr_dev, "dsr%d");
+	dsr_dev->init = &dsr_dev_setup;	
+#else
 	dsr_dev = alloc_netdev(sizeof(struct dsr_node),
 			       "dsr%d", dsr_dev_setup);
-
+#endif
 	if (!dsr_dev)
 		return -ENOMEM;
 
@@ -439,7 +446,11 @@ int __init dsr_dev_init(char *ifname)
  cleanup_netdev_register:
 	unregister_netdev(dsr_dev);
  cleanup_netdev:
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,4,20)
+	kfree(dsr_dev);
+#else
 	free_netdev(dsr_dev);
+#endif
 	return res;
 } 
 
@@ -448,5 +459,9 @@ void __exit dsr_dev_cleanup(void)
         unregister_netdevice_notifier(&netdev_notifier);
 	unregister_inetaddr_notifier(&inetaddr_notifier);
 	unregister_netdev(dsr_dev);
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,4,20)
+	kfree(dsr_dev);
+#else
 	free_netdev(dsr_dev);
+#endif
 }

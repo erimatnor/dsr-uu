@@ -10,6 +10,7 @@
 #include <linux/module.h>
 #include <linux/if_ether.h>
 #include <linux/in.h>
+#include <linux/init.h>
 extern atomic_t num_pkts;
 #else
 #include <stdlib.h>
