@@ -176,7 +176,11 @@ int kdsr_arpset(struct in_addr addr, struct sockaddr *hw_addr,
 	//        err = PTR_ERR(neigh);
         if (!IS_ERR(neigh)) {
 		neigh->parms->delay_probe_time = 0;
-                neigh_update(neigh, hw_addr->sa_data, NUD_REACHABLE, 1, 0);
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,8)
+                neigh_update(neigh, hw_addr->sa_data, NUD_REACHABLE, 1);
+#else
+		neigh_update(neigh, hw_addr->sa_data, NUD_REACHABLE, 1, 0);
+#endif
                 neigh_release(neigh);
         }
 	return 0;

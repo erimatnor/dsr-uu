@@ -127,13 +127,16 @@ int dsr_rreq_recv(dsr_pkt_t *dp)
 			      DSR_RREQ_ADDRS_LEN(rreq), (char *)rreq->addrs);
 #ifdef __KERNEL__
 	/* Add mac address of previous hop to the arp table */
-	if (dp->skb->mac.ethernet) {
+	if (dp->skb->mac.raw) {
 		struct sockaddr hw_addr;
 		struct in_addr ph;
+		struct ethhdr *eth;
 		int n;
 		/* struct net_device *dev = skb->dev; */
 		
-		memcpy(hw_addr.sa_data, dp->skb->mac.ethernet->h_source, ETH_ALEN);
+		eth = eth_hdr(dp->skb);
+		
+		memcpy(hw_addr.sa_data, eth->h_source, ETH_ALEN);
 		n = dp->srt->laddrs / sizeof(u_int32_t);
 		/* Find the previous hop */
 		if (n == 0)
