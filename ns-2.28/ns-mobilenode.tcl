@@ -777,10 +777,8 @@ SRNodeNew instproc init args {
 	}
 
 	if { [$ns set routingAgent_] == "DSRUU" } {
-		puts "Creating DSRUU node"
 		set dsr_agent_ [new Agent/DSRUU]
 	} else {
-		puts "Creating DSR node"
 		set dsr_agent_ [new Agent/DSRAgent]
 	}
 

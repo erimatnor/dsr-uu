@@ -90,9 +90,11 @@ struct dsr_pkt *dsr_pkt_alloc(Packet *p)
 	memset(dp, 0, sizeof(struct dsr_pkt));
 	
 	if (p) {
-		cmh =  hdr_cmn::access(p);	
+		cmh = hdr_cmn::access(p);	
 
 		dp->p = p;
+		dp->mac.ethh = hdr_mac::access(p);
+
 		dp->nh.iph = hdr_ip::access(p);
 		
 		dp->src.s_addr = Address::instance().get_nodeaddr(dp->nh.iph->saddr());
@@ -134,6 +136,8 @@ struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb)
 	
 	if (skb) {		
 		dp->skb = skb;
+
+		dp->mac.raw = skb->mac.raw;
 		dp->nh.iph = skb->nh.iph;
 		
 		dp->src.s_addr = skb->nh.iph->saddr;
@@ -170,18 +174,25 @@ void dsr_pkt_free(struct dsr_pkt *dp)
 		return;
 #ifdef NS2
 /* 	if (dp->p) */
-		
 #else
 	if (dp->skb)
 		kfree_skb(dp->skb);
 #endif
+	/* fprintf(stderr, "Freeing options\n"); */
+
 	dsr_pkt_free_opts(dp);
+
+	/* fprintf(stderr, "Freeing source route\n"); */
 
 	if (dp->srt)
 		FREE(dp->srt);
-
 	
+	/* fprintf(stderr, "Freeing DSR packet\n"); */
+
 	FREE(dp);
 	
+
+/* 	fprintf(stderr, "Free done\n"); */
+
 	return;
 }

@@ -10,8 +10,6 @@
 #ifdef NS2
 #include "ns-agent.h"
 #else
-#define NEIGH_TBL_MAX_LEN 50
-
 
 static TBL(neigh_tbl, NEIGH_TBL_MAX_LEN);
 
@@ -20,6 +18,9 @@ static TBL(neigh_tbl, NEIGH_TBL_MAX_LEN);
 static DSRUUTimer neigh_tbl_timer;
 
 #endif /* NS2 */
+
+#define NEIGH_TBL_MAX_LEN 50
+
 
 #define DSRTV_SRTTBASE 0
 #define DSRTV_MIN 2
@@ -149,7 +150,14 @@ static struct neighbor *neigh_tbl_create(struct in_addr addr,
 int NSCLASS neigh_tbl_add(struct in_addr neigh_addr, struct sockaddr *hw_addr)
 {
 	struct neighbor *neigh;
+	int mac_addr;
 	
+
+	ethtoint((char *)hw_addr, &mac_addr);
+
+	DEBUG("Adding %s with MAC=%d\n", 
+	      print_ip(neigh_addr), mac_addr);
+
 	if (in_tbl(&neigh_tbl, &neigh_addr, crit_addr))
 		return 0;
 
@@ -296,6 +304,8 @@ static int neigh_tbl_proc_info(char *buffer, char **start, off_t offset, int len
 
 int __init NSCLASS neigh_tbl_init(void)
 {
+	INIT_TBL(&neigh_tbl, NEIGH_TBL_MAX_LEN);
+
 	init_timer(&neigh_tbl_timer);
 	
 	neigh_tbl_timer.function = &NSCLASS neigh_tbl_garbage_timeout;

@@ -103,7 +103,7 @@ int dsr_opts_remove(struct dsr_pkt *dp)
 int NSCLASS dsr_opt_recv(struct dsr_pkt *dp)
 {	
 	int dsr_len, l;
-	int action = DSR_PKT_NONE;
+	int action = 0;
 	int num_rreq_opts = 0;
 	struct dsr_opt *dopt;
 	struct in_addr myaddr;

@@ -17,6 +17,7 @@ class DSRUU;
 #include <dsr-priqueue.h>
 #include <mac.h>
 #include <mobilenode.h>
+#include <linux/if_ether.h>
 
 #include "tbl.h"
 #include "endian.h"
@@ -25,16 +26,15 @@ class DSRUU;
 
 #define NSCLASS DSRUU::
 
-
 #define NO_DECLS
 #include "dsr-opt.h"
+#include "send-buf.h"
 #include "dsr-rreq.h"
 #include "dsr-pkt.h"
 #include "dsr-rrep.h"
 #include "dsr-rerr.h"
 #include "dsr-ack.h"
 #include "dsr-srt.h"
-#include "send-buf.h"
 #include "neigh.h"
 #include "link-cache.h"
 #include "debug.h"
@@ -141,12 +141,22 @@ class DSRUU : public Agent {
 
 #undef NO_GLOBALS
 	
-	struct in_addr my_addr() { return ip_addr; }
-	
+	struct in_addr my_addr() { return myaddr; }
+	int arpset(struct in_addr addr, struct sockaddr *hw_addr);
+	inline void ethtoint(char * eth, int *num)
+		{
+			memcpy((char*)num, eth, ETH_ALEN);
+			return;
+		}
+	inline void inttoeth(int *num, char* eth)
+		{
+			memcpy(eth,(char*)num, ETH_ALEN);
+			return;
+		}
  private:
 	static int params[PARAMS_MAX];
-
-	struct in_addr ip_addr;
+	struct in_addr myaddr;
+	unsigned long macaddr;
 	Trace *trace_;
 	Mac *mac_;
 	LL *ll_;

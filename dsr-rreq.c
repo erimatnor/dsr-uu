@@ -6,6 +6,10 @@
 #include "dsr-dev.h"
 #endif
 
+#ifdef NS2
+#include "ns-agent.h"
+#endif
+
 #include "debug.h"
 #include "dsr.h"
 #include "tbl.h"
@@ -15,9 +19,7 @@
 #include "link-cache.h"
 #include "send-buf.h"
 
-#ifdef NS2
-#include "ns-agent.h"
-#else 
+#ifndef NS2
 
 #define RREQ_TBL_PROC_NAME "dsr_rreq_tbl"
 
@@ -244,7 +246,7 @@ int NSCLASS rreq_tbl_add_id(struct in_addr initiator, struct in_addr target,
 	return 1;
 }
 
-int NSCLASS rreq_tbl_disable_route_discovery(struct in_addr dst)
+int NSCLASS rreq_tbl_route_discovery_cancel(struct in_addr dst)
 {
 	struct rreq_tbl_entry *e;
 
@@ -372,6 +374,8 @@ int NSCLASS dsr_rreq_send(struct in_addr target, int ttl)
 		
 	buf = dsr_pkt_alloc_opts(dp, len);
 	
+	DEBUG("Allocating %d for opts %d\n", dsr_pkt_opts_len(dp), sizeof(struct dsr_opt_hdr));
+
 	if (!buf)
 		goto out_err;
 
@@ -397,7 +401,8 @@ int NSCLASS dsr_rreq_send(struct in_addr target, int ttl)
 		goto out_err;
 	}
 	
-	DEBUG("Sending RREQ for %s ttl=%d\n", print_ip(target), ttl);
+	DEBUG("Sending RREQ src=%s dst=%s target=%s ttl=%d iph->saddr()=%d\n", 
+	      print_ip(dp->src), print_ip(dp->dst), print_ip(target), ttl, dp->nh.iph->saddr());
 
 	XMIT(dp);
 
@@ -440,7 +445,8 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		DEBUG("Could not extract source route\n");
 		return DSR_PKT_ERROR;
 	}
-	DEBUG("RREQ target=%s\n", print_ip(trg));
+	DEBUG("RREQ target=%s src=%s dst=%s\n", 
+	      print_ip(trg), print_ip(dp->src), print_ip(dp->dst));
 	DEBUG("my addr %s\n", print_ip(myaddr));
 	
         /* Add reversed source route */

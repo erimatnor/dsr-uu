@@ -19,18 +19,26 @@ struct dsr_pkt {
        	struct in_addr nxt_hop;
        	struct in_addr prv_hop;
 #ifdef NS2
-	struct hdr_ip ip_data;
-#else
-	char ip_data[60];
-#endif
 	union {
-#ifdef NS2
+		struct hdr_mac *ethh;
+		char *raw;
+	} mac;
+	struct hdr_ip ip_data;
+	union {
 		struct hdr_ip *iph;
-#else
-		struct iphdr *iph;
-#endif
 		char *raw;
 	} nh;
+#else	
+	union {
+		struct ethhdr *ethh;
+		char *raw;
+	} mac;
+	char ip_data[60];
+	union {
+		struct iphdr *iph;
+		char *raw;
+	} nh;
+#endif
 	union {
 		struct dsr_opt_hdr *opth;
 		char *raw;
@@ -83,7 +91,7 @@ struct dsr_pkt {
 #define DSR_PKT_DROP           (DSR_PKT_NONE << 9)
 #define DSR_PKT_ERROR          (DSR_PKT_NONE << 10)
 #define DSR_PKT_DELIVER        (DSR_PKT_NONE << 11)
-#define DSR_PKT_ACTION_LAST    (DSR_PKT_NONE << 12)
+#define DSR_PKT_ACTION_LAST    (12)
 
 static inline int dsr_pkt_opts_len(struct dsr_pkt *dp)
 {

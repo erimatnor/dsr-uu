@@ -5,7 +5,16 @@
 #include <net/ip.h>
 #include "kdsr.h"
 #include "dsr-dev.h"
+
+#define GRAT_RREP_TBL_PROC_NAME "dsr_grat_rrep_tbl"
+static TBL(grat_rrep_tbl, GRAT_RREP_TBL_MAX_LEN);
+DSRUUTimer grat_rrep_tbl_timer;
+
 #endif /* __KERNEL__ */
+
+#ifdef NS2
+#include "ns-agent.h"
+#endif
 
 #include "dsr.h"
 #include "debug.h"
@@ -20,14 +29,6 @@
 
 #define GRAT_RREP_TBL_MAX_LEN 64
 #define GRAT_REPLY_HOLDOFF 1
-
-#ifdef NS2
-#include "ns-agent.h"
-#else
-#define GRAT_RREP_TBL_PROC_NAME "dsr_grat_rrep_tbl"
-static TBL(grat_rrep_tbl, GRAT_RREP_TBL_MAX_LEN);
-DSRUUTimer grat_rrep_tbl_timer;
-#endif
 
 struct grat_rrep_entry {
 	list_t l;
@@ -310,7 +311,7 @@ int NSCLASS dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 	
 	/* Remove pending RREQs */
 	
-	rreq_tbl_disable_route_discovery(rrep_opt_srt->dst);
+	rreq_tbl_route_discovery_cancel(rrep_opt_srt->dst);
 	
 	FREE(rrep_opt_srt);
 	

@@ -110,7 +110,7 @@ static inline int do_lowest_cost(void *pos, void *data)
 	struct lc_node *n = (struct lc_node *)pos;
 	struct cheapest_node *cn = (struct cheapest_node *)data;
 
-	if (!cn || n->cost < cn->n->cost) {
+	if (!cn->n || n->cost < cn->n->cost) {
 		cn->n = n;		
 	}
 	return 0;
@@ -173,15 +173,18 @@ void NSCLASS lc_garbage_collect(unsigned long data)
 
 void NSCLASS lc_garbage_collect_set(void)
 {
-#ifdef __KERNEL__
-	LC.timer.function = lc_garbage_collect;
-	LC.timer.data = 0;
-	LC.timer.expires = TimeNow + SECONDS(LC_GARBAGE_COLLECT_INTERVAL);
-	add_timer(&LC.timer);
+	DSRUUTimer *lctimer;
+
+#ifdef NS2
+	lctimer = &lc_timer;
 #else
-	lc_timer.expires = TimeNow + SECONDS(LC_GARBAGE_COLLECT_INTERVAL);
-	add_timer(&lc_timer);
+	lctimer = &LC.timer;
 #endif
+
+	lctimer->function = &NSCLASS lc_garbage_collect;
+	lctimer->data = 0;
+	lctimer->expires = TimeNow + SECONDS(LC_GARBAGE_COLLECT_INTERVAL);
+	add_timer(lctimer);
 }
 
 #endif /* LC_TIMER */
@@ -432,7 +435,7 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 		int k = (dst_node->hops - 1);
 		int i = 0;
 		
-		srt = (struct dsr_srt *)MALLOC(sizeof(srt) * k, GFP_ATOMIC);
+		srt = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) + (k * sizeof(struct in_addr)), GFP_ATOMIC);
 		
 		if (!srt) {
 			DEBUG("Could not allocate source route!!!\n");
@@ -441,7 +444,7 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 
 		srt->dst = dst;
 		srt->src = src;		
-		srt->laddrs = k * sizeof(srt->dst);
+		srt->laddrs = k * sizeof(struct in_addr);
 
 		if (!dst_node->pred) {
 			FREE(srt);
@@ -626,15 +629,14 @@ int __init NSCLASS lc_init(void)
 	INIT_TBL(&LC.links, LC_LINKS_MAX);
 	INIT_TBL(&LC.nodes, LC_NODES_MAX);
 
-#ifdef LC_TIMER
-	init_timer(&LC.timer);
-#endif
 	
 	LC.src = NULL;
 
 #ifdef __KERNEL__
 	LC.lock = RW_LOCK_UNLOCKED;
-
+#ifdef LC_TIMER
+	init_timer(&LC.timer);
+#endif
 	proc_net_create(LC_PROC_NAME, 0, lc_proc_info);
 #endif
 	return 0;

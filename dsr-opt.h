@@ -71,8 +71,8 @@ struct dsr_pad1_opt {
 #define DSR_OPT_ACK_REQ  160
 #define DSR_OPT_PAD1     224
 
-#define DSR_FIXED_HDR(iph) (struct dsr_opt_hdr *)((char *)iph + (iph->ihl << 2))
-#define DSR_GET_OPT(opt_hdr) (opt_hdr->option)
+/* #define DSR_FIXED_HDR(iph) (struct dsr_opt_hdr *)((char *)iph + (iph->ihl << 2)) */
+#define DSR_GET_OPT(opt_hdr) ((struct dsr_opt *)(((char *)opt_hdr) + DSR_OPT_HDR_LEN))
 #define DSR_GET_NEXT_OPT(dopt) ((struct dsr_opt *)((char *)dopt + dopt->length + 2))
 #define DSR_LAST_OPT(dp, opt) ((dp->dh.raw + ntohs(dp->dh.opth->p_len) + 4) == ((char *)opt + opt->length + 2))
 

@@ -9,6 +9,15 @@
 #include <linux/icmp.h>
 #include <net/icmp.h>
 #include "kdsr.h"
+
+#define SEND_BUF_PROC_FS_NAME "send_buf"
+
+TBL(send_buf, SEND_BUF_MAX_LEN);
+static DSRUUTimer send_buf_timer;
+#endif
+
+#ifdef NS2
+#include "ns-agent.h"
 #endif
 
 #include "tbl.h"
@@ -18,22 +27,12 @@
 #include "dsr-srt.h"
 #include "timer.h"
 
-#ifdef NS2
-#include "ns-agent.h"
-#else
-#define SEND_BUF_PROC_FS_NAME "send_buf"
-
-TBL(send_buf, SEND_BUF_MAX_LEN);
-static DSRUUTimer send_buf_timer;
-#endif
-
 struct send_buf_entry {
 	list_t l;
 	struct dsr_pkt *dp;
 	Time qtime;
-	int (*okfn)(struct dsr_pkt *);
+	xmit_fct_t okfn;
 };
-
 
 static inline int crit_addr(void *pos, void *addr)
 {
@@ -91,7 +90,8 @@ void NSCLASS send_buf_timeout(unsigned long data)
 }
 
 
-static struct send_buf_entry *send_buf_entry_create(struct dsr_pkt *dp, int (*okfn)(struct dsr_pkt *))
+static struct send_buf_entry *send_buf_entry_create(struct dsr_pkt *dp, 
+						    xmit_fct_t okfn)
 {
 	struct send_buf_entry *e;
 	
@@ -107,7 +107,7 @@ static struct send_buf_entry *send_buf_entry_create(struct dsr_pkt *dp, int (*ok
 	return e;
 }
 
-int NSCLASS send_buf_enqueue_packet(struct dsr_pkt *dp, int (*okfn)(struct dsr_pkt *))
+int NSCLASS send_buf_enqueue_packet(struct dsr_pkt *dp, xmit_fct_t okfn)
 {
 	struct send_buf_entry *e;
 	int res, empty = 0;
@@ -120,29 +120,28 @@ int NSCLASS send_buf_enqueue_packet(struct dsr_pkt *dp, int (*okfn)(struct dsr_p
 	if (!e)
 		return -ENOMEM;
 	
+	DEBUG("enqueing packet to %s\n", print_ip(dp->dst));
+
 	res = tbl_add_tail(&send_buf, &e->l);
 	
 	if (res < 0) {
-		DEBUG("Could not buffer packet\n");
-		FREE(e);
-		return -1;
-	/* 	struct send_buf_entry *f; */
+		struct send_buf_entry *f;
 		
-/* 		DEBUG("buffer full, removing first\n"); */
-/* 		f = tbl_detach_first(&send_buf); */
+		DEBUG("buffer full, removing first\n");
+		f = (struct send_buf_entry *)tbl_detach_first(&send_buf);
 		
-/* 		if (f) { */
-/* 			dsr_pkt_free(f->dp); */
-/* 			FREE(f); */
-/* 		} */
+		if (f) {
+			dsr_pkt_free(f->dp);
+			FREE(f);
+		}
 
-/* 		res = tbl_add_tail(&send_buf, &e->l); */
+		res = tbl_add_tail(&send_buf, &e->l);
 		
-/* 		if (res < 0) { */
-/* 			DEBUG("Could not buffer packet\n"); */
-/* 			kfree (e); */
-/* 			return -1; */
-/* 		} */
+		if (res < 0) {
+			DEBUG("Could not buffer packet\n");
+			FREE(e);
+			return -1;
+		}
 	}
 		
 	if (empty) {
@@ -188,9 +187,12 @@ int NSCLASS send_buf_set_verdict(int verdict, struct in_addr dst)
 					DEBUG("Could not add source route\n");
 					dsr_pkt_free(e->dp);
 				} else 					
-					/* Send packet */		
+					/* Send packet */
+#ifdef NS2
+					(this->*e->okfn)(e->dp);
+#else		
 					e->okfn(e->dp);
-				
+#endif			
 			} else {
 				DEBUG("No source route found for %s!\n", print_ip(dst));
 		    

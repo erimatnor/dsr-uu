@@ -17,7 +17,9 @@ typedef void (DSRUU::*fct_t)(unsigned long data);
 
 class DSRUUTimer : public TimerHandler {
  public:
-	DSRUUTimer(DSRUU *a) : TimerHandler() { a_=a; }
+	DSRUUTimer(DSRUU *a) : TimerHandler() { a_ = a; name_ = "NoName";}
+	DSRUUTimer(DSRUU *a, char *name) : TimerHandler() 
+		{ a_ = a; name_ = name; }
 	Time expires;
 	fct_t function;
 	unsigned long data;
@@ -26,6 +28,7 @@ class DSRUUTimer : public TimerHandler {
  protected:
 	virtual void expire (Event *e);
 	DSRUU *a_;
+	char *name_;
 };
 
 #define SECONDS(secs) (secs)

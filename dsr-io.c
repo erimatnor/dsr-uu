@@ -1,51 +1,53 @@
-#include "dsr.h"
-#include "dsr-pkt.h"
-#include "dsr-rreq.h"
-#include "dsr-rrep.h"
-#include "dsr-srt.h"
-#include "dsr-ack.h"
-#include "send-buf.h"
-#include "dsr-rtc.h"
-#include "dsr-ack.h"
-#include "maint-buf.h"
-#include "neigh.h"
-#include "dsr-opt.h"
-#include "link-cache.h"
-
-#include "debug.h"
-
 #ifdef NS2
 #include "ns-agent.h"
 #else
 #include "dsr-dev.h"
 #endif
 
+#include "dsr.h"
+#include "dsr-pkt.h"
+#include "dsr-rreq.h"
+#include "dsr-rrep.h"
+#include "dsr-srt.h"
+#include "dsr-ack.h"
+#include "dsr-rtc.h"
+#include "dsr-ack.h"
+#include "maint-buf.h"
+#include "neigh.h"
+#include "dsr-opt.h"
+#include "link-cache.h"
+#include "debug.h"
+#include "send-buf.h"
 
 void NSCLASS dsr_recv(struct dsr_pkt *dp)
 {
 	int i = 0, action;
+	int mask = DSR_PKT_NONE;
 
 	/* Process DSR Options */
 	action = dsr_opt_recv(dp);
 	
       	/* Add mac address of previous hop to the arp table */
-	if (dp->srt /* && skb->mac.raw */) {
+	if (dp->srt && dp->mac.raw) {
 		struct sockaddr hw_addr;
-		struct ethhdr *eth = NULL;
 #ifdef NS2
-		
+		inttoeth(&dp->mac.ethh->macSA(), (char *)&hw_addr);
 #else
-	/* 	eth = (struct ethhdr *)skb->mac.raw; */
-		
-		memcpy(hw_addr.sa_data, eth->h_source, ETH_ALEN);
-#endif	
+		memcpy(hw_addr.sa_data, dp->mac.ethh->h_source, ETH_A_LEN);
+#endif		
 		dp->prv_hop = dsr_srt_prev_hop(dp->srt, my_addr());
 		
 		neigh_tbl_add(dp->prv_hop, &hw_addr);
 	}
 	
 	for (i = 1; i < DSR_PKT_ACTION_LAST; i++) {
-		switch (action & (DSR_PKT_NONE << i)) {
+		//DEBUG("i=%d action=0x%08x mask=0x%08x (action & mask)=0x%08x\n", i, action, (mask), (action & mask));
+
+		switch (action & mask) {
+		case DSR_PKT_NONE:
+			DEBUG("DSR_PKT_NONE - Do nothing\n");
+			dsr_pkt_free(dp);
+			return;
 		case DSR_PKT_DROP:
 		case DSR_PKT_ERROR:
 			DEBUG("DSR_PKT_DROP or DSR_PKT_ERROR\n");
@@ -83,6 +85,7 @@ void NSCLASS dsr_recv(struct dsr_pkt *dp)
 			}
 			break;
 		case DSR_PKT_FORWARD_RREQ:
+			DEBUG("Forward RREQ\n");
 			XMIT(dp);
 			return;
 		case DSR_PKT_SEND_RREP:
@@ -107,11 +110,14 @@ void NSCLASS dsr_recv(struct dsr_pkt *dp)
 			DEBUG("Deliver to DSR device\n");
 			DELIVER(dp);
 			return;
+		case 0:
+			break;
 		default:
 			DEBUG("Unknown pkt action\n");
 		}
-		dsr_pkt_free(dp);
+		mask = (mask << 1);
 	}
+	dsr_pkt_free(dp);
 }
 
 void NSCLASS dsr_start_xmit(struct dsr_pkt *dp)
@@ -139,7 +145,7 @@ void NSCLASS dsr_start_xmit(struct dsr_pkt *dp)
 		
 	} else {			
 #ifdef NS2
-		/* 	res = send_buf_enqueue_packet(dp, ); */
+		res = send_buf_enqueue_packet(dp, &DSRUU::xmit);
 #else
 		res = send_buf_enqueue_packet(dp, dsr_dev_xmit);
 #endif	

@@ -57,7 +57,7 @@ set val(seed)           0.0
 set val(adhocRP)        AODVUU
 set val(nn)             4       ;# how many nodes are simulated
 set val(stop)           290.0   ;# simulation time
-
+set opt(prot)           dsruu
 # =====================================================================
 # Main Program
 # ======================================================================

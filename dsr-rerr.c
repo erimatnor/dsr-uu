@@ -40,10 +40,10 @@ static struct dsr_rerr_opt *dsr_rerr_opt_add(char *buf, int len,
 	
 	switch (err_type) {
 	case NODE_UNREACHABLE:
-		if (len < DSR_RERR_HDR_LEN + sizeof(unreach_addr))
+		if (len < DSR_RERR_HDR_LEN + sizeof(struct in_addr))
 			return NULL;
-		rerr_opt->length += sizeof(unreach_addr);
-		memcpy(rerr_opt->info, &unreach_addr, sizeof(unreach_addr));
+		rerr_opt->length += sizeof(struct in_addr);
+		memcpy(rerr_opt->info, &unreach_addr, sizeof(struct in_addr));
 		break;
 	case FLOW_STATE_NOT_SUPPORTED:
 		break;
