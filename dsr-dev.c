@@ -129,6 +129,11 @@ static int __init dsr_dev_init(void)
 	struct in_device *indev = NULL;
 	struct in_ifaddr **ifap = NULL;
 	struct in_ifaddr *ifa = NULL;
+	
+	err = p_queue_init();
+   
+	if (err < 0)
+		return err;
 
 	dsr_dev = alloc_netdev(sizeof(struct net_device_stats),
 			       "dsr%d", dsr_dev_setup);
@@ -195,6 +200,7 @@ static void __exit dsr_dev_cleanup(void)
 
 	unregister_netdev(dsr_dev);
 	free_netdev(dsr_dev);
+	p_queue_fini();
 }
 
 module_init(dsr_dev_init);
