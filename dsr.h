@@ -46,6 +46,45 @@ struct dsr_pkt {
 
 /* Local device info (shared data) */
 //extern struct netdev_info ldev_info;  /* defined in dsr-dev.c */
+enum {
+	BroadCastJitter,
+	RouteCacheTimeout,
+	SendBufferTimeout,
+	RequestTableSize,
+	RequestTableIds,
+	MaxRequestRexmt,
+	RequestPeriod,
+	NonpropRequestTimeout,
+	RexmtBufferSize,
+	MaintHoldoffTime,
+	MaxMaintRexmt,
+	TryPassiveAcks,
+	PassiveAckTimeout,
+	GratReplyHoldOff,
+	MAX_SALVAGE_COUNT,
+	PARAMS_MAX,
+};
+
+static struct { 
+	const char *name; 
+	const int val; 
+} params_def[PARAMS_MAX] = {
+	{ "BroadCastJitter", 10 },
+	{ "RouteCacheTimeout", 300000 },
+	{ "SendBufferTimeout", 30000 },
+	{ "RequestTableSize", 64 },
+	{ "RequestTableIds", 16 },
+	{ "MaxRequestRexmt", 5 },
+	{ "RequestPeriod", 10 },
+	{ "NonpropRequestTimeout", 30 },
+	{ "RexmtBufferSize", 50 },
+	{ "MaintHoldoffTime", 250000 },
+	{ "MaxMaintRexmt", 2 },
+	{ "TryPassiveAcks", 1 },
+	{ "PassiveAckTimeout", 100000 },
+	{ "GratReplyHoldOff", 1 },
+	{ "MAX_SALVAGE_COUNT", 15 }
+};
 
 struct dsr_node {
 	struct net_device *dev;
@@ -54,9 +93,38 @@ struct dsr_node {
 	struct in_addr ifaddr;
 	struct in_addr bcaddr;
 	spinlock_t lock;
+	int params[PARAMS_MAX];
 };
 
 extern struct dsr_node *dsr_node;
+
+static inline const int get_param(int index)
+{
+	int param = 0;
+	
+	if (dsr_node) {
+		spin_lock(&dsr_node->lock);
+		param = dsr_node->params[index];
+		spin_unlock(&dsr_node->lock);
+	}
+	return param;  
+}
+
+#define PARAM(name) (get_param(name))
+
+static inline void dsr_node_init(struct dsr_node *dn)
+{
+	int i;
+	
+	spin_lock_init(&dn->lock);
+
+	dn->dev = NULL;
+	dn->slave_dev = NULL;
+	
+	for (i = 0; i < PARAMS_MAX; i++) {
+		dn->params[i] = params_def[i].val;
+	}
+}
 
 static inline void dsr_node_lock(struct dsr_node *dnode)
 {
@@ -67,6 +135,7 @@ static inline void dsr_node_unlock(struct dsr_node *dnode)
 {
 	spin_unlock(&dnode->lock);
 }
+
 
 static inline struct in_addr my_addr(void)
 {

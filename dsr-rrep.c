@@ -115,7 +115,7 @@ static int grat_rrep_tbl_print(char *buf)
 		len += sprintf(buf+len, "  %-15s %-15s %lu\n", 
 			       print_ip(e->src.s_addr), 
 			       print_ip(e->prev_hop.s_addr),
-			       e->expire ? ((e->expire - jiffies) * HZ) : 0);
+			       e->expire ? ((e->expire - jiffies) / HZ) : 0);
 	}
     
 	read_unlock_bh(&grat_rrep_tbl.lock);

@@ -10,7 +10,7 @@
 struct in_addr dsr_srt_next_hop(struct dsr_srt *srt)
 {
 
-	/* This function should be fixed for multihop */
+	/* TODO: This function should be fixed for multihop */
 	if (srt->laddrs == 0)
 		return srt->dst;
 	else
@@ -164,6 +164,9 @@ int dsr_srt_add(struct dsr_pkt *dp, struct sk_buff *skb)
 	
 	ip_send_check(iph);
 
+	/* Set next hop */
+	dp->nxt_hop = dsr_srt_next_hop(dp->srt);
+
 	return 0;
 }
 
@@ -204,6 +207,3 @@ int dsr_srt_opt_recv(struct dsr_pkt *dp)
 	}
 	return DSR_PKT_ERROR;
 }
-
-
-

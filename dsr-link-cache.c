@@ -13,8 +13,11 @@
 #define LC_COST_INF UINT_MAX
 #define LC_HOPS_INF UINT_MAX
 
-/* TBL(node_tbl, LC_NODES_MAX); */
-/* TBL(link_tbl, LC_LINKS_MAX); */
+#define LC_TIMER
+
+#ifdef LC_TIMER
+#define LC_GARBAGE_COLLECT_INTERVAL 5 /* Seconds */
+#endif
 
 struct lc_node {
 	struct list_head l;
@@ -32,7 +35,7 @@ struct lc_link {
 	struct lc_node *src, *dst;
 	int status;
 	unsigned int cost;
-	unsigned long time;
+	unsigned long expire;
 };
 
 struct lc_graph {
@@ -41,7 +44,7 @@ struct lc_graph {
 	struct lc_node *src;
 	rwlock_t lock;
 #ifdef LC_TIMER
-	static struct timer_list timer;
+	struct timer_list timer;
 #endif
 };
 
@@ -64,7 +67,16 @@ static inline int crit_link_query(void *pos, void *query)
 	} *q = query;
 
 	if (p->src->addr.s_addr == q->src.s_addr && 
-	    p->dst->addr.s_addr == (q+1)->dst.s_addr)
+	    p->dst->addr.s_addr == q->dst.s_addr)
+		return 1;
+	return 0;
+}
+
+static inline int crit_expire(void *pos, void *data)
+{
+	struct lc_link *link = pos;
+
+	if (link->expire < jiffies)
 		return 1;
 	return 0;
 }
@@ -72,10 +84,14 @@ static inline int crit_link_query(void *pos, void *query)
 static inline int do_lowest_cost(void *pos, void *cheapest)
 {
 	struct lc_node *n = pos;
-	struct lc_node *c = cheapest;
+	struct {
+		struct lc_node *cheapest;
+	} *d = cheapest;
 	
-	if (!c || n->cost < c->cost)
-		cheapest = n;		
+	if (!d->cheapest || n->cost < d->cheapest->cost) {
+		DEBUG("New lowest cost %lu, %s\n", n->cost, print_ip(n->addr.s_addr));
+		d->cheapest = n;		
+	}
 	return 0;
 }
 
@@ -104,6 +120,9 @@ static inline int do_init(void *pos, void *addr)
 	struct in_addr *a = addr; 
 	struct lc_node *n = pos;
 	
+	if (!a || !n)
+		return -1;
+
 	if (n->addr.s_addr == a->s_addr) {
 		n->cost = 0;
 		n->hops = 0;
@@ -115,6 +134,33 @@ static inline int do_init(void *pos, void *addr)
 	}	
 	return 0;
 }
+
+#ifdef LC_TIMER
+
+static void lc_garbage_collect_set(void);
+
+static void lc_garbage_collect(unsigned long data)
+{
+	write_lock_bh(&LC.lock);
+	tbl_for_each_del(&LC.links, NULL, crit_expire);
+
+	if (!TBL_EMPTY(&LC.links))
+		lc_garbage_collect_set();
+	
+	write_unlock_bh(&LC.lock);
+}
+
+static void lc_garbage_collect_set(void)
+{
+	LC.timer.function = lc_garbage_collect;
+	LC.timer.data = 0;
+	LC.timer.expires = jiffies + (LC_GARBAGE_COLLECT_INTERVAL * HZ);
+
+	add_timer(&LC.timer);
+}
+
+#endif /* LC_TIMER */
+
 
 static inline struct lc_node *lc_node_create(struct in_addr addr)
 {
@@ -143,7 +189,7 @@ static inline struct lc_link *__lc_link_find(struct in_addr src,
 }
 
 static int __lc_link_tbl_add(struct lc_node *src, struct lc_node *dst, 
-			   int status, int cost)
+			     unsigned long timeout, int status, int cost)
 {	
 	struct lc_link *link;
 
@@ -160,6 +206,12 @@ static int __lc_link_tbl_add(struct lc_node *src, struct lc_node *dst,
 			DEBUG("Could not allocate link\n");
 			return -1;
 		}
+		
+		DEBUG("Adding Link %s <-> %s cost=%d\n", 
+		      print_ip(src->addr.s_addr), 
+		      print_ip(dst->addr.s_addr), 
+		      cost);
+		
 		__tbl_add(&LC.links, &link->l, crit_none);
 	}
 	
@@ -167,49 +219,57 @@ static int __lc_link_tbl_add(struct lc_node *src, struct lc_node *dst,
 	link->dst = dst;
 	link->status = status;
 	link->cost = cost;
-	link->time = jiffies;
+	link->expire = jiffies + (timeout / 1000 * HZ);
 	
 	return 1;
 }
 
-
-int lc_link_add(struct in_addr addr1, struct in_addr addr2, 
-		int status, int cost)
+int lc_link_add(struct in_addr src, struct in_addr dst, 
+		unsigned long timeout, int status, int cost)
 {
-	struct lc_node *n1, *n2;
+	struct lc_node *sn, *dn;
 	int res;
 	
 	write_lock_bh(&LC.lock);
 	
-	n1 = __tbl_find(&LC.nodes, &addr1, crit_addr);
-	n2 = __tbl_find(&LC.nodes, &addr2, crit_addr);
 
-	if (!n1) {
-		n1 = lc_node_create(addr1);
+	sn = __tbl_find(&LC.nodes, &src, crit_addr);
+	dn = __tbl_find(&LC.nodes, &dst, crit_addr);
 
-		if (!n1) {
+	if (!sn) {
+		sn = lc_node_create(src);
+
+		if (!sn) {
 			DEBUG("Could not allocate nodes\n");
 			write_unlock_bh(&LC.lock);
 			return -1;
 		}
-		__tbl_add(&LC.nodes, &n1->l, crit_none);
+		__tbl_add(&LC.nodes, &sn->l, crit_none);
 		
 	}
-	if (!n2) {
-		n2 = lc_node_create(addr2);
-		if (!n2) {
+	if (!dn) {
+		dn = lc_node_create(dst);
+		if (!dn) {
 			DEBUG("Could not allocate nodes\n");
 			write_unlock_bh(&LC.lock);
 			return -1;
 		}
-		__tbl_add(&LC.nodes, &n2->l, crit_none);
+		__tbl_add(&LC.nodes, &dn->l, crit_none);
 	}
 	
-	res = __lc_link_tbl_add(n1, n2, status, cost);
-	
-	if (!res) {
+	res = __lc_link_tbl_add(sn, dn, timeout, status, cost);
+		
+	if (res) {	
+		sn->links++;
+		dn->links++;
+#ifdef LC_TIMER
+		if (!timer_pending(&LC.timer))
+			lc_garbage_collect_set();
+#endif
+		
+	} else
 		DEBUG("Could not add new link\n");
-	}
+
 	write_unlock_bh(&LC.lock);
 
 	return 0;
@@ -218,7 +278,6 @@ int lc_link_add(struct in_addr addr1, struct in_addr addr2,
 int lc_link_del(struct in_addr src, struct in_addr dst)
 {
 	struct lc_link *link;
-
 	
 	write_lock_bh(&LC.lock);
 
@@ -247,7 +306,7 @@ static int lc_print(char *buf)
     
 	read_lock_bh(&LC.lock);
     
-	len += sprintf(buf, "# %-15s %-15s %-4s Age\n", "Addr", "Addr", "Cost");
+	len += sprintf(buf, "# %-15s %-15s %-4s Timeout\n", "Src Addr", "Dst Addr", "Cost");
 
 	list_for_each(pos, &LC.links.head) {
 		struct lc_link *link = (struct lc_link *)pos;
@@ -256,7 +315,7 @@ static int lc_print(char *buf)
 			       print_ip(link->src->addr.s_addr),
 			       print_ip(link->dst->addr.s_addr),
 			       link->cost,
-			       (jiffies - link->time) * HZ);
+			       (link->expire - jiffies) / HZ);
 	}
     
 	read_unlock_bh(&LC.lock);
@@ -281,16 +340,19 @@ static int lc_proc_info(char *buffer, char **start, off_t offset, int length)
 
 static inline void __dijkstra_init_single_source(struct in_addr src)
 {
+	DEBUG("Initializing source\n");
 	__tbl_do_for_each(&LC.nodes, &src, do_init);
 }
 
 static inline struct lc_node *__dijkstra_find_lowest_cost_node(void)
 {
-	struct lc_node *cheapest = NULL;
+	struct {
+		struct lc_node *cheapest;
+	} data = { NULL };
 
-	__tbl_do_for_each(&LC.nodes, cheapest, do_lowest_cost);
+	__tbl_do_for_each(&LC.nodes, &data, do_lowest_cost);
 	
-	return cheapest;
+	return data.cheapest;
 }
 /*
   relax( Node u, Node v, double w[][] )
@@ -299,25 +361,49 @@ static inline struct lc_node *__dijkstra_find_lowest_cost_node(void)
           pi[v] := u
 
 */
+static void __lc_move(struct tbl *to, struct tbl *from)
+{
+	while (!TBL_EMPTY(from)) {
+		struct lc_node *n;
+		
+		n = tbl_detach_first(from);
+		
+		tbl_add(to, &n->l, crit_none);
+	}
+}
 
 static void __dijkstra(struct in_addr src)
 {	
 	TBL(S, LC_NODES_MAX);
 	struct lc_node *src_node;
+	int i = 0;
 	
+	DEBUG("Attempting Dijkstras\n");
+	
+	if (TBL_EMPTY(&LC.nodes)) {
+		DEBUG("No nodes in Link Cache\n");
+		return;
+	}
+
 	__dijkstra_init_single_source(src);
 	
 	src_node = __tbl_find(&LC.nodes, &src, crit_addr);
 
+	if (!src_node) 
+		return;
+	
 	while (!TBL_EMPTY(&LC.nodes)) {
 		struct lc_node *u;
 		
-		u = __dijkstra_find_lowest_cost_node();
-		
-		if (!u) {
-			DEBUG("Dijkstra Error? No lowest cost node u!\n");
-			continue;
-		}
+		i++;
+
+	u = __dijkstra_find_lowest_cost_node();
+	
+	if (!u) {
+		DEBUG("Dijkstra Error? No lowest cost node u!\n");
+		continue;
+	} else
+		DEBUG("Lowest cost node %d=%s\n", i, print_ip(u->addr.s_addr));
 
 		tbl_detach(&LC.nodes, &u->l);
 		
@@ -326,9 +412,12 @@ static void __dijkstra(struct in_addr src)
 
 		tbl_do_for_each(&LC.links, u, do_relax);
 	}
-	/* Restore the nodes in the LC graph */
-	memcpy(&LC.nodes, &S, sizeof(S));
 	
+	/* Restore the nodes in the LC graph */
+	/* memcpy(&LC.nodes, &S, sizeof(S)); */
+/* 	LC.nodes = S; */
+	__lc_move(&LC.nodes, &S);
+
 	/* Set currently calculated source */
 	LC.src = src_node;
 }
@@ -337,7 +426,6 @@ struct dsr_srt *dsr_rtc_find(struct in_addr src, struct in_addr dst)
 {
 	struct dsr_srt *srt = NULL;
 	struct lc_node *dst_node;
-
 	
 	write_lock_bh(&LC.lock);
 	
@@ -347,6 +435,7 @@ struct dsr_srt *dsr_rtc_find(struct in_addr src, struct in_addr dst)
 	dst_node = __tbl_find(&LC.nodes, &dst, crit_addr);
 
 	if (!dst_node) {
+		DEBUG("%s not found\n", print_ip(dst.s_addr));
 		write_unlock_bh(&LC.lock);
 		return NULL;
 	}
@@ -361,24 +450,28 @@ struct dsr_srt *dsr_rtc_find(struct in_addr src, struct in_addr dst)
 		
 		srt->dst = dst;
 		srt->src = src;
-		srt->laddrs = dst_node->hops * sizeof(srt->dst);
 		
 		for (n = dst_node->pred; n != n->pred; n = n->pred) {
 			srt->addrs[i] = n->addr;
-			i++;				
+			i++;
 		}
-		if (i != srt->laddrs)
-			DEBUG("hop count ERROR!!!\n");
+		srt->laddrs = i * sizeof(srt->dst);
+
+		if ((i + 1) != dst_node->hops)
+			DEBUG("hop count ERROR i+1=%d hops=%d!!!\n", i + 1, 
+			       dst_node->hops);
 	}
 	write_unlock_bh(&LC.lock);
+
 	return srt;
 }
 
-int dsr_rtc_add(struct dsr_srt *srt, unsigned long time, unsigned short flags)
+int dsr_rtc_add(struct dsr_srt *srt, unsigned long timeout, unsigned short flags)
 {
 	int i, n, links = 0;
 	struct in_addr addr1, addr2;
 	
+        timeout = 300000;
 	
 	if (!srt)
 		return -1;
@@ -388,32 +481,37 @@ int dsr_rtc_add(struct dsr_srt *srt, unsigned long time, unsigned short flags)
 	addr1 = srt->src;
 	
 	write_lock_bh(&LC.lock);
+
 	for (i = 0; i < n; i++) {
 		addr2 = srt->addrs[i];
 		
-		lc_link_add(addr1, addr2, 0, 1);
+		lc_link_add(addr1, addr2, timeout, 0, 1);
 		links++;
 		
 		if (srt->flags & SRT_BIDIR) {
-			lc_link_add(addr2, addr1, 0, 1);
+			lc_link_add(addr2, addr1, timeout, 0, 1);
 			links++;
 		}
 		addr1 = addr2;
 	}
 	addr2 = srt->dst;
 	
-	lc_link_add(addr1, addr2, 0, 1);
+	lc_link_add(addr1, addr2, timeout, 0, 1);
 	links++;
 	
 	if (srt->flags & SRT_BIDIR) {
-		lc_link_add(addr2, addr1, 0, 1);
+		lc_link_add(addr2, addr1, timeout, 0, 1);
 		links++;
 	}
 	
 	/* Set currently calculated source to NULL since we have modified the
 	 * link cache. */
 	LC.src = NULL;
-	
+
+/* #ifdef LC_TIMER	 */
+/* 	if (!timer_pending(&LC.timer)) */
+/* 		add_timer(&LC.timer); */
+/* #endif */
 	write_unlock_bh(&LC.lock);
 	return links;
 }
@@ -489,7 +587,9 @@ int __init lc_init(void)
 	INIT_TBL(&LC.nodes, LC_NODES_MAX);
 	LC.lock = RW_LOCK_UNLOCKED;
 	LC.src = NULL;
-
+#ifdef LC_TIMER
+	init_timer(&LC.timer);
+#endif
 	proc_net_create(LC_PROC_NAME, 0, lc_proc_info);
 	return 0;
 }

@@ -195,7 +195,7 @@ static inline int tbl_del(struct tbl *t, struct list_head *l)
 }
 
 
-static inline int tbl_find_del(struct tbl *t, void *id, criteria_t crit)
+static inline int tbl_for_each_del(struct tbl *t, void *id, criteria_t crit)
 {
 	struct list_head *pos, *tmp;
 	int n = 0;

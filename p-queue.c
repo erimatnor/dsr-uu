@@ -217,21 +217,12 @@ int p_queue_set_verdict(int verdict, unsigned long daddr)
 		    
 			if (entry->dp.srt) {
 				
-
-				if (entry->skb->nh.iph->protocol == IPPROTO_ICMP) {
-					
-					struct icmphdr *icmp;
-					icmp = entry->skb->h.icmph;
-
-					DEBUG("ICMP type=%u code=%u\n", icmp->type, icmp->code);
-
-				}
+				DEBUG("Source route=%s\n", print_srt(entry->dp.srt));
 				
 				if (dsr_srt_add(&entry->dp, entry->skb) < 0) {
 					DEBUG("Could not add source route\n");
 				} else {
-					/* Set next hop */
-					entry->dp.nxt_hop = dsr_srt_next_hop(entry->dp.srt);
+					
 					/* Send packet */
 					entry->okfn(&entry->dp);
 				    

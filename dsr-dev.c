@@ -299,7 +299,7 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 				DEBUG("Queueing failed!\n");
 				break;
 			}
-			res = dsr_rreq_send(dp.dst, 1);
+			res = dsr_rreq_route_discovery(dp.dst);
 			
 			if (res < 0)
 				DEBUG("RREQ Transmission failed...");
@@ -340,7 +340,7 @@ int __init dsr_dev_init(char *ifname)
 
 	dnode = dsr_node = (struct dsr_node *)dsr_dev->priv;
 
-	spin_lock_init(&dnode->lock);
+	dsr_node_init(dnode);
 
 	if (ifname) {
 		dnode->slave_dev = dev_get_by_name(ifname);

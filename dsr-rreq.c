@@ -30,6 +30,7 @@ struct rreq_tbl_entry {
 	} rreq_ids[RREQ_TLB_MAX_ID];
 	int id_ndx;   /* Index into rreqs_recvd array */
 	int ttl;
+	int rreqs;
 	unsigned long time;
 	unsigned long expire;
 };
@@ -44,6 +45,7 @@ struct rreq_tbl_query {
 static unsigned int rreq_seqno = 1;
 
 static void rreq_tbl_resend_timeout(unsigned long data);
+int dsr_rreq_send(struct in_addr target, int ttl, unsigned long timeout);
 
 static inline int crit_addr(void *pos, void *addr)
 {
@@ -55,16 +57,6 @@ static inline int crit_addr(void *pos, void *addr)
 
 	return 0;
 }
-/* static inline int crit_src(void *pos, void *addr) */
-/* { */
-/* 	struct in_addr *src = (struct in_addr *)addr;  */
-/* 	struct rreq_tbl_entry *p = (struct rreq_tbl_entry *)pos; */
-	
-/* 	if (p->src.s_addr == src->s_addr) */
-/* 		return 1; */
-
-/* 	return 0; */
-/* } */
 
 static inline int crit_expire(void *pos, void *expire)
 {
@@ -115,44 +107,19 @@ static inline int crit_query(void *pos, void *query)
 }
 
 
-/* static inline int rreq_tbl_find_by_target(struct in_addr trg) */
-/* { */
-/* 	if (tbl_in_tbl(&rreq_tbl, &trg, crit_trg)) */
-/* 		return 1; */
-/* 	return 0; */
-/* } */
-/* static inline int rreq_tbl_find_by_source(struct in_addr src) */
-/* { */
-/* 	if (tbl_in_tbl(&rreq_tbl, &src, crit_src)) */
-/* 		return 1; */
-/* 	return 0; */
-/* } */
-/* static inline int rreq_tbl_find_by_src_id(struct in_addr src, unsigned long id) */
-/* { */
-/* 	struct rreq_tbl_entry *e; */
-/* 	int i; */
-	
-/* 	read_lock_bh(&rreq_tbl.lock); */
-/* 	e = __tbl_find(&rreq_tbl, &src, crit_src); */
-		
-/* 	for (i = 0; i < RREQ_TLB_IDS; i++) { */
-/* 		if (e->ids[i] == id) */
-/* 			return 1; */
-/* 	} */
-/* 	return 0; */
-	
-/* } */
 static void rreq_tbl_set_timer(struct rreq_tbl_entry *e)
 {
+	read_lock_bh(&rreq_tbl.lock);
 	e->timer.function = rreq_tbl_resend_timeout;
 	e->timer.expires = e->timer.data = e->expire;
 	add_timer(&e->timer);
+	read_unlock_bh(&rreq_tbl.lock);
 }
 
 static void rreq_tbl_resend_timeout(unsigned long data)
 {
 	struct rreq_tbl_entry *e;
-	int ttl;
+	int ttl, rreqs;
 	struct in_addr trg;
 	
 	DEBUG("RREQ TBL resend timeout!\n");
@@ -161,18 +128,18 @@ static void rreq_tbl_resend_timeout(unsigned long data)
 	/* Find the first RREQ entry that this node originated */
 	e = __tbl_find(&rreq_tbl, &data, crit_expire);
 	
-	ttl = e->ttl;
+	ttl = e->ttl + 2;
 	trg = e->addr;
-	
+	rreqs =  ++e->rreqs;
 	read_unlock_bh(&rreq_tbl.lock);
 
 	if (ttl < RREQ_TTL_MAX)
-		dsr_rreq_send(trg, ttl * 2);
+		dsr_rreq_send(trg, ttl, 80 * (ttl + 2) * 2);
 	
 }
 
 int rreq_tbl_add(struct in_addr addr, struct in_addr src, struct in_addr trg, 
-		 int ttl, unsigned int id)
+		 int ttl, unsigned int id, unsigned long timeout)
 {
 	struct rreq_tbl_entry *e;
 	struct in_addr myaddr;
@@ -200,19 +167,21 @@ int rreq_tbl_add(struct in_addr addr, struct in_addr src, struct in_addr trg,
 		init_timer(&e->timer);
 
 		e->id_ndx = 0;
+		e->rreqs = 0;
 
 		write_lock_bh(&rreq_tbl.lock);
 
 		/* Remove first (least recently used) entry */
 		if (rreq_tbl.len >= rreq_tbl.max_len) {
-			e = (struct rreq_tbl_entry *)TBL_FIRST(&rreq_tbl);
+			struct rreq_tbl_entry *f;
+			f = (struct rreq_tbl_entry *)TBL_FIRST(&rreq_tbl);
 			
-			__tbl_detach(&rreq_tbl, &e->l);
+			__tbl_detach(&rreq_tbl, &f->l);
 			
-			if (timer_pending(&e->timer))
-				del_timer(&e->timer);
+			if (timer_pending(&f->timer))
+				del_timer(&f->timer);
 			
-			kfree(e);
+			kfree(f);
 		}
 		write_unlock_bh(&rreq_tbl.lock);
 	}
@@ -222,7 +191,10 @@ int rreq_tbl_add(struct in_addr addr, struct in_addr src, struct in_addr trg,
 	e->ttl = ttl;
 
 	if (src.s_addr == myaddr.s_addr) {
-		e->expire = time + (ttl * HZ);
+		e->expire = time + (timeout * HZ / 1000);
+		DEBUG("Resend timeout in %lu ms\n", (e->expire - time) * 1000 /
+HZ);
+		
 		set_timer = 1;
 	} else {
 		e->rreq_ids[e->id_ndx].trg = trg;
@@ -369,7 +341,7 @@ static inline int dsr_rreq_duplicate(struct in_addr src, struct in_addr trg, uns
 	return in_tbl(&rreq_tbl, &q, crit_query);
 }
 
-int dsr_rreq_send(struct in_addr target, int ttl)
+int dsr_rreq_send(struct in_addr target, int ttl, unsigned long timeout)
 {
 	struct dsr_pkt dp;
 	char buf[IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN];
@@ -403,9 +375,15 @@ int dsr_rreq_send(struct in_addr target, int ttl)
 
 	dsr_dev_xmit(&dp);
 
-	rreq_tbl_add(target, dp.src, target, ttl, rreq_seqno);
+	rreq_tbl_add(target, dp.src, target, ttl, rreq_seqno, timeout);
 
 	return 1;
+}
+int dsr_rreq_route_discovery(struct in_addr target)
+{
+        int ttl = 1;
+
+        return dsr_rreq_send(target, ttl, 80 * (ttl + 2));
 }
 
 int dsr_rreq_opt_recv(struct dsr_pkt *dp)
@@ -426,7 +404,7 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp)
 	if (dsr_rreq_duplicate(dp->src, trg, dp->rreq_opt->id))
 		return DSR_PKT_DROP;
 	
-	rreq_tbl_add(dp->src, dp->src, trg, dp->iph->ttl, dp->rreq_opt->id);
+	rreq_tbl_add(dp->src, dp->src, trg, dp->iph->ttl, dp->rreq_opt->id, 0);
 
 	dp->srt = dsr_srt_new(dp->src, myaddr,
 			      DSR_RREQ_ADDRS_LEN(dp->rreq_opt),
