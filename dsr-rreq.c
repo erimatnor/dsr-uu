@@ -209,6 +209,7 @@ int dsr_rreq_route_discovery(struct in_addr target)
 	write_unlock_bh(&rreq_tbl);
 
 #define	TTL_START 2
+	e->state = STATE_IN_ROUTE_DISC;
 
 	dsr_rreq_send(target, TTL_START);
 	
@@ -322,7 +323,7 @@ int dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 	
 	trg.s_addr = rreq_opt->target;
 
-	if (dsr_rreq_duplicate(dp->src, trg, rreq_opt->id)) {
+	if (dsr_rreq_duplicate(dp->src, trg, ntohs(rreq_opt->id))) {
 		DEBUG("Duplicate RREQ from %s\n", print_ip(dp->src.s_addr));
 		return DSR_PKT_DROP;
 	}
