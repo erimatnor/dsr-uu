@@ -111,6 +111,18 @@ static inline const int get_param(int index)
 	}
 	return param;  
 }
+static inline const int get_slave_dev_ifindex(void)
+{
+	int ifindex = -1;
+	
+	if (dsr_node) {
+		spin_lock(&dsr_node->lock);
+		if (dsr_node->slave_dev)
+			ifindex = dsr_node->slave_dev->ifindex;
+		spin_unlock(&dsr_node->lock);
+	}
+	return ifindex;  
+}
 
 #define PARAM(name) (get_param(name))
 

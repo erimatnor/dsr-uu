@@ -12,6 +12,7 @@
 #include <net/ip.h>
 #include <net/dst.h>
 #include <net/neighbour.h>
+#include <linux/netfilter_ipv4.h>
 #ifdef KERNEL26
 #include <linux/moduleparam.h>
 #endif
@@ -40,6 +41,7 @@ module_param(ifname, charp, 0);
 #else
 MODULE_PARM(ifname, "s");
 #endif
+
 
 static int kdsr_arpset(struct in_addr addr, struct sockaddr *hw_addr, 
 		       struct net_device *dev)
@@ -286,6 +288,37 @@ int kdsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb)
 	}
 	return 0;
 }
+/* We hook in before IP's routing so that IP doesn't get a chance to drop it
+ * before we can look at it... Packet to this node can go through since it will
+ * be routed to us anyway */
+static unsigned int kdsr_pre_routing_recv(unsigned int hooknum,
+					 struct sk_buff **skb,
+					 const struct net_device *in,
+					 const struct net_device *out,
+					 int (*okfn) (struct sk_buff *))
+{	
+	struct iphdr *iph = (*skb)->nh.iph;
+	struct in_addr myaddr = my_addr();
+	
+	if (!in || in->ifindex != get_slave_dev_ifindex() || 
+	    !iph || iph->protocol != IPPROTO_DSR || iph->daddr == myaddr.s_addr)
+		return NF_ACCEPT;
+
+	kdsr_ip_recv(*skb);
+
+	return NF_STOLEN;
+}
+
+static struct nf_hook_ops dsr_pre_routing_hook = {
+	
+	.hook		= kdsr_pre_routing_recv,
+#ifdef KERNEL26
+	.owner		= THIS_MODULE,
+#endif
+	.pf		= PF_INET,
+	.hooknum	= NF_IP_PRE_ROUTING,
+	.priority	= NF_IP_PRI_FIRST,
+};
 
 /* This is kind of a mess */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7)
@@ -330,6 +363,10 @@ static int __init kdsr_init(void)
 	if (res < 0) 
 		goto cleanup_rreq_tbl;
 
+	res = nf_register_hook(&dsr_pre_routing_hook);
+
+	if (res < 0)
+		goto cleanup_neigh_tbl;
 #ifndef KERNEL26
 	inet_add_protocol(&dsr_inet_prot);
 	DEBUG("Setup finished\n");
@@ -338,15 +375,18 @@ static int __init kdsr_init(void)
 	
 	if (inet_add_protocol(&dsr_inet_prot, IPPROTO_DSR) < 0) {
 		DEBUG("Could not register inet protocol\n");
-		goto cleanup_neigh_tbl;
+		goto cleanup_nf_hook;
 	}
 	DEBUG("Setup finished res=%d\n", res);
 	
 	return 0;
- cleanup_neigh_tbl:
-	neigh_tbl_cleanup();
+
+ cleanup_nf_hook:
+	nf_unregister_hook(&dsr_pre_routing_hook);
 #endif
       
+ cleanup_neigh_tbl:
+	neigh_tbl_cleanup();
  cleanup_rreq_tbl:
 	rreq_tbl_cleanup();
  cleanup_p_queue:
@@ -364,6 +404,7 @@ static void __exit kdsr_cleanup(void)
 #else
 	inet_del_protocol(&dsr_inet_prot);
 #endif
+	nf_unregister_hook(&dsr_pre_routing_hook);
 	p_queue_cleanup();
 	dsr_dev_cleanup();
 	rreq_tbl_cleanup();
