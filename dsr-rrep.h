@@ -21,11 +21,11 @@ struct dsr_rrep_opt {
 	u_int32_t addrs[0];
 };
 
-#define DSR_RREP_HDR_LEN 3
+#define DSR_RREP_HDR_LEN sizeof(dsr_rrep_opt)
 #define DSR_RREP_OPT_LEN(srt) (DSR_RREP_HDR_LEN + srt->laddrs + sizeof(struct in_addr))
 /* Length of source route is length of option, minus reserved/flags field minus
  * the last source route hop (which is the destination) */
-#define DSR_RREP_ADDRS_LEN(rrep_opt) (rrep_opt->length - (1 + sizeof(struct in_addr)))
+#define DSR_RREP_ADDRS_LEN(rrep_opt) (rrep_opt->length - 1 - sizeof(struct in_addr))
 
 #endif				/* NO_GLOBALS */
 

@@ -178,6 +178,7 @@ static inline int
 dsr_rrep_add_srt(struct dsr_rrep_opt *rrep_opt, struct dsr_srt *srt)
 {
 	int n;
+	struct in_addr foo;
 
 	if (!rrep_opt | !srt)
 		return -1;
@@ -185,7 +186,12 @@ dsr_rrep_add_srt(struct dsr_rrep_opt *rrep_opt, struct dsr_srt *srt)
 	n = srt->laddrs / sizeof(struct in_addr);
 
 	memcpy(rrep_opt->addrs, srt->addrs, srt->laddrs);
-	memcpy(&rrep_opt->addrs[n], &srt->dst, sizeof(struct in_addr));
+	rrep_opt->addrs[n] = srt->dst.s_addr;
+
+	foo.s_addr = rrep_opt->addrs[n];
+	
+
+	printf("dst=%s\n", print_ip(foo));
 
 	return 0;
 }
@@ -237,7 +243,7 @@ int NSCLASS dsr_rrep_send(struct dsr_srt *srt, struct dsr_srt *srt_to_me)
 		dp->nxt_hop = srt->addrs[0];
 
 	len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) +
-	    DSR_RREP_OPT_LEN(srt_to_me) + DSR_OPT_PAD1_LEN;
+	    DSR_RREP_OPT_LEN(srt_to_me)/*  + DSR_OPT_PAD1_LEN */;
 
 	n = srt->laddrs / sizeof(struct in_addr);
 
@@ -295,11 +301,14 @@ int NSCLASS dsr_rrep_send(struct dsr_srt *srt, struct dsr_srt *srt_to_me)
 		goto out_err;
 	}
 
-	buf += DSR_RREP_OPT_LEN(srt_to_me);
-	len -= DSR_RREP_OPT_LEN(srt_to_me);
+	/* TODO: Should we PAD? The rrep struct is padded and aligned
+	 * automatically by the compiler... How to fix this? */
 
-	pad1_opt = (struct dsr_pad1_opt *)buf;
-	pad1_opt->type = DSR_OPT_PAD1;
+/* 	buf += DSR_RREP_OPT_LEN(srt_to_me); */
+/* 	len -= DSR_RREP_OPT_LEN(srt_to_me); */
+
+/* 	pad1_opt = (struct dsr_pad1_opt *)buf; */
+/* 	pad1_opt->type = DSR_OPT_PAD1; */
 
 	/* if (ConfVal(UseNetworkLayerAck)) */
 /* 		dp->flags |= PKT_REQUEST_ACK; */
@@ -326,8 +335,8 @@ int NSCLASS dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 
 	myaddr = my_addr();
 	
-	srt_dst.s_addr = rrep_opt->addrs[DSR_RREP_ADDRS_LEN(rrep_opt) - 1];
-
+	srt_dst.s_addr = rrep_opt->addrs[DSR_RREP_ADDRS_LEN(rrep_opt) / sizeof(struct in_addr)];
+	
 	rrep_opt_srt = dsr_srt_new(dp->dst, srt_dst,
 				   DSR_RREP_ADDRS_LEN(rrep_opt),
 				   (char *)rrep_opt->addrs);
@@ -335,7 +344,6 @@ int NSCLASS dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 	if (!rrep_opt_srt)
 		return DSR_PKT_ERROR;
 
-/* 	DEBUG("Adding srt to cache\n"); */
 	dsr_rtc_add(rrep_opt_srt, ConfValToUsecs(RouteCacheTimeout), 0);
 
 	/* Remove pending RREQs */
