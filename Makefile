@@ -1,5 +1,5 @@
 
-SRC=kdsr.c dsr-dev.c dsr-opt.c dsr-rreq.c dsr-rrep.c dsr-srt.c p-queue.c
+SRC=kdsr.c dsr-dev.c dsr-opt.c dsr-rreq.c dsr-rrep.c dsr-srt.c p-queue.c dsr-link-cache.c
 
 DEFS=-DDEBUG 
 

@@ -23,6 +23,12 @@ struct tbl {
 #define TBL(name, max_len) \
 	struct tbl name = TBL_INIT(name, max_len)
 
+#define INIT_TBL(ptr, max_length) do { \
+        (ptr)->head.next = (ptr)->head.prev = &((ptr)->head); \
+        (ptr)->len = 0; (ptr)->max_len = max_length; \
+        (ptr)->lock = RW_LOCK_UNLOCKED; \
+} while (0)
+
 /* Criteria function should return 1 if the criteria is fulfilled or 0 if not
  * fulfilled */
 typedef int (*criteria_t) (void *, void *);
@@ -51,10 +57,9 @@ static inline void tbl_flush(struct tbl *t, at_flush_t at_flush)
 	write_unlock_bh(&t->lock);
 }
 
-static inline int tbl_add(struct tbl *t, struct list_head *l, criteria_t crit)
+static inline int __tbl_add(struct tbl *t, struct list_head *l, criteria_t crit)
 {
 	int len;
-	write_lock_bh(&t->lock);
 
 	if (t->len >= t->max_len) {
 		printk(KERN_WARNING "Max list len reached\n");
@@ -76,8 +81,17 @@ static inline int tbl_add(struct tbl *t, struct list_head *l, criteria_t crit)
 
 	len = ++t->len;
 
-	write_unlock_bh(&t->lock);
 
+	return len;
+}
+
+static inline int tbl_add(struct tbl *t, struct list_head *l, criteria_t crit)
+{
+	int len;
+
+	write_lock_bh(&t->lock);
+	len = __tbl_add(t, l, crit);	
+	write_unlock_bh(&t->lock);
 	return len;
 }
 
@@ -123,18 +137,42 @@ static inline void *tbl_find_detach(struct tbl *t, void *id, criteria_t crit)
 	return e;
 }
 
-static inline int __tbl_detach(struct tbl *t, struct list_head *l)
+static inline void *__tbl_detach(struct tbl *t, struct list_head *l)
 {
 	int len;
 
 	if (TBL_EMPTY(t)) 
-		return 0;
+		return NULL;
 	
 	list_del(l);
 	
 	len = --t->len;
 	
-	return len;
+	return l;
+}
+
+static inline int __tbl_del(struct tbl *t, struct list_head *l)
+{
+
+	if (!__tbl_detach(t, l)) 
+		return -1;
+	
+	kfree(l);
+		
+	return 1;
+}
+
+static inline int tbl_del(struct tbl *t, struct list_head *l)
+{
+	int res;
+	
+	write_lock_bh(&t->lock);
+
+	res = tbl_del(t, l);
+	
+	write_unlock_bh(&t->lock);
+	
+	return res;
 }
 
 static inline void *tbl_detach_first(struct tbl *t)
