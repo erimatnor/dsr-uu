@@ -502,17 +502,16 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 {
 	struct in_addr myaddr;
 	struct in_addr trg;
-	struct dsr_srt *srt_rev;
+	struct dsr_srt *srt_rev, *srt_rc;
 	int action = DSR_PKT_NONE;
+	int i, n;
 
 	if (!dp || !rreq_opt || dp->flags & PKT_PROMISC_RECV)
 		return DSR_PKT_DROP;
 
 	myaddr = my_addr();
 
-	if (dp->src.s_addr == myaddr.s_addr)
-		return DSR_PKT_DROP;
-
+	
 	trg.s_addr = rreq_opt->target;
 
 	if (dsr_rreq_duplicate(dp->src, trg, ntohs(rreq_opt->id))) {
@@ -570,19 +569,55 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		dsr_rrep_send(srt_rev, dp->srt);
 
 		action = DSR_PKT_NONE;
+	} 
+	
+	n = DSR_RREQ_ADDRS_LEN(rreq_opt) / sizeof(struct in_addr);
+	
+	if (dp->srt->src.s_addr == myaddr.s_addr)
+		return DSR_PKT_DROP;
+	
+	for (i = 0; i < n; i++)
+		if (dp->srt->addrs[i].s_addr == myaddr.s_addr) {
+			action = DSR_PKT_DROP;
+			goto out;
+		}
+
+	/* TODO: Check Blacklist */
+	
+	
+	if ((srt_rc = lc_srt_find(myaddr, trg))) {
+		struct dsr_srt *srt_cat;
+		/* Send cached route reply */
+		
+		srt_cat = dsr_srt_concatenate(dp->srt, srt_rc);
+
+		FREE(srt_rc);
+
+		if (!srt_cat) {
+			DEBUG("Could not concatenate\n");
+			goto rreq_forward;
+		}
+
+		DEBUG("srt_cat: %s\n", print_srt(srt_cat));
+		
+		if (dsr_srt_check_duplicate(srt_cat) > 0) {
+			DEBUG("Duplicate address in source route!!!\n");
+			FREE(srt_cat);
+			goto rreq_forward;				
+		}
+#ifdef NS2
+		dp->nh.iph->daddr() = (nsaddr_t) rreq_opt->target;
+#else
+		dp->nh.iph->daddr = rreq_opt->target;
+#endif
+		dsr_rrep_send(srt_cat, dp->srt);
+		
+		action = DSR_PKT_NONE;	
+		
+		FREE(srt_cat);
 	} else {
-		int i, n;
-		struct in_addr myaddr = my_addr();
 
-		n = DSR_RREQ_ADDRS_LEN(rreq_opt) / sizeof(struct in_addr);
-
-		/* Examine source route if this node already exists in it */
-		for (i = 0; i < n; i++)
-			if (dp->srt->addrs[i].s_addr == myaddr.s_addr) {
-				action = DSR_PKT_DROP;
-				goto out;
-			}
-
+	rreq_forward:	
 		dsr_pkt_alloc_opts_expand(dp, sizeof(struct in_addr));
 
 		if (!DSR_LAST_OPT(dp, rreq_opt)) {

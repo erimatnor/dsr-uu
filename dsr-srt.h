@@ -82,6 +82,8 @@ struct dsr_srt *dsr_srt_new(struct in_addr src, struct in_addr dst,
 			    unsigned int length, char *addrs);
 struct dsr_srt *dsr_srt_new_rev(struct dsr_srt *srt);
 void dsr_srt_del(struct dsr_srt *srt);
+struct dsr_srt *dsr_srt_concatenate(struct dsr_srt *srt1, struct dsr_srt *srt2);int dsr_srt_check_duplicate(struct dsr_srt *srt);
+
 #endif				/* NO_GLOBALS */
 
 #ifndef NO_DECLS

@@ -201,8 +201,8 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 	dsr_ack_req_send(m->nxt_hop, m->id);
 
 	/* Add at end of buffer */
-	tbl_add(&maint_buf, &m->l, crit_expires);
-/* 	tbl_add_tail(&maint_buf, &m->l); */
+/* 	tbl_add(&maint_buf, &m->l, crit_expires); */
+	tbl_add_tail(&maint_buf, &m->l);
       out:
 	maint_buf_set_timeout();
 
@@ -252,15 +252,17 @@ void NSCLASS maint_buf_set_timeout(void)
 
 int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 {
-	struct maint_entry *m;
 	struct neighbor_info neigh_info;
+	struct timeval now;
 	int res;
 /* 	char buf[2048]; */
 
-	if (!dp) {
+       	if (!dp) {
 		DEBUG("dp is NULL!?\n");
 		return -1;
 	}
+
+	gettime(&now);
 
 	res = neigh_tbl_query(dp->nxt_hop, &neigh_info);
 
@@ -268,39 +270,39 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 		DEBUG("No neighbor info about %s\n", print_ip(dp->nxt_hop));
 		return -1;
 	}
-
-	m = maint_entry_create(dp, neigh_info.id, neigh_info.rto);
-
-	if (!m)
-		return -1;
-
-	if (tbl_add(&maint_buf, &m->l, crit_expires) < 0) {
-		DEBUG("Buffer full, not buffering!\n");
-		FREE(m);
-		return -1;
-	}
-
-	neigh_tbl_id_inc(m->nxt_hop);
-
+	
 	/* Check if we should add an ACK REQ */
 	if (dp->flags & PKT_REQUEST_ACK &&
 	    !timer_pending(&ack_timer) &&
-	    (usecs_t) timeval_diff(&m->tx_time, &neigh_info.last_ack_req) >
+	    (usecs_t) timeval_diff(&now, &neigh_info.last_ack_req) >
 	    ConfValToUsecs(MaintHoldoffTime)) {
+		struct maint_entry *m;
 
-		/* Increased ID and sets last_ack_req time */
+		/* Set last_ack_req time */
+		m = maint_entry_create(dp, neigh_info.id, neigh_info.rto);
+		
+		if (!m)
+			return -1;
 
+		if (tbl_add_tail(&maint_buf, &m->l) < 0) {
+			DEBUG("Buffer full - not buffering!\n");
+			FREE(m);
+			return -1;
+		}
+		
 		m->ack_req_sent = 1;
-
+		
+		neigh_tbl_set_ack_req_time(m->nxt_hop);
+		
+		neigh_tbl_id_inc(m->nxt_hop);	
+	
 		dsr_ack_req_opt_add(dp, m->id);
 
 	/* 	if (!timer_pending(&ack_timer)) */
-/* 			maint_buf_set_timeout(); */
+		maint_buf_set_timeout();
 	} else {
-		DEBUG("Deferring ACK REQ for %s since_last=%ld id=%u\n",
-		      print_ip(dp->nxt_hop), timeval_diff(&m->tx_time,
-							  &neigh_info.
-							  last_ack_req), m->id);
+		DEBUG("Deferring ACK REQ for %s since_last=%ld\n",
+		      print_ip(dp->nxt_hop), timeval_diff(&now, &neigh_info.last_ack_req));
 	}
 
 /* 	maint_buf_print(&maint_buf, buf); */

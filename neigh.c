@@ -88,6 +88,17 @@ static inline int crit_addr_id_inc(void *pos, void *addr)
 
 	if (n->addr.s_addr == a->s_addr) {
 		n->id++;
+		//gettime(&n->last_ack_req);
+		return 1;
+	}
+	return 0;
+}
+static inline int set_ack_req_time(void *pos, void *addr)
+{
+	struct in_addr *a = (struct in_addr *)addr;
+	struct neighbor *n = (struct neighbor *)pos;
+
+	if (n->addr.s_addr == a->s_addr) {
 		gettime(&n->last_ack_req);
 		return 1;
 	}
@@ -166,7 +177,7 @@ static struct neighbor *neigh_tbl_create(struct in_addr addr,
 		     ((DSR_SRTTBASE >> 2) + (DSR_SRTTDFLT << 2)) >> 1, 
 		     DSR_MIN, DSR_REXMTMAX);
 
-	gettime(&neigh->last_ack_req);
+	memset(&neigh->last_ack_req, 0, sizeof(struct timeval));
 	memcpy(&neigh->hw_addr, hw_addr, sizeof(struct sockaddr));
 
 /* 	garbage_timer.expires = TimeNow + NEIGH_TBL_GARBAGE_COLLECT_TIMEOUT / 1000*HZ; */
@@ -218,6 +229,11 @@ int NSCLASS neigh_tbl_add(struct in_addr neigh_addr, struct ethhdr *ethh)
 int NSCLASS neigh_tbl_del(struct in_addr neigh_addr)
 {
 	return tbl_for_each_del(&neigh_tbl, &neigh_addr, crit_addr);
+}
+
+int NSCLASS neigh_tbl_set_ack_req_time(struct in_addr neigh_addr)
+{
+	return tbl_find_do(&neigh_tbl, &neigh_addr, set_ack_req_time);
 }
 
 int NSCLASS 

@@ -29,7 +29,7 @@ int neigh_tbl_query(struct in_addr neigh_addr,
 		    struct neighbor_info *neigh_info);
 int neigh_tbl_id_inc(struct in_addr neigh_addr);
 int neigh_tbl_set_rto(struct in_addr neigh_addr, struct neighbor_info *neigh_info);
-
+int neigh_tbl_set_ack_req_time(struct in_addr neigh_addr);
 void neigh_tbl_garbage_timeout(unsigned long data);
 
 int neigh_tbl_init(void);

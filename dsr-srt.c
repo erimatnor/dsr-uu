@@ -42,7 +42,7 @@ struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt, int sleft)
 	return prev_hop;
 }
 
-static int
+static int 
 dsr_srt_find_addr(struct dsr_srt *srt, struct in_addr addr, int index)
 {
 	int n = srt->laddrs / sizeof(struct in_addr);
@@ -189,7 +189,7 @@ struct dsr_srt *dsr_srt_shortcut(struct dsr_srt *srt, struct in_addr a1,
 	n_cut = n - (a2_num - a1_num - 1);
 
 	srt_cut = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) +
-					   (n_cut * sizeof(struct in_addr)),
+					   (n_cut*sizeof(struct in_addr)),
 					   GFP_ATOMIC);
 
 	if (!srt_cut)
@@ -213,6 +213,65 @@ struct dsr_srt *dsr_srt_shortcut(struct dsr_srt *srt, struct in_addr a1,
 	return srt_cut;
 }
 
+struct dsr_srt *dsr_srt_concatenate(struct dsr_srt *srt1, struct dsr_srt *srt2)
+{
+	struct dsr_srt *srt_cat;
+	int n, n1, n2;
+	
+	if (!srt1 || !srt2)
+		return NULL;
+	
+	n1 = srt1->laddrs / sizeof(struct in_addr);
+	n2 = srt2->laddrs / sizeof(struct in_addr);
+	
+	n = n1 + n2 + 1;
+	
+	srt_cat = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) +
+					   (n * sizeof(struct in_addr)),
+					   GFP_ATOMIC);
+	
+	if (!srt_cat)
+		return NULL;
+	
+	srt_cat->src = srt1->src;
+	srt_cat->dst = srt2->dst;
+	srt_cat->laddrs = n * sizeof(struct in_addr);
+	
+	memcpy(srt_cat->addrs, srt1->addrs, n1 * sizeof(struct in_addr));
+	memcpy(srt_cat->addrs + n1, &srt1->src, sizeof(struct in_addr));
+	memcpy(srt_cat->addrs + n1 + 1, srt2->addrs, n2 * sizeof(struct in_addr));
+	return srt_cat;
+}
+
+
+int dsr_srt_check_duplicate(struct dsr_srt *srt)
+{
+	struct in_addr *buf;
+	int n, i;
+	
+	n = srt->laddrs / sizeof(struct in_addr);
+
+	buf = (struct in_addr *)MALLOC(sizeof(struct in_addr) * (n + 1), 
+				       GFP_ATOMIC);
+	
+	buf[0] = srt->src;
+		
+	for (i = 0; i < n; i++) {
+		int j;
+		
+		for (j = 0; j < i + 1; j++)
+			if (buf[j].s_addr == srt->addrs[i].s_addr)
+				return 1;
+		
+		buf[i+1] = srt->addrs[i];
+	}
+	
+	for (i = 0; i < n + 1; i++)
+		if (buf[i].s_addr == srt->dst.s_addr)
+			return 1;
+	
+	return 0;
+}
 struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt)
 {
 	struct dsr_srt_opt *srt_opt;
