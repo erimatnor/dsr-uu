@@ -128,8 +128,11 @@ struct dsr_srt *dsr_srt_new_splice(struct dsr_srt *srt, struct in_addr addr)
 	return NULL;
  splice:
 	srt_spliced =  (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) + 
-						i * sizeof(struct in_addr), 
+						(i * sizeof(struct in_addr)), 
 						GFP_ATOMIC);
+
+	if (!srt_spliced)
+		return NULL;
 
 	srt_spliced->src.s_addr = srt->src.s_addr;
 	srt_spliced->dst.s_addr = srt->addrs[i].s_addr;
@@ -184,7 +187,8 @@ struct dsr_srt *dsr_srt_shortcut(struct dsr_srt *srt, struct in_addr a1,
 	
 	n_cut = n - (a2_num - a1_num - 1);
 		
-	srt_cut = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) + n_cut, 
+	srt_cut = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) + 
+					   (n_cut * sizeof(struct in_addr)), 
 					   GFP_ATOMIC);
 	
 	if (!srt_cut)
@@ -207,13 +211,6 @@ struct dsr_srt *dsr_srt_shortcut(struct dsr_srt *srt, struct in_addr a1,
 
 	return srt_cut;
 }
-
-
-void dsr_srt_del(struct dsr_srt *srt)
-{
-	FREE(srt);
-}
-
 
 struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt)
 {
@@ -366,6 +363,8 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp)
 		if (!srt_cut)
 			return DSR_PKT_DROP;
 		
+		DEBUG("shortcut: %s\n", print_srt(srt_cut));
+		
 		/* srt = dsr_rtc_find(myaddr, dp->src); */
 		srt = dsr_srt_new_splice_rev(srt_cut, myaddr);
 
@@ -374,7 +373,6 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp)
 			FREE(srt_cut);
 			return DSR_PKT_DROP;
 		}
-		DEBUG("shortcut: %s\n", print_srt(srt_cut));
 		DEBUG("my srt: %s\n", print_srt(srt));
 		
 		grat_rrep_tbl_add(dp->src, dp->prv_hop);

@@ -234,7 +234,6 @@ static inline struct lc_link *__lc_link_find(struct tbl *t,
 					     struct in_addr dst)
 {
 	struct link_query q = { src, dst };
-	
 	return (struct lc_link *)__tbl_find(t, &q, crit_link_query);
 }
 
@@ -427,7 +426,7 @@ void NSCLASS __dijkstra(struct in_addr src)
 /* 		lc_print(&LC, buf); */
 /* 		printf("%s\n", buf); */
 /* 		fflush(stdout); */
-/* 		tbl_detach(&LC.nodes, &u->l); */
+		tbl_detach(&LC.nodes, &u->l);
 		
 		/* Add to S */
 		tbl_add_tail(&S, &u->l);
@@ -449,7 +448,6 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 {
 	struct dsr_srt *srt = NULL;
 	struct lc_node *dst_node;
-
 	
 	if (src.s_addr == dst.s_addr)
 		return NULL;
@@ -465,7 +463,7 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 		DEBUG("%s not found\n", print_ip(dst));
 		goto out;
 	}
-
+	
 /* 	lc_print(&LC, lc_print_buf); */
 /* 	DEBUG("Find SR to node %s\n%s\n", print_ip(dst_node->addr), lc_print_buf); */
 
@@ -529,7 +527,7 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 	}
  out:
 	DSR_WRITE_UNLOCK(&LC.lock);
-
+	
 	return srt;
 }
 

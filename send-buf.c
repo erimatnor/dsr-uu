@@ -190,7 +190,7 @@ int NSCLASS send_buf_set_verdict(int verdict, struct in_addr dst)
 	case SEND_BUF_SEND:
 
 		while ((e = (struct send_buf_entry *)tbl_find_detach(&send_buf, &dst, crit_addr))) {
-			
+			DEBUG("Send packet\n");
 			/* Get source route */
 			e->dp->srt = dsr_rtc_find(e->dp->src, e->dp->dst);
 		    
