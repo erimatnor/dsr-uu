@@ -22,7 +22,22 @@ dsr_hdr_t *dsr_hdr_add(char *buf, int len, unsigned int protocol)
 	return dh;
 }
 
-void dsr_parse_source_route(struct in_addr initiator, u_int32_t *addrs)
+dsr_src_rte_t *dsr_src_rte_new(struct in_addr initiator, struct in_addr target,
+			       unsigned int length, u_int32_t *addrs)
+{
+	dsr_src_rte_t *sr;
+
+	sr = kmalloc(sizeof(dsr_src_rte_t) + length, GFP_ATOMIC);
+
+	sr->initiator.s_addr = initiator.s_addr;
+	sr->target.s_addr = target.s_addr;
+	sr->length = length;
+	memcpy(sr->addrs, addrs, length);
+
+	return sr;
+}
+
+void dsr_parse_source_route(struct in_addr initiator, dsr_src_rte_t *sr)
 {
 	DEBUG("Parse source route\n");
 	return;

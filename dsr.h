@@ -38,18 +38,23 @@ typedef struct dsr_hdr {
 #define DSR_OPT_AREQ     160
 #define DSR_OPT_PAD1     224
 
+typedef struct dsr_src_rte {
+	struct in_addr initiator;
+	struct in_addr target;
+	unsigned int length;  /* length in bytes if addrs */
+	struct in_addr addrs[0];
+} dsr_src_rte_t;
 
 /* Header lengths */
 #define DSR_FIXED_HDR_LEN sizeof(struct dsr_opt)
 #define DSR_PKT_MIN_LEN 24 /* IP header + DSR header =  20 + 4 */
 
 #define DSR_FIXED_HDR(iph) (dsr_hdr_t *)((char *)iph + (iph->ihl << 2))
-//#define DSR_OPT_HDR(iph) (dsr_opt_t *)((char *)iph + (iph->ihl << 2) + DSR_FIXED_HDR_LEN)
 #define DSR_OPT_HDR(dh) (dh->option)
 
 struct netdev_info {
-    __u32 ip_addr;
-    __u32 bc_addr;
+    struct in_addr ifaddr;
+    struct in_addr bcaddr;
     int ifindex;
 };
 
@@ -60,7 +65,8 @@ struct netdev_info {
 /* Local device info */
 extern struct netdev_info ldev_info;  /* defined in dsr-dev.c */
 
+dsr_src_rte_t *dsr_src_rte_new(struct in_addr initiator, struct in_addr target, unsigned int length, u_int32_t *addrs);
 dsr_hdr_t *dsr_hdr_add(char *buf, int len, unsigned int protocol);
-void dsr_parse_source_route(struct in_addr initiator, u_int32_t *addrs);
+void dsr_parse_source_route(struct in_addr initiator, dsr_src_rte_t *sr);
 void dsr_recv(char *buf, int len);
 #endif

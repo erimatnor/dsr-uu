@@ -1,5 +1,5 @@
 
-SRC=kdsr.c dsr-dev.c dsr-opt.c dsr-rreq.c p-queue.c
+SRC=kdsr.c dsr-dev.c dsr-opt.c dsr-rreq.c dsr-rrep.c p-queue.c
 
 DEFS=-DDEBUG
 
@@ -56,8 +56,9 @@ clean:
 endif
 # DO NOT DELETE
 
-dsr-dev.o: debug.h dsr.h dsr-rreq.h p-queue.h
-dsr-opt.o: debug.h dsr.h kdsr.h
+kdsr.o: dsr.h dsr-dev.h dsr-rreq.h p-queue.h debug.h
+dsr-dev.o: debug.h dsr.h kdsr.h dsr-rreq.h p-queue.h
+dsr-opt.o: debug.h dsr.h dsr-rreq.h kdsr.h
 dsr-rreq.o: debug.h dsr.h kdsr.h dsr-rreq.h
-p-queue.o: p-queue.h
-kdsr.o: dsr.h dsr-dev.h p-queue.h debug.h
+dsr-rrep.o: dsr.h dsr-rrep.h
+p-queue.o: p-queue.h debug.h

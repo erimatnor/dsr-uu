@@ -48,8 +48,8 @@ static int dsr_dev_set_ldev_info(struct net_device *dev)
 		if (ifa) {
 			if (basedev)
 				ldev_info.ifindex = basedev->ifindex;
-			ldev_info.ip_addr = ifa->ifa_address;
-			ldev_info.bc_addr = ifa->ifa_broadcast;
+			ldev_info.ifaddr.s_addr = ifa->ifa_address;
+			ldev_info.bcaddr.s_addr = ifa->ifa_broadcast;
 		}
 		in_dev_put(indev);
 	} else {

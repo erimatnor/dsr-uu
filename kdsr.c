@@ -104,7 +104,8 @@ struct sk_buff *dsr_rreq_create(__u32 taddr, struct net_device *dev)
 	return skb;
 }
 
-struct sk_buff *dsr_rreq_create(struct in_addr initiator)
+
+struct sk_buff *dsr_rrep_create(struct in_addr initiator, struct net_device *dev)
 {
 	struct sk_buff *skb;
 	struct in_addr target;
@@ -120,7 +121,7 @@ struct sk_buff *dsr_rreq_create(struct in_addr initiator)
 	if (!skb)
 		return NULL;
 
-	target.s_addr = taddr;
+	target.s_addr = initiator.s_addr;
 
 	dsr_rreq = dsr_rreq_hdr_add(skb_put(skb, DSR_RREQ_TOT_LEN), skb->len, target);
 
@@ -129,8 +130,6 @@ struct sk_buff *dsr_rreq_create(struct in_addr initiator)
 		return NULL;
 	}
 	return skb;
-
-	
 }
 
 int dsr_send_rrep(struct in_addr initiator)
