@@ -4,6 +4,10 @@
 #include "dsr.h"
 #include "debug.h"
 
+#ifdef NS2
+#include "endian.h"
+#endif
+
 #ifndef NO_GLOBALS
 
 /* Source route options header */
@@ -71,23 +75,19 @@ static inline char *print_srt(struct dsr_srt *srt)
 		len = sprintf(buf+len, "%s", print_ip(srt->dst));
 	return buf;
 }
-
+struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, struct in_addr myaddr, int index);
+struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt, struct in_addr myaddr);
+int dsr_srt_add(struct dsr_pkt *dp);
+struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt);
+struct dsr_srt *dsr_srt_new(struct in_addr src, struct in_addr dst, 
+			    unsigned int length, char *addrs);
+struct dsr_srt *dsr_srt_new_rev(struct dsr_srt *srt);
+void dsr_srt_del(struct dsr_srt *srt);
 #endif /* NO_GLOBALS */
 
 #ifndef NO_DECLS
 
-
-struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, int index);
-struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt);
-char *print_srt(struct dsr_srt *srt);
-struct dsr_srt *dsr_srt_new(struct in_addr src, struct in_addr dst, 
-		       unsigned int length, char *addrs);
-struct dsr_srt *dsr_srt_new_rev(struct dsr_srt *srt);
-char *dsr_srt_opt_make_room(struct dsr_srt *srt, struct sk_buff *skb, int len);
-struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt);
 int dsr_srt_opt_recv(struct dsr_pkt *dp);
-int dsr_srt_add(struct dsr_pkt *dp);
-void dsr_srt_del(struct dsr_srt *srt);
 
 #endif /* NO_DECLS */
 

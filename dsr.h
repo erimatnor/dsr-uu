@@ -20,7 +20,6 @@
 #include <netinet/in.h>
 #endif /* __KERNEL__ */
 
-
 #include "dsr-pkt.h"
 
 #define DSR_BROADCAST ((unsigned long int) 0xffffffff)
@@ -97,15 +96,18 @@ struct dsr_node {
 #define DSR_SPIN_UNLOCK(l)  spin_unlock(l)
 #define MALLOC(s, p)        kmalloc(s, p)
 #define FREE(p)             kfree(p)
-typedef struct timer_list DSRTimer;
-typedef unsigned long Time;
-#define SECONDS(secs) (secs*HZ)
 #define NSCLASS
 #define XMIT(pkt) dsr_dev_xmit(pkt)
 #else
 #define DSR_SPIN_LOCK(l)
 #define DSR_SPIN_UNLOCK(l)
 #endif /* __KERNEL__ */
+
+
+
+#ifdef __KERNEL__
+
+#define PARAM(name) (get_param(name))
 
 extern struct dsr_node *dsr_node;
 
@@ -134,16 +136,12 @@ static inline const int set_param(int index, int val)
 }
 
 
-#define PARAM(name) (get_param(name))
-
 static inline void dsr_node_init(struct dsr_node *dn)
 {
 	int i;
-#ifndef NS2	
 	spin_lock_init(&dn->lock);
 	dn->dev = NULL;
 	dn->slave_dev = NULL;
-#endif
 	
 	for (i = 0; i < PARAMS_MAX; i++) {
 		dn->params[i] = params_def[i].val;
@@ -161,7 +159,6 @@ static inline struct in_addr my_addr(void)
 	return my_addr;
 }
 
-#ifdef __KERNEL__
 static inline unsigned long time_add_msec(unsigned long msecs)
 {
 	struct timespec t;

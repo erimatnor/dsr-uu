@@ -3,6 +3,10 @@
 
 #include "dsr.h"
 
+#ifdef NS2
+#include "endian.h"
+#endif
+
 #ifndef NO_GLOBALS
 
 struct dsr_rerr_opt {

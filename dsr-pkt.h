@@ -2,7 +2,7 @@
 #define _DSR_PKT_H
 
 #ifdef NS2
-#include "ns-agent.h"
+#include <packet.h>
 #endif
 
 #define MAX_RREP_OPTS 10
@@ -19,10 +19,10 @@ struct dsr_pkt {
        	struct in_addr prv_hop;
 	char ip_data[60];
 	union {
-#if defined(__KERNEL__)
+#ifdef NS2
+		struct hdr_ip *iph;
+#else
 		struct iphdr *iph;
-#elif defined(NS2)
-		struct hdr_ip *ih;
 #endif
 		char *raw;
 	} nh;
@@ -44,10 +44,10 @@ struct dsr_pkt {
 
 	char *payload;           /* Packet payload (IP not included)*/
 	int payload_len;
-#if defined(__KERNEL__)
-	struct sk_buff *skb;
-#elif defined(NS2)
+#ifdef NS2
 	Packet *p;
+#else
+	struct sk_buff *skb;
 #endif
 };
 
@@ -74,8 +74,11 @@ static inline int dsr_pkt_tailroom(struct dsr_pkt *dp)
 {
 	return dp->end - dp->tail;
 }
-
+#ifdef NS2
+struct dsr_pkt *dsr_pkt_alloc(Packet *p);
+#else
 struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb);
+#endif
 char *dsr_pkt_alloc_opts(struct dsr_pkt *dp, int len);
 char *dsr_pkt_alloc_opts_expand(struct dsr_pkt *dp, int len);
 void dsr_pkt_free(struct dsr_pkt *dp);

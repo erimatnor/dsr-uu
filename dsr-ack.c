@@ -7,7 +7,7 @@
 #include "debug.h"
 #include "dsr-opt.h"
 #include "dsr-ack.h"
-#include "dsr-rtc.h"
+#include "link-cache.h"
 #include "neigh.h"
 #include "maint-buf.h"
 

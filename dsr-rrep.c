@@ -14,8 +14,9 @@
 #include "dsr-rreq.h"
 #include "dsr-opt.h"
 #include "dsr-srt.h"
-#include "dsr-rtc.h"
+#include "link-cache.h"
 #include "send-buf.h"
+#include "timer.h"
 
 #define GRAT_RREP_TBL_MAX_LEN 64
 #define GRAT_REPLY_HOLDOFF 1
@@ -25,7 +26,7 @@
 #else
 #define GRAT_RREP_TBL_PROC_NAME "dsr_grat_rrep_tbl"
 static TBL(grat_rrep_tbl, GRAT_RREP_TBL_MAX_LEN);
-DSRTimer grat_rrep_tbl_timer;
+DSRUUTimer grat_rrep_tbl_timer;
 #endif
 
 struct grat_rrep_entry {
@@ -112,6 +113,7 @@ int NSCLASS grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop)
 	}
 	return 1;
 }
+
 #ifdef __KERNEL__
 static int grat_rrep_tbl_print(char *buf)
 {
@@ -150,18 +152,7 @@ static int grat_rrep_tbl_proc_info(char *buffer, char **start, off_t offset, int
 	return len;    
 }
 
-int __init grat_rrep_tbl_init(void)
-{
-	proc_net_create(GRAT_RREP_TBL_PROC_NAME, 0, grat_rrep_tbl_proc_info);
-	return 0;
-}
 
-
-void __exit grat_rrep_tbl_cleanup(void)
-{
-	tbl_flush(&grat_rrep_tbl, NULL);
-	proc_net_remove(GRAT_RREP_TBL_PROC_NAME);
-}
 #endif /* __KERNEL__ */
 
 static inline int dsr_rrep_add_srt(struct dsr_rrep_opt *rrep_opt, struct dsr_srt *srt)
@@ -232,7 +223,7 @@ int NSCLASS dsr_rrep_send(struct dsr_srt *srt_to_me)
 
 	dp->src = my_addr();
 	dp->dst = dp->srt->dst;
-	dp->nxt_hop = dsr_srt_next_hop(dp->srt, 0);
+	dp->nxt_hop = dsr_srt_next_hop(dp->srt, dp->src, 0);
 
 	DEBUG("IP_HDR_LEN=%d DSR_OPT_HDR_LEN=%d DSR_SRT_OPT_LEN=%d DSR_RREP_OPT_LEN=%d DSR_OPT_PAD1_LEN=%d RREP len=%d\n", IP_HDR_LEN, DSR_OPT_HDR_LEN, DSR_SRT_OPT_LEN(srt_to_me), DSR_RREP_OPT_LEN(srt_to_me), DSR_OPT_PAD1_LEN, len);
 	
@@ -338,4 +329,23 @@ int NSCLASS dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 
 	/* Forward */
 	return DSR_PKT_FORWARD;	
+}
+
+int __init NSCLASS grat_rrep_tbl_init(void)
+{
+	INIT_TBL(&grat_rrep_tbl, GRAT_RREP_TBL_MAX_LEN);
+	
+#ifdef __KERNEL__
+	proc_net_create(GRAT_RREP_TBL_PROC_NAME, 0, grat_rrep_tbl_proc_info);
+#endif
+	return 0;
+}
+
+
+void __exit NSCLASS grat_rrep_tbl_cleanup(void)
+{
+	tbl_flush(&grat_rrep_tbl, NULL);
+#ifdef __KERNEL__
+	proc_net_remove(GRAT_RREP_TBL_PROC_NAME);
+#endif
 }

@@ -14,7 +14,9 @@
 #include "tbl.h"
 #include "send-buf.h"
 #include "debug.h"
-#include "dsr-rtc.h"
+#include "link-cache.h"
+#include "dsr-srt.h"
+#include "timer.h"
 
 #ifdef NS2
 #include "ns-agent.h"
@@ -22,7 +24,7 @@
 #define SEND_BUF_PROC_FS_NAME "send_buf"
 
 TBL(send_buf, SEND_BUF_MAX_LEN);
-static DSRTimer send_buf_timer;
+static DSRUUTimer send_buf_timer;
 #endif
 
 struct send_buf_entry {
@@ -207,12 +209,12 @@ int NSCLASS send_buf_set_verdict(int verdict, struct in_addr dst)
 	return pkts;
 }
 
-int NSCLASS send_buf_flush(void)
+static inline int send_buf_flush(struct tbl *t)
 {
 	struct send_buf_entry *e;
 	int pkts = 0;
 	/* Flush send buffer */
-	while((e = (struct send_buf_entry *)tbl_find_detach(&send_buf, NULL, crit_none))) {
+	while((e = (struct send_buf_entry *)tbl_find_detach(t, NULL, crit_none))) {
 		dsr_pkt_free(e->dp);
 		FREE(e);
 		pkts++;
@@ -255,8 +257,11 @@ static int send_buf_get_info(char *buffer, char **start, off_t offset, int lengt
 	return len;
 }
 
-int __init send_buf_init(void)
+int __init NSCLASS send_buf_init(void)
 {
+	
+
+#ifdef __KERNEL__
 	struct proc_dir_entry *proc;
 		
 	init_timer(&send_buf_timer);
@@ -269,11 +274,14 @@ int __init send_buf_init(void)
 		printk(KERN_ERR "send_buf: failed to create proc entry\n");
 		return -1;
 	}
+#else
+	INIT_TBL(&send_buf, SEND_BUF_MAX_LEN);
+#endif
 
 	return 1;
 }
 
-void __exit send_buf_cleanup(void)
+void __exit NSCLASS send_buf_cleanup(void)
 {
 	int pkts;
 #ifdef KERNEL26
@@ -282,11 +290,13 @@ void __exit send_buf_cleanup(void)
 	if (timer_pending(&send_buf_timer))
 		del_timer_sync(&send_buf_timer);
 	
-	pkts = send_buf_flush();
+	pkts = send_buf_flush(&send_buf);
 	
 	DEBUG("Flushed %d packets\n", pkts);
 
+#ifdef __KERNEL__
 	proc_net_remove(SEND_BUF_PROC_FS_NAME);
+#endif
 }
 
 

@@ -5,6 +5,8 @@
 #include "endian.h"
 #endif
 
+#ifndef NO_GLOBALS
+
 /* Generic header for all options */
 struct dsr_opt {
 	u_int8_t type;
@@ -55,13 +57,22 @@ struct dsr_pad1_opt {
 #define DSR_GET_NEXT_OPT(dopt) ((struct dsr_opt *)((char *)dopt + dopt->length + 2))
 #define DSR_LAST_OPT(dp, opt) ((dp->dh.raw + ntohs(dp->dh.opth->p_len) + 4) == ((char *)opt + opt->length + 2))
 
+
+struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, int len, unsigned int protocol);
+struct dsr_opt *dsr_opt_find_opt(struct dsr_pkt *dp, int type);
+int dsr_opts_remove(struct dsr_pkt *dp);
+
+#ifdef __KERNEL__
 struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, struct in_addr dst, int ip_len, int totlen, int protocol, int ttl);
+#endif
+
+
+#endif /* NO_GLOBALS */
+
+#ifndef NO_DECLS
 
 int dsr_opt_recv(struct dsr_pkt *dp);
-struct dsr_opt *dsr_opt_find_opt(struct dsr_pkt *dp, int type);
-struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, int len, unsigned int protocol);
-int dsr_opts_remove(struct dsr_pkt *dp);
-int dsr_opts_create(struct dsr_pkt *dp);
-char *dsr_opt_make_room_skb(struct dsr_pkt *dp, struct sk_buff *skb, int len);
+
+#endif /* NO_DECLS */
 
 #endif

@@ -12,12 +12,15 @@
 #include "dsr-rrep.h"
 #include "dsr-rreq.h"
 #include "dsr-opt.h"
-#include "dsr-rtc.h"
+#include "link-cache.h"
 #include "send-buf.h"
 
 #ifdef NS2
 #include "ns-agent.h"
 #else 
+
+#define RREQ_TBL_PROC_NAME "dsr_rreq_tbl"
+
 static TBL(rreq_tbl, RREQ_TBL_MAX_LEN);
 static unsigned int rreq_seqno = 1;
 #endif
@@ -32,7 +35,7 @@ struct rreq_tbl_entry {
 	int state;
 	struct in_addr node_addr;
 	int ttl;
-	DSRTimer timer;
+	DSRUUTimer timer;
 	Time tx_time;
 	Time last_used;
 	Time timeout;
@@ -128,7 +131,7 @@ void NSCLASS rreq_tbl_timeout(unsigned long data)
 	dsr_rreq_send(target, ttl);
 }
 
-static struct rreq_tbl_entry *__rreq_tbl_entry_create(struct in_addr node_addr)
+struct rreq_tbl_entry *NSCLASS __rreq_tbl_entry_create(struct in_addr node_addr)
 {
 	struct rreq_tbl_entry *e;
 	
@@ -142,7 +145,7 @@ static struct rreq_tbl_entry *__rreq_tbl_entry_create(struct in_addr node_addr)
 	e->ttl = 0;
 	e->tx_time = 0;
 	e->num_rexmts = 0;
-#ifndef NS2
+#ifdef __KERNEL__
 	init_timer(&e->timer);
 	e->timer.function = &rreq_tbl_timeout;
 	e->timer.data = (unsigned long)e;
@@ -494,7 +497,6 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 
 #ifdef __KERNEL__
 
-#define RREQ_TBL_PROC_NAME "dsr_rreq_tbl"
 
 static int rreq_tbl_print(char *buf)
 {
@@ -549,26 +551,28 @@ static int rreq_tbl_proc_info(char *buffer, char **start, off_t offset, int leng
 	return len;    
 }
 
-static inline int crit_flush(void *pos, void *data)
+
+#endif /* __KERNEL__ */
+
+int __init NSCLASS rreq_tbl_init(void)
 {
-	struct rreq_tbl_entry *e = (struct rreq_tbl_entry *)pos;
-
-	del_timer_sync(&e->timer);
-	tbl_flush(&e->rreq_id_tbl, crit_none);
-
-	return 1;
-}
-
-int __init rreq_tbl_init(void)
-{
+	INIT_TBL(&rreq_tbl, RREQ_TBL_MAX_LEN);
+	
+#ifdef __KERNEL__
 	proc_net_create(RREQ_TBL_PROC_NAME, 0, rreq_tbl_proc_info);
+#endif
 	return 0;
 }
 
-void __exit rreq_tbl_cleanup(void)
-{
-	tbl_flush(&rreq_tbl, crit_flush);
+void __exit NSCLASS rreq_tbl_cleanup(void)
+{	
+	struct rreq_tbl_entry *e;
+	
+	while ((e = (struct rreq_tbl_entry *)tbl_detach_first(&rreq_tbl))) {
+		del_timer_sync(&e->timer);
+		tbl_flush(&e->rreq_id_tbl, crit_none);
+	}
+#ifdef __KERNEL__
 	proc_net_remove(RREQ_TBL_PROC_NAME);
-}
-
 #endif
+}

@@ -1,11 +1,11 @@
 #ifdef __KERNEL__
 #include <linux/proc_fs.h>
-#include <linux/timer.h>
 #endif
 
 #include "tbl.h"
 #include "neigh.h"
 #include "debug.h"
+#include "timer.h"
 
 #ifdef NS2
 #include "ns-agent.h"
@@ -17,7 +17,7 @@ static TBL(neigh_tbl, NEIGH_TBL_MAX_LEN);
 
 #define NEIGH_TBL_PROC_NAME "dsr_neigh_tbl"
 
-static DSRTimer garbage_timer;
+static DSRUUTimer garbage_timer;
 
 #endif /* NS2 */
 

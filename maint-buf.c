@@ -8,8 +8,9 @@
 #include "tbl.h"
 #include "neigh.h"
 #include "dsr-ack.h"
-#include "dsr-rtc.h"
+#include "link-cache.h"
 #include "dsr-rerr.h"
+#include "timer.h"
 
 #ifdef NS2
 #include "ns-agent.h"
@@ -19,7 +20,7 @@
 
 TBL(maint_buf, MAINT_BUF_MAX_LEN);
 
-static DSRTimer ack_timer;
+static DSRUUTimer ack_timer;
 
 #endif /* NS2 */
 
@@ -34,46 +35,57 @@ struct maint_entry {
 	struct dsr_pkt *dp;
 };
 
-struct id_query {
+struct maint_buf_query {
 	struct in_addr *nxt_hop;
 	unsigned short *id;
+#ifdef NS2
+	DSRUU *a_;
+#else
+	DSRUUTimer *t;
+#endif
 };
 	
 static void maint_buf_set_timeout(void);
 static void maint_buf_timeout(unsigned long data);
 
-inline int NSCLASS crit_addr_id_del(void *pos, void *data)
+static inline int crit_addr_id_del(void *pos, void *data)
 {	
 	struct maint_entry *m = (struct maint_entry *)pos;
-	struct id_query *q = (struct id_query *)data;
+	struct maint_buf_query *q = (struct maint_buf_query *)data;
 
 	if (m->nxt_hop.s_addr == q->nxt_hop->s_addr &&
 	    m->id == *(q->id)) {
 		
 		if (m->dp)
 			dsr_pkt_free(m->dp);
-
+#ifdef NS2
+		if (m->timer_set)
+			q->a_->del_timer_sync(&q->a_->ack_timer);
+#else
 		if (m->timer_set) 
-			del_timer_sync(&ack_timer);
-		
+			del_timer_sync(q->t);
+#endif		
 		return 1;
 	}
 	return 0;
 }
 
-inline int NSCLASS crit_addr_del(void *pos, void *data)
+static inline int crit_addr_del(void *pos, void *data)
 {	
 	struct maint_entry *m = (struct maint_entry *)pos;
-	struct in_addr *addr = (struct in_addr *)data;
+	struct maint_buf_query *q = (struct maint_buf_query *)data;
 	
-	if (m->nxt_hop.s_addr == addr->s_addr) {
+	if (m->nxt_hop.s_addr == q->nxt_hop->s_addr) {
 		
 		if (m->dp)
 			dsr_pkt_free(m->dp);
-
+#ifdef NS2
+		if (m->timer_set)
+			q->a_->del_timer_sync(&q->a_->ack_timer);
+#else
 		if (m->timer_set) 
-			del_timer_sync(&ack_timer);
-		
+			del_timer_sync(q->t);
+#endif		
 		return 1;
 	}
 	return 0;
@@ -259,8 +271,16 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 
 int NSCLASS maint_buf_del_all(struct in_addr nxt_hop)
 {
+	struct maint_buf_query q;
+
+	q.nxt_hop = &nxt_hop;
+#ifdef NS2
+	q.a_ = this;
+#else
+	q.t = &ack_timer;
+#endif
       	/* Find the buffered packet to mark as acked */
-	if (!tbl_for_each_del(&maint_buf, &nxt_hop, crit_addr_del))
+	if (!tbl_for_each_del(&maint_buf, &q, crit_addr_del))
 		return 0;
 
 	if (!TBL_EMPTY(&maint_buf) && !timer_pending(&ack_timer))
@@ -271,11 +291,15 @@ int NSCLASS maint_buf_del_all(struct in_addr nxt_hop)
 
 int NSCLASS maint_buf_del(struct in_addr nxt_hop, unsigned short id)
 {
-	struct id_query q;
+	struct maint_buf_query q;
 	
 	q.id = &id;
 	q.nxt_hop = &nxt_hop;
-
+#ifdef NS2
+	q.a_ = this;
+#else
+	q.t = &ack_timer;
+#endif
 	/* Find the buffered packet to mark as acked */
 	if (!tbl_find_del(&maint_buf, &q, crit_addr_id_del))
 		return 0;
@@ -323,8 +347,9 @@ static int maint_buf_get_info(char *buffer, char **start, off_t offset, int leng
 	return len;
 }
 
-int maint_buf_init(void)
+int NSCLASS maint_buf_init(void)
 {
+#ifdef __KERNEL__
 	struct proc_dir_entry *proc;
 		
 	init_timer(&ack_timer);
@@ -339,15 +364,19 @@ int maint_buf_init(void)
 		printk(KERN_ERR "maint_buf: failed to create proc entry\n");
 		return -1;
 	}
+#endif
+	INIT_TBL(&maint_buf, MAINT_BUF_MAX_LEN);
 
 	return 1;
 }
 
-void maint_buf_cleanup(void)
+void NSCLASS maint_buf_cleanup(void)
 {
+#ifdef __KERNEL__
 	del_timer_sync(&ack_timer);
-	tbl_flush(&maint_buf, crit_free_pkt);
 	proc_net_remove(MAINT_BUF_PROC_FS_NAME);
+#endif
+	tbl_flush(&maint_buf, crit_free_pkt);
 }
 
 #endif /* __KERNEL__ */

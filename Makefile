@@ -42,17 +42,17 @@ OBJS_NS_CPP=$(NS_SRC_CPP:%.cc=%-ns.o)
 NS_DEFS= # DON'T CHANGE (overridden by NS Makefile)
 
 # Set extra DEFINES here. Link layer feedback is now a runtime option.
-EXTRA_NS_DEFS=-DNS2
+EXTRA_NS_DEFS=
 
 # Note: OPTS is overridden by NS Makefile
 NS_CFLAGS=$(OPTS) $(CPP_OPTS) $(DEBUG) $(NS_DEFS) $(EXTRA_NS_DEFS)
 
 NS_INC= # DON'T CHANGE (overridden by NS Makefile)
 
-NS_TARGET=libdsr-uu.a
+NS_TARGET=libdsruu-ns2.a
 # Archiver and options
 AR=ar
-AR_FLAGS=rc
+AR_FLAGS=rcs
 
 #######
 VERSION=$(shell if [ ! -d $(KERNEL_DIR) ]; then echo "No linux source found!!! Check your setup..."; exit; fi; grep ^VERSION $(KERNEL_DIR)/Makefile | cut -d' ' -f 3)
@@ -65,7 +65,7 @@ KDEFS=-D__KERNEL__ -DMODULE -DEXPORT_SYMTAB $(DEFS) -DCONFIG_MODVERSIONS -DMODVE
 KINC=-nostdinc $(shell $(CC) -print-search-dirs | sed -ne 's/install: \(.*\)/-I \1include/gp') -I$(KERNEL_INC)
 KCFLAGS=-Wall -fno-strict-aliasing -O2 $(KDEFS) $(KINC)
 
-.PHONY: mips default depend
+.PHONY: mips default depend clean ns
 
 # Check for kernel version
 ifeq ($(PATCHLEVEL),6)
@@ -99,7 +99,11 @@ $(OBJS_NS_CPP): %-ns.o: %.cc Makefile
 $(OBJS_NS): %-ns.o: %.c Makefile
 	$(CPP) $(NS_CFLAGS) $(NS_INC) -c -o $@ $<
 
-$(NS_TARGET): endian.h $(OBJS_NS_CPP) $(OBJS_NS)
+ns: dsr-uu.o $(NS_TARGET)
+
+dsr-uu.o: endian.h $(OBJS_NS_CPP) $(OBJS_NS)
+
+$(NS_TARGET): dsr-uu.o
 	$(AR) $(AR_FLAGS) $@ $(OBJS_NS_CPP) $(OBJS_NS) > /dev/null
 
 endian.h: endian.c
@@ -123,35 +127,45 @@ endif
 # DO NOT DELETE
 
 debug.o: debug.h
-dsr-ack.o: tbl.h dsr.h dsr-pkt.h debug.h dsr-opt.h dsr-ack.h dsr-dev.h
-dsr-ack.o: dsr-rtc.h dsr-srt.h neigh.h maint-buf.h
-dsr-dev.o: debug.h dsr.h dsr-pkt.h kdsr.h dsr-opt.h dsr-rreq.h dsr-rtc.h
-dsr-dev.o: dsr-srt.h dsr-ack.h send-buf.h maint-buf.h
-dsr-module.o: dsr.h dsr-pkt.h dsr-dev.h dsr-rreq.h dsr-rrep.h dsr-srt.h
-dsr-module.o: debug.h dsr-ack.h send-buf.h dsr-rtc.h maint-buf.h neigh.h
-dsr-module.o: dsr-opt.h
-dsr-opt.o: debug.h dsr.h dsr-pkt.h dsr-opt.h dsr-rreq.h dsr-rrep.h dsr-srt.h
-dsr-opt.o: dsr-rerr.h dsr-ack.h kdsr.h
-dsr-pkt.o: dsr.h dsr-pkt.h dsr-opt.h
-dsr-rerr.o: dsr-rerr.h dsr.h dsr-pkt.h dsr-opt.h debug.h dsr-srt.h dsr-ack.h
-dsr-rerr.o: dsr-dev.h dsr-rtc.h maint-buf.h
-dsr-rrep.o: dsr.h dsr-pkt.h debug.h tbl.h dsr-rrep.h dsr-srt.h dsr-rreq.h
-dsr-rrep.o: dsr-opt.h dsr-rtc.h dsr-dev.h send-buf.h kdsr.h
-dsr-rreq.o: debug.h dsr.h dsr-pkt.h tbl.h kdsr.h dsr-rrep.h dsr-srt.h
-dsr-rreq.o: dsr-rreq.h dsr-opt.h dsr-rtc.h dsr-dev.h send-buf.h
-dsr-rtc-simple.o: tbl.h dsr-rtc.h dsr-srt.h dsr.h dsr-pkt.h debug.h
-dsr-srt.o: dsr.h dsr-pkt.h dsr-srt.h debug.h dsr-opt.h dsr-ack.h dsr-rtc.h
-link-cache.o: dsr-rtc.h dsr-srt.h dsr.h dsr-pkt.h debug.h tbl.h
-maint-buf.o: dsr.h dsr-pkt.h debug.h tbl.h neigh.h dsr-ack.h dsr-rtc.h
-maint-buf.o: dsr-srt.h dsr-rerr.h
-neigh.o: tbl.h neigh.h dsr.h dsr-pkt.h debug.h
-send-buf.o: tbl.h send-buf.h dsr.h dsr-pkt.h debug.h dsr-rtc.h dsr-srt.h
-send-buf.o: kdsr.h
-dsr.o: dsr-pkt.h
-dsr-rerr.o: dsr.h dsr-pkt.h
-dsr-rrep.o: dsr.h dsr-pkt.h dsr-srt.h debug.h
-dsr-rreq.o: dsr.h dsr-pkt.h
-dsr-rtc.o: dsr-srt.h dsr.h dsr-pkt.h debug.h
-dsr-srt.o: dsr.h dsr-pkt.h debug.h
-neigh.o: dsr.h dsr-pkt.h
-send-buf.o: dsr.h dsr-pkt.h
+dsr-ack.o: tbl.h list.h debug.h dsr-opt.h dsr-ack.h dsr.h ./endian.h
+dsr-ack.o: dsr-pkt.h link-cache.h neigh.h maint-buf.h
+dsr-dev.o: debug.h dsr.h ./endian.h dsr-pkt.h kdsr.h dsr-opt.h dsr-rreq.h
+dsr-dev.o: link-cache.h dsr-srt.h dsr-ack.h send-buf.h maint-buf.h
+dsr-module.o: dsr.h ./endian.h dsr-pkt.h dsr-dev.h dsr-rreq.h dsr-rrep.h
+dsr-module.o: dsr-srt.h debug.h dsr-ack.h send-buf.h dsr-rtc.h maint-buf.h
+dsr-module.o: neigh.h dsr-opt.h
+dsr-opt.o: debug.h dsr.h ./endian.h dsr-pkt.h dsr-opt.h dsr-rreq.h dsr-rrep.h
+dsr-opt.o: dsr-srt.h dsr-rerr.h dsr-ack.h
+dsr-pkt.o: dsr.h ./endian.h dsr-pkt.h dsr-opt.h
+dsr-rerr.o: dsr.h ./endian.h dsr-pkt.h dsr-rerr.h dsr-opt.h debug.h dsr-srt.h
+dsr-rerr.o: dsr-ack.h link-cache.h maint-buf.h
+dsr-rrep.o: dsr.h ./endian.h dsr-pkt.h debug.h tbl.h list.h dsr-rrep.h
+dsr-rrep.o: dsr-srt.h dsr-rreq.h dsr-opt.h link-cache.h send-buf.h
+dsr-rreq.o: debug.h dsr.h ./endian.h dsr-pkt.h tbl.h list.h dsr-rrep.h
+dsr-rreq.o: dsr-srt.h dsr-rreq.h dsr-opt.h link-cache.h send-buf.h
+dsr-rtc-simple.o: tbl.h list.h dsr-rtc.h dsr-srt.h dsr.h ./endian.h dsr-pkt.h
+dsr-rtc-simple.o: debug.h
+dsr-srt.o: dsr.h ./endian.h dsr-pkt.h dsr-srt.h debug.h dsr-opt.h dsr-ack.h
+dsr-srt.o: link-cache.h
+link-cache.o: debug.h dsr-rtc.h dsr-srt.h dsr.h ./endian.h dsr-pkt.h tbl.h
+link-cache.o: list.h link-cache.h
+maint-buf.o: dsr.h ./endian.h dsr-pkt.h debug.h tbl.h list.h neigh.h
+maint-buf.o: dsr-ack.h link-cache.h dsr-rerr.h
+neigh.o: tbl.h list.h neigh.h dsr.h ./endian.h dsr-pkt.h debug.h
+send-buf.o: tbl.h list.h send-buf.h dsr.h ./endian.h dsr-pkt.h debug.h
+send-buf.o: link-cache.h dsr-srt.h
+dsr-ack.o: dsr.h ./endian.h dsr-pkt.h
+dsr-dev.o: dsr.h ./endian.h dsr-pkt.h
+dsr.o: ./endian.h dsr-pkt.h
+dsr-rerr.o: dsr.h ./endian.h dsr-pkt.h
+dsr-rrep.o: dsr.h ./endian.h dsr-pkt.h dsr-srt.h debug.h
+dsr-rreq.o: dsr.h ./endian.h dsr-pkt.h
+dsr-rtc.o: dsr-srt.h dsr.h ./endian.h dsr-pkt.h debug.h
+dsr-srt.o: dsr.h ./endian.h dsr-pkt.h debug.h
+kdsr.o: dsr-pkt.h
+neigh.o: dsr.h ./endian.h dsr-pkt.h
+ns-agent.o: tbl.h list.h ./endian.h dsr-rreq.h dsr.h dsr-pkt.h dsr-rrep.h
+ns-agent.o: dsr-srt.h debug.h dsr-rerr.h dsr-ack.h send-buf.h neigh.h
+ns-agent.o: maint-buf.h link-cache.h
+send-buf.o: dsr.h ./endian.h dsr-pkt.h
+tbl.o: list.h

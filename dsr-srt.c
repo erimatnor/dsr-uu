@@ -7,17 +7,17 @@
 #include "dsr-srt.h"
 #include "dsr-opt.h"
 #include "dsr-ack.h"
-#include "dsr-rtc.h"
+#include "link-cache.h"
 #include "debug.h"
 
 #ifdef NS2
 #include "ns-agent.h"
 #endif
 
-struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, int index)
+struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, struct in_addr myaddr, int index)
 {
 	int n = srt->laddrs / sizeof(struct in_addr);
-	struct in_addr nxt_hop, myaddr = my_addr();
+	struct in_addr nxt_hop;
 	
 	if (srt->src.s_addr == myaddr.s_addr) {
 		if (srt->laddrs == 0)
@@ -41,7 +41,7 @@ struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, int index)
 	return nxt_hop;
 }
 
-struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt)
+struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt, struct in_addr myaddr)
 {
 	struct in_addr prev_hop;
 	int n = srt->laddrs / sizeof(u_int32_t);
@@ -51,7 +51,6 @@ struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt)
 		prev_hop = srt->src;
 	else {
 		int i;
-		struct in_addr myaddr = my_addr();
 		
 		if (srt->dst.s_addr == myaddr.s_addr) {
 			prev_hop = srt->addrs[n-1];
@@ -157,7 +156,7 @@ int dsr_srt_add(struct dsr_pkt *dp)
 	if (!dp || !dp->srt)
 		return -1;
 
-	dp->nxt_hop = dsr_srt_next_hop(dp->srt, 0);
+	dp->nxt_hop = dsr_srt_next_hop(dp->srt, dp->src, 0);
 
 	/* Calculate extra space needed */
 
@@ -251,7 +250,7 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp)
 		
 
 		/* Fill in next hop */
-		dp->nxt_hop = dsr_srt_next_hop(dp->srt, i);
+		dp->nxt_hop = dsr_srt_next_hop(dp->srt, my_addr(), i);
 
 		DEBUG("Setting next hop %s and forward n=%d i=%d\n", 
 		      print_ip(dp->nxt_hop), n, i);

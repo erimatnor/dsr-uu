@@ -42,7 +42,7 @@ struct rtc_entry {
 #define RTC_TIMER
 
 #ifdef RTC_TIMER
-static DSRTimer rtc_timer;
+static DSRUUTimer rtc_timer;
 
 static void dsr_rtc_timeout(unsigned long data);
 

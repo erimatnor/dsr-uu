@@ -16,7 +16,7 @@
 #include "kdsr.h"
 #include "dsr-opt.h"
 #include "dsr-rreq.h"
-#include "dsr-rtc.h"
+#include "link-cache.h"
 #include "dsr-srt.h"
 #include "dsr-ack.h"
 #include "send-buf.h"

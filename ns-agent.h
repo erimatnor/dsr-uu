@@ -1,7 +1,11 @@
 #ifndef _DSR_NS_AGENT
 #define _DSR_NS_AGENT
 
-class DSRAgent;
+#ifndef NS2
+#error "To compile the ns-2 version of DSR-UU, NS2 must be defined!"
+#endif /* NS2 */
+
+class DSRUU;
 
 #include <stdarg.h>
 
@@ -9,59 +13,78 @@ class DSRAgent;
 #include <agent.h>
 #include <trace.h>
 #include <scheduler.h>
+#include <packet.h>
+#include <dsr-priqueue.h>
+#include <mac.h>
+#include <mobilenode.h>
 
 #include "tbl.h"
 #include "endian.h"
+#include "dsr.h"
+#include "timer.h"
 
 #define NO_DECLS
+#include "dsr-opt.h"
 #include "dsr-rreq.h"
+#include "dsr-pkt.h"
 #include "dsr-rrep.h"
 #include "dsr-rerr.h"
 #include "dsr-ack.h"
 #include "dsr-srt.h"
 #include "send-buf.h"
 #include "neigh.h"
-#include "maint-buf.h"
+#include "maint-buf.h" 
+#include "link-cache.h"
 #undef NO_DECLS
 
-#define NSCLASS DSRAgent::
+#define NSCLASS DSRUU::
 #define jiffies Scheduler::instance().clock()
 
 #define timer_pending(timer) 1 /* What here ??? */
 #define del_timer_sync(timer) del_timer(timer)
-#define SECONDS(secs) (secs)
 #define MALLOC(s, p)        malloc(s)
 #define FREE(p)             free(p)
 #define XMIT(pkt) /* What here ??? */
+#define __init
+#define __exit
+#define PARAM(name) DSRUU::get_param(name)
+#define ntohl(x) x
+#define htonl(x) x
+#define htons(x) x
+#define ntohs(x) x
 
 #define IPDEFTTL 64
 
-typedef double Time;
-
-class DSRTimer : public TimerHandler {
+class DSRUU : public Agent {
  public:
-	DSRTimer(DSRAgent *a);//:TimerHandler(){a_=a; debuglevel=debug}
-	double expires;
-	int debuglevel;
- protected:
-	virtual void expire (Event *e);
-	DSRAgent *a_;
-};
+	friend class DSRUUTimer;
+	
+	DSRUU();
+	~DSRUU();
 
-class DSRAgent : public Agent {
- public:
+	DSRUUTimer ack_timer;
 
-	virtual int command(int argc, const char*const* argv);
-	virtual void recv(Packet*, Handler* callback = 0);
+	int command(int argc, const char*const* argv);
+	void recv(Packet*, Handler* callback = 0);
+	Packet *ns_packet_create(struct dsr_pkt *dp);
 
-	void tap(const Packet *p);
+/* 	void tap(const Packet *p); */
 	// tap out all data packets received at this host and promiscously snoop
 	// them for interesting tidbits
 
-	void add_timer (DSRTimer *);
-	void del_timer (DSRTimer *);
-
+	void add_timer (DSRUUTimer *t) { t->sched(t->expires); }
+	void mod_timer (DSRUUTimer *t, Time expires_) 
+		{ t->expires = expires_; t->sched(t->expires); }
+	void del_timer (DSRUUTimer *t) { t->cancel(); }
+	static const int get_param(int index) { return params[index]; }
+	static const int set_param(int index, int val) 
+		{ params[index] = val; return val; }
 #define NO_GLOBALS
+#undef NO_DECLS
+
+#undef _DSR_OPT_H
+#include "dsr-opt.h"
+
 #undef _DSR_RREQ_H
 #include "dsr-rreq.h"
 
@@ -86,27 +109,37 @@ class DSRAgent : public Agent {
 #undef _MAINT_BUF_H
 #include "maint-buf.h"
 
+#undef _LINK_CACHE_H
+#include "link-cache.h"
+
 #undef NO_GLOBALS
 
-	int dsr_opt_recv(struct dsr_pkt *dp);
-
-	DSRAgent();
-	~DSRAgent();
+	struct in_addr my_addr() { return ip_addr; }
 
  private:
-	static struct tbl rreq_tbl;
-	static struct tbl grat_rrep_tbl;
-	static struct tbl send_buf;
-	static struct tbl neigh_tbl;
-	static struct tbl maint_buf;
-	
-	static unsigned int rreq_seqno;
-	
-	static DSRTimer grat_rrep_tbl_timer;
-	static DSRTimer send_buf_timer;
-	static DSRTimer garbage_timer;
-	static DSRTimer ack_timer;
-};
+	static int params[PARAMS_MAX];
 
+	struct in_addr ip_addr;
+	Mac *mac_;
+	LL *ll_;
+	CMUPriQueue *ifq_;
+	MobileNode *node_;
+
+	struct tbl rreq_tbl;
+	struct tbl grat_rrep_tbl;
+	struct tbl send_buf;
+	struct tbl neigh_tbl;
+	struct tbl maint_buf;
+	
+	unsigned int rreq_seqno;
+	
+	DSRUUTimer grat_rrep_tbl_timer;
+	DSRUUTimer send_buf_timer;
+	DSRUUTimer garbage_timer;
+	DSRUUTimer lc_timer;
+
+	/* The link cache */
+	struct lc_graph LC;
+};
 
 #endif /* _DSR_NS_AGENT_H */

@@ -35,8 +35,11 @@ struct dsr_rrep_opt {
 
 int dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt);
 int dsr_rrep_send(struct dsr_srt *srt);
+
 void grat_rrep_tbl_timeout(unsigned long data);
 int grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop);
+int grat_rrep_tbl_init(void);
+void grat_rrep_tbl_cleanup(void);
 
 #endif /* NO_DECLS */
 

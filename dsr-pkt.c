@@ -3,6 +3,10 @@
 #include <linux/if_ether.h>
 #endif
 
+#ifdef NS2
+#include "ns-agent.h"
+#endif
+
 #include "dsr.h"
 #include "dsr-opt.h"
 
@@ -71,6 +75,35 @@ int dsr_pkt_free_opts(struct dsr_pkt *dp)
 	return len;
 }
 
+#ifdef NS2
+struct dsr_pkt *dsr_pkt_alloc(Packet *p)
+{
+	struct dsr_pkt *dp;
+	struct hdr_cmn *cmh;
+	int dsr_opts_len = 0;	
+
+	dp = (struct dsr_pkt *)MALLOC(sizeof(struct dsr_pkt), GFP_ATOMIC);
+
+	if (!dp)
+		return NULL;
+	
+	memset(dp, 0, sizeof(struct dsr_pkt));
+	
+	if (p) {
+		cmh =  hdr_cmn::access(p);	
+
+		dp->p = p;
+		dp->nh.iph = hdr_ip::access(p);
+		
+		dp->src.s_addr = Address::instance().get_nodeaddr(dp->nh.iph->saddr());
+		dp->dst.s_addr = Address::instance().get_nodeaddr(dp->nh.iph->daddr());
+		
+	}
+	return dp;
+}
+
+#else
+		
 struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb)
 {
 	struct dsr_pkt *dp;
@@ -82,7 +115,7 @@ struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb)
 		return NULL;
 	
 	memset(dp, 0, sizeof(struct dsr_pkt));
-#ifdef __KERNEL__		
+	
 	if (skb) {		
 		dp->skb = skb;
 		dp->nh.iph = skb->nh.iph;
@@ -109,10 +142,10 @@ struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb)
 		dp->payload_len = ntohs(dp->nh.iph->tot_len) - 
 			(dp->nh.iph->ihl << 2) - dsr_opts_len;
 	}
-#endif    	
 	return dp;
 }
 
+#endif    	
 
 void dsr_pkt_free(struct dsr_pkt *dp)
 {

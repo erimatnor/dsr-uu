@@ -167,7 +167,7 @@ static int dsr_ip_recv(struct sk_buff *skb)
 			
 		memcpy(hw_addr.sa_data, eth->h_source, ETH_ALEN);
 		
-		dp->prv_hop = dsr_srt_prev_hop(dp->srt);
+		dp->prv_hop = dsr_srt_prev_hop(dp->srt, my_addr());
 		
 		neigh_tbl_add(dp->prv_hop, &hw_addr);
 	}

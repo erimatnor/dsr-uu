@@ -8,7 +8,7 @@
 #include "debug.h"
 #include "dsr-srt.h"
 #include "dsr-ack.h"
-#include "dsr-rtc.h"
+#include "link-cache.h"
 #include "maint-buf.h"
 
 #ifdef NS2
@@ -111,7 +111,7 @@ int NSCLASS dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 	dp->src = my_addr();
 	dp->dst = dst;
 	dp->srt = srt;
-	dp->nxt_hop = dsr_srt_next_hop(dp->srt, 0);
+	dp->nxt_hop = dsr_srt_next_hop(dp->srt, dp->src, 0);
 
 	buf = dsr_pkt_alloc_opts(dp, len);
 
