@@ -610,6 +610,7 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 #else
 		dp->nh.iph->daddr = rreq_opt->target;
 #endif
+		DEBUG("Sending cached RREP to %s\n", print_ip(dp->src));
 		dsr_rrep_send(srt_cat, dp->srt);
 		
 		action = DSR_PKT_NONE;	
