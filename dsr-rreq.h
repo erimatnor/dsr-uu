@@ -21,5 +21,6 @@ typedef struct dsr_rreq_opt {
 //dsr_rreq_opt_t *dsr_rreq_opt_add(char *buf, int buflen, struct in_addr target);
 int dsr_rreq_create(dsr_pkt_t *dp);
 int dsr_rreq_recv(dsr_pkt_t *dp);
+int dsr_rreq_send(struct in_addr target);
 
 #endif  /* _DSR_RREQ */

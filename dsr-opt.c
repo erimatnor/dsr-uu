@@ -12,13 +12,9 @@ dsr_pkt_t *dsr_pkt_alloc(void)
 {
 	dsr_pkt_t *dp;
 
-/* 	if (len < sizeof(dsr_pkt_t)) { */
-/* 		DEBUG("len=%d too short\n", len); */
-/* 		return NULL; */
-/* 	} */
 	dp = kmalloc(sizeof(dsr_pkt_t), GFP_ATOMIC);
 	
-	memset(dp, 0, len);
+	memset(dp, 0, sizeof(dsr_pkt_t));
 	
 	return dp;
 }
@@ -31,7 +27,7 @@ void dsr_pkt_free(dsr_pkt_t *dp)
 	/* Can't free skb, might be needed further down, or up, the stack */
 
 	if (dp->srt)
-		kfree(srt);
+		kfree(dp->srt);
 	
 	kfree(dp);
 }
@@ -79,33 +75,42 @@ struct iphdr *dsr_build_ip(char *buf, int len, struct in_addr src,
 	return iph;
 }
 
-int dsr_opts_remove(struct iphdr *iph, int len)
+int dsr_opts_remove(dsr_pkt_t *dp)
 {
-	dsr_hdr_t *dh;
+	struct iphdr *iph;
 	int dsr_len;
 	
-	dh = (dsr_hdr_t *)((char *)iph + (iph->ihl << 2));
+	if (!dp)
+		return -1;
 
-	dsr_len = ntohs(dh->length) + DSR_OPT_HDR_LEN;
+       	dsr_len = ntohs(dp->dh->length) + DSR_OPT_HDR_LEN;
 	
-	if (dsr_len > len) {
-		DEBUG("data to short according to DSR header len=%d dh->length=%d!\n", len, dsr_len);
+	if (dsr_len > dp->len) {
+		DEBUG("data to short according to DSR header len=%d dh->length=%d!\n", dp->len, dsr_len);
 		return -1;
 	}
 	/* Update IP header */
-	iph->protocol = dh->nh;
-	iph->tot_len = htons((iph->ihl << 2) + len - dsr_len);
+	iph = dp->skb->nh.iph;
+
+	iph->protocol = dp->dh->nh;
+	iph->tot_len = htons(ntohs(iph->tot_len) - dsr_len);
 	ip_send_check(iph);
 
-	memcpy((char *)dh, (char *)dh + dsr_len, len - dsr_len);
+	memcpy((char *)dp->dh, (char *)dp->dh + dsr_len, dp->len - dsr_len);
+	
+	dp->len -= dsr_len;
+	dp->dh = NULL;
+	dp->sopt = NULL;
+	dp->rreq = NULL;
+	dp->rrep = NULL;
 	
 	/* Return new length */
-	return (len - dsr_len);
+	return dp->len;
 }
 int dsr_recv(dsr_pkt_t *dp)
 {	
 	int dsr_len, l;
-	int res = DSR_PKT_KILL;
+	int res = DSR_PKT_DROP;
 	dsr_opt_t *dopt;
 	
 	if (!dp)
@@ -113,7 +118,7 @@ int dsr_recv(dsr_pkt_t *dp)
 	
 	dp->dh = (dsr_hdr_t *)dp->data;
 
-	dsr_len = ntohs(dh->length);
+	dsr_len = ntohs(dp->dh->length);
 	
 	if (dsr_len > dp->len) {
 		DEBUG("data to short, DSR header len=%d dh->length=%d!\n", 
@@ -122,11 +127,11 @@ int dsr_recv(dsr_pkt_t *dp)
 	}
 	
 	l = DSR_OPT_HDR_LEN;
-	dopt = DSR_OPT_HDR(dh);
+	dopt = DSR_OPT_HDR(dp->dh);
 	
 	while (l < dsr_len) {
-		DEBUG("len=%d dsr_len=%d l=%d\n", len, dsr_len, l);
-		switch (dp->dopt->type) {
+		DEBUG("len=%d dsr_len=%d l=%d\n", dp->len, dsr_len, l);
+		switch (dopt->type) {
 		case DSR_OPT_PADN:
 			break;
 		case DSR_OPT_RREQ:
@@ -177,7 +182,7 @@ int dsr_srt_add(dsr_pkt_t *dp)
 	char *ndx;
 	int dsr_len;
 	
-	if (!dp || !sp->skb || !dp->srt)
+	if (!dp || !dp->skb || !dp->srt)
 		return -1;
 	
 	skb = dp->skb;
@@ -217,131 +222,7 @@ int dsr_srt_add(dsr_pkt_t *dp)
 	
 	dsr_hdr_add(ndx, dsr_len, iph->protocol);
 	
-	dsr_srt_opt_add(ndx + DSR_OPT_HDR_LEN, dsr_len - DSR_OPT_HDR_LEN, srt);
+	dsr_srt_opt_add(ndx + DSR_OPT_HDR_LEN, dsr_len - DSR_OPT_HDR_LEN, dp->srt);
 
 	return 0;
-}
-
-int dsr_rreq_send(u_int32_t target)
-{
-	int res = 0;
-	struct net_device *dev;
-	dsr_pkt_t *dp;
-	struct sockaddr broadcast = {AF_UNSPEC, {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
-	dev = dev_get_by_index(ldev_info.ifindex);
-	
-	if (!dev) {
-		DEBUG("no send device!\n");
-		res = -1;
-		goto out_err;
-	}
-	
-	dp->dsr_pkt_alloc();
-	
-	dp->len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN;
-	dp->dst.s_addr = target;
-	
-	dp->skb = kdsr_pkt_alloc(dp->len, dev);
-	
-	if (!skb) {
-		res = -1;
-		goto out_err;
-	}
-	
-	dp->skb->dev = dev;
-	dp->data = skb->data;
-	dp->dst.s_addr = target.s_addr;
-	
-	res = dsr_rreq_create(dp);
-
-	if (res < 0) {
-		DEBUG("Could not create RREQ\n");
-		goto out_err;
-	}
-	
-	res = dsr_dev_build_hw_hdr(dp->skb, &broadcast);
-	
-	if (res < 0) {
-		DEBUG("RREQ transmission failed...\n");
-		dev_kfree_skb(dp->skb);
-		goto out_err;
-	}
-
-	dev_queue_xmit(dp->skb);
-
- out_err:	
-	dsr_pkt_free(dp);
-	dev_put(dev);
-	return res;
-}
-
-int dsr_rrep_send(dsr_srt_t *srt)
-{
-	int res = 0;
-	struct net_device *dev;
-	dsr_pkt_t *dp;
-	struct sockaddr dest;
-	
-	dev = dev_get_by_index(ldev_info.ifindex);
-	
-	if (!dev) {
-		DEBUG("no send device!\n");
-		res = -1;
-		goto out_err;
-	}
-	
-	if (!srt) {
-		DEBUG("no source route!\n");
-		res = -1;
-		goto out_err;
-	}
-
-	DEBUG("Sending RREP\n");
-	
-	dp->dsr_pkt_alloc();
-	
-	dp->len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) + DSR_RREP_OPT_LEN(srt);
-		
-	dp->skb = kdsr_pkt_alloc(dp->len, dev);
-	
-	if (!skb) {
-		res = -1;
-		goto out_err;
-	}
-
-	dp->skb->dev = dev;
-	dp->srt = srt;
-	dp->data = skb->data;
-	
-	res = dsr_rrep_create(dp);
-
-	if (res < 0) {
-		DEBUG("Could not create RREP\n");
-		goto out_err;
-	}
-	
-	if (srt->laddrs == 0) {
-		DEBUG("source route is one hop\n");
-		dp->nh.s_addr = srt->src.s_addr;
-	} else		
-		dp->nh.s_addr = srt->addrs->s_addr;
-	
-	if (kdsr_get_hwaddr(dp->nh, &dest, dev) < 0) {
-		DEBUG("Could not get hardware address for %s\n", 
-		      print_ip(dp->nh.s_addr));
-		goto out_err;
-	}
-	
-	res = dsr_dev_build_hw_hdr(dp->skb, &dest);
-	
-	if (res < 0) {
-		DEBUG("RREP transmission failed...\n");
-		dev_kfree_skb(dp->skb);
-		goto out_err;
-	}	
-	dev_queue_xmit(skb);
- out_err:	
-	dsr_pkt_free(sp);
-	dev_put(dev);
-	return res;
 }

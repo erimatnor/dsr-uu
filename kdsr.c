@@ -37,30 +37,11 @@ MODULE_PARM(ifname, "s");
 #endif
 
 
-static int kdsr_arpset(struct in_addr addr, struct sockaddr *hw_addr, 
-		       struct net_device *dev)
-{
-	struct neighbour *neigh;
-
-	DEBUG("Setting arp for %s %s\n", print_ip(addr.s_addr), 
-	      print_eth(hw_addr->sa_data));
-
-	neigh = __neigh_lookup_errno(&arp_tbl, &(addr.s_addr), dev);
-	//        err = PTR_ERR(neigh);
-        if (!IS_ERR(neigh)) {
-		neigh->parms->delay_probe_time = 0;
-                neigh_update(neigh, hw_addr->sa_data, NUD_REACHABLE, 1, 0);
-                neigh_release(neigh);
-        }
-	return 0;
-}
 
 static int kdsr_recv(struct sk_buff *skb)
 {
 	dsr_pkt_t *dp;
 	struct iphdr *iph;
-	struct in_addr src, dst, nh;
-	struct sockaddr hw_addr;
 	int ret, newlen;
 
 	DEBUG("received dsr packet\n");
@@ -80,28 +61,26 @@ static int kdsr_recv(struct sk_buff *skb)
 	dp->data = skb->data;
 	
 	/* Get IP stuff that we need */
-	src.s_addr = iph->saddr;
-	dst.s_addr = iph->daddr;
+	dp->src.s_addr = iph->saddr;
+	dp->dst.s_addr = iph->daddr;
 
 	/* Process packet */
-	ret = dsr_recv(dp, src, dst, &nh);
+	ret = dsr_recv(dp);
 
 	switch (ret) {
 	case DSR_PKT_FORWARD:
-		DEBUG("Forwarding %s", print_ip(src.s_addr));
-		DEBUG(" %s", print_ip(dst.s_addr));		
-		DEBUG(" nh %s\n", print_ip(nh.s_addr));
+		DEBUG("Forwarding %s", print_ip(dp->src.s_addr));
+		DEBUG(" %s", print_ip(dp->dst.s_addr));		
+		DEBUG(" nh %s\n", print_ip(dp->nh.s_addr));
 
 		iph->ttl--;
 
 		/* Must checksum be recalculated? */
 		ip_send_check(iph);
-		
-		
-		
+				
 		return 0;
 	case DSR_PKT_DELIVER:
-		newlen = dsr_opts_remove(skb->nh.iph, skb->len);
+		newlen = dsr_opts_remove(dp);
 		
 		if (newlen) {
 			DEBUG("Deliver to IP\n");
@@ -159,8 +138,26 @@ int kdsr_get_hwaddr(struct in_addr addr, struct sockaddr *hwaddr,
 	return -1;
 }
 
+int kdsr_arpset(struct in_addr addr, struct sockaddr *hw_addr, 
+		       struct net_device *dev)
+{
+	struct neighbour *neigh;
+
+	DEBUG("Setting arp for %s %s\n", print_ip(addr.s_addr), 
+	      print_eth(hw_addr->sa_data));
+
+	neigh = __neigh_lookup_errno(&arp_tbl, &(addr.s_addr), dev);
+	//        err = PTR_ERR(neigh);
+        if (!IS_ERR(neigh)) {
+		neigh->parms->delay_probe_time = 0;
+                neigh_update(neigh, hw_addr->sa_data, NUD_REACHABLE, 1, 0);
+                neigh_release(neigh);
+        }
+	return 0;
+}
+
 /* Allocate DSR packet, dev is send device */
-static struct sk_buff *kdsr_pkt_alloc(unsigned int size, struct net_device *dev)
+struct sk_buff *kdsr_pkt_alloc(unsigned int size, struct net_device *dev)
 {
 	struct sk_buff *skb;
 	

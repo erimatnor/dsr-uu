@@ -82,9 +82,9 @@ dsr_srt_opt_t *dsr_srt_opt_add(char *buf, int len, dsr_srt_t *srt)
 	return sopt;
 }
 
-int dsr_srt_recv(dsr_pkt_t *dp)
+int dsr_srt_recv(struct dsr_pkt *dp)
 {
-	dsr_srt_opt_t sopt;
+	dsr_srt_opt_t *sopt;
 	int n;	
 	
 	if (!dp || !dp->sopt)
@@ -113,7 +113,7 @@ int dsr_srt_recv(dsr_pkt_t *dp)
 		i = n - sopt->sleft;
 
 		/* Fill in next hop */
-		dp->nh->s_addr = sopt->addrs[i];
+		dp->nh.s_addr = sopt->addrs[i];
 
 		/* TODO: check for multicast address in next hop or dst */
 		/* TODO: check MTU and compare to pkt size */

@@ -5,6 +5,8 @@
 #include <linux/types.h>
 #include <linux/in.h>
 
+#include "dsr.h"
+
 /* Source route options header */
 typedef struct dsr_srt_opt {
 	u_int8_t type;
@@ -49,6 +51,6 @@ dsr_srt_t *dsr_srt_new(struct in_addr src, struct in_addr dst,
 		       unsigned int length, u_int32_t *addrs);
 dsr_srt_t *dsr_srt_new_rev(dsr_srt_t *srt);
 dsr_srt_opt_t *dsr_srt_opt_add(char *buf, int len, dsr_srt_t *srt);
-int dsr_srt_recv(dsr_pkt_t *dp);
+int dsr_srt_recv(struct dsr_pkt *dp);
 
 #endif /* _DSR_SRT_H */

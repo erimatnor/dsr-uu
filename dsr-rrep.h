@@ -1,6 +1,9 @@
 #ifndef _DSR_RREP_H
 #define _DSR_RREP_H
 
+#include "dsr.h"
+#include "dsr-srt.h"
+
 typedef struct dsr_rrep_opt {
 	u_int8_t type;
 	u_int8_t length;
@@ -26,5 +29,6 @@ typedef struct dsr_rrep_opt {
 //dsr_rrep_opt_t *dsr_rrep_opt_add(char *buf, int len, dsr_srt_t *sr);
 int dsr_rrep_create(dsr_pkt_t *dp);
 int dsr_rrep_recv(dsr_pkt_t *dp);
+int dsr_rrep_send(dsr_srt_t *srt);
 
 #endif /* _DSR_RREP */

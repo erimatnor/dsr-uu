@@ -6,6 +6,7 @@
 #include "dsr-rrep.h"
 #include "dsr-rreq.h"
 #include "dsr-rtc.h"
+#include "dsr-dev.h"
 #include "p-queue.h"
 
 static unsigned int rreq_seqno = 1;
@@ -37,13 +38,13 @@ int dsr_rreq_create(dsr_pkt_t *dp)
 	
 	l = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN;
 	
-	if (!dp->buf || dp->len < l)
+	if (!dp->data || dp->len < l)
 		return -1;
 
 	dst.s_addr = DSR_BROADCAST;
-	off = skb->data;
+	off = dp->skb->data;
 	
-	dsr_build_ip(skb->data, l, ldev_info.ifaddr, dst, 1);
+	dsr_build_ip(dp->skb->data, l, ldev_info.ifaddr, dst, 1);
 
 	off += IP_HDR_LEN;
 	l -= IP_HDR_LEN;
@@ -64,7 +65,6 @@ int dsr_rreq_create(dsr_pkt_t *dp)
 
 int dsr_rreq_recv(dsr_pkt_t *dp)
 {
-	dsr_srt_t *srt;
 	dsr_rreq_opt_t *rreq;
 	
 	if (!dp || !dp->rreq)
@@ -80,10 +80,18 @@ int dsr_rreq_recv(dsr_pkt_t *dp)
 #ifdef __KERNEL__
 	/* Add mac address of previous hop to the arp table */
 	if (dp->skb->mac.ethernet) {
+		struct sockaddr hw_addr;
+		struct in_addr ph;
 		/* struct net_device *dev = skb->dev; */
 		
 		memcpy(hw_addr.sa_data, dp->skb->mac.ethernet->h_source, ETH_ALEN);
-		kdsr_arpset(src, &hw_addr, dp->skb->dev);
+		/* Find the previous hop */
+		if (dp->srt->laddrs == 0)
+			ph.s_addr = dp->srt->src.s_addr;
+		else
+			ph.s_addr = dp->srt->addrs[0].s_addr;
+		
+		kdsr_arpset(ph, &hw_addr, dp->skb->dev);
 	/* 	dev_put(dev); */
 	}
 #endif
@@ -92,10 +100,12 @@ int dsr_rreq_recv(dsr_pkt_t *dp)
 		
 		DEBUG("I am RREQ target\n");
 		
-		DEBUG("srt: %s\n", print_srt(srt));
+		DEBUG("srt: %s\n", print_srt(dp->srt));
 
-		srt_rev = dsr_srt_new_rev(srt);
+		srt_rev = dsr_srt_new_rev(dp->srt);
 		
+		DEBUG("srt_rev: %s\n", print_srt(srt_rev));
+
 		dsr_rtc_add(srt_rev, 60000, 0);
 
 		/* Send buffered packets */
@@ -112,11 +122,65 @@ int dsr_rreq_recv(dsr_pkt_t *dp)
 		
 		/* Examine source route if this node already exists in it */
 		for (i = 0; i < n; i++)
-			if (srt->addrs[i].s_addr == ldev_info.ifaddr.s_addr) {
+			if (dp->srt->addrs[i].s_addr == ldev_info.ifaddr.s_addr) {
 				return DSR_PKT_DROP;
 			}		
 		/* Forward RREQ */
 		return DSR_PKT_FORWARD;
 	}
 	return DSR_PKT_DROP;
+}
+
+int dsr_rreq_send(struct in_addr target)
+{
+	int res = 0;
+	struct net_device *dev;
+	struct sockaddr broadcast = {AF_UNSPEC, {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
+	dsr_pkt_t *dp;
+	
+
+	dev = dev_get_by_index(ldev_info.ifindex);
+	
+	if (!dev) {
+		DEBUG("no send device!\n");
+		return -1;
+	}	
+	
+	dp = dsr_pkt_alloc();
+
+	dp->len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_RREQ_HDR_LEN;
+	dp->dst.s_addr = target.s_addr;
+	
+	dp->skb = kdsr_pkt_alloc(dp->len, dev);
+	
+	if (!dp->skb) {
+		res = -1;
+		goto out_err;
+	}
+	
+	dp->skb->dev = dev;
+	dp->data = dp->skb->data;
+	dp->dst.s_addr = target.s_addr;
+	
+	res = dsr_rreq_create(dp);
+
+	if (res < 0) {
+		DEBUG("Could not create RREQ\n");
+		goto out_err;
+	}
+	
+	res = dsr_dev_build_hw_hdr(dp->skb, &broadcast);
+	
+	if (res < 0) {
+		DEBUG("RREQ transmission failed...\n");
+		dev_kfree_skb(dp->skb);
+		goto out_err;
+	}
+
+	dev_queue_xmit(dp->skb);
+
+ out_err:	
+	dsr_pkt_free(dp);
+	dev_put(dev);
+	return res;
 }

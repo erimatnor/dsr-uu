@@ -6,7 +6,9 @@
 #include "dsr-rrep.h"
 #include "dsr-srt.h"
 #include "dsr-rtc.h"
+#include "dsr-dev.h"
 #include "p-queue.h"
+#include "kdsr.h"
 
 static inline int dsr_rrep_add_srt(dsr_rrep_opt_t *rrep, dsr_srt_t *srt)
 {
@@ -49,13 +51,16 @@ int dsr_rrep_create(dsr_pkt_t *dp)
 	char *off;
 	int l;
 	
-	l = IP_HDR_LEN + DSR_OPT_HDR_LEN + 
-		DSR_SRT_OPT_LEN(srt) + DSR_RREP_OPT_LEN(srt);
-	
-	if (!dp || !dp->srt || dp->len < l)
+	if (!dp || !dp->srt)
 		return -1;
 	
-	dp->dst.s_addr = srt->src.s_addr;
+	l = IP_HDR_LEN + DSR_OPT_HDR_LEN + 
+		DSR_SRT_OPT_LEN(dp->srt) + DSR_RREP_OPT_LEN(dp->srt);
+	
+	if (dp->len < l)
+		return -1;
+	
+	dp->dst.s_addr = dp->srt->src.s_addr;
 	off = dp->data;
 	
 	dsr_build_ip(off, l, ldev_info.ifaddr, dp->dst, 1);
@@ -74,7 +79,7 @@ int dsr_rrep_create(dsr_pkt_t *dp)
 	off += DSR_SRT_OPT_LEN(dp->srt);
 	l -= DSR_SRT_OPT_LEN(dp->srt);
 
-	rrep = dsr_rrep_opt_add(off, l, srt);
+	rrep = dsr_rrep_opt_add(off, l, dp->srt);
 
 	if (!rrep) {
 		DEBUG("Could not create RREQ\n");
@@ -115,4 +120,72 @@ int dsr_rrep_recv(dsr_pkt_t *dp)
 	}
 	
 	return DSR_PKT_DROP;
+}
+
+int dsr_rrep_send(dsr_srt_t *srt)
+{
+	int res = 0;
+	struct net_device *dev;
+	dsr_pkt_t *dp;
+	struct sockaddr dest;
+	
+	if (!srt) {
+		DEBUG("no source route!\n");
+		return -1;
+	}
+	dev = dev_get_by_index(ldev_info.ifindex);
+	
+	if (!dev) {
+		DEBUG("no send device!\n");
+		return -1;
+	}
+	
+	DEBUG("Sending RREP\n");
+	
+	dp = dsr_pkt_alloc();
+	
+	dp->len = IP_HDR_LEN + DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(srt) + DSR_RREP_OPT_LEN(srt);
+		
+	dp->skb = kdsr_pkt_alloc(dp->len, dev);
+	
+	if (!dp->skb) {
+		res = -1;
+		goto out_err;
+	}
+
+	dp->skb->dev = dev;
+	dp->srt = srt;
+	dp->data = dp->skb->data;
+	
+	res = dsr_rrep_create(dp);
+
+	if (res < 0) {
+		DEBUG("Could not create RREP\n");
+		goto out_err;
+	}
+	
+	if (srt->laddrs == 0) {
+		DEBUG("source route is one hop\n");
+		dp->nh.s_addr = srt->src.s_addr;
+	} else		
+		dp->nh.s_addr = srt->addrs->s_addr;
+	
+	if (kdsr_get_hwaddr(dp->nh, &dest, dev) < 0) {
+		DEBUG("Could not get hardware address for %s\n", 
+		      print_ip(dp->nh.s_addr));
+		goto out_err;
+	}
+	
+	res = dsr_dev_build_hw_hdr(dp->skb, &dest);
+	
+	if (res < 0) {
+		DEBUG("RREP transmission failed...\n");
+		dev_kfree_skb(dp->skb);
+		goto out_err;
+	}	
+	dev_queue_xmit(dp->skb);
+ out_err:	
+	dsr_pkt_free(dp);
+	dev_put(dev);
+	return res;
 }

@@ -24,16 +24,10 @@
 #define NET_P_QUEUE_QMAX 2088
 #define NET_P_QUEUE_QMAX_NAME "p_queue_maxlen"
 
-struct p_rt_info {
-	__u8 tos;
-	__u32 daddr;
-	__u32 saddr;
-};
-
 struct p_queue_entry {
 	struct list_head list;
-	dsr_pkt_t *dp;
-	int (*okfn)(struct sk_buff *);
+	struct dsr_pkt *dp;
+	int (*okfn)(struct dsr_pkt *);
 };
 
 typedef int (*p_queue_cmpfn)(struct p_queue_entry *, unsigned long);
@@ -43,8 +37,7 @@ static rwlock_t queue_lock = RW_LOCK_UNLOCKED;
 static unsigned int queue_total;
 static LIST_HEAD(queue_list);
 
-static inline int
-__p_queue_enqueue_entry(struct p_queue_entry *entry)
+static inline int __p_queue_enqueue_entry(struct p_queue_entry *entry)
 {
        if (queue_total >= queue_maxlen) {
                if (net_ratelimit()) 
@@ -61,8 +54,7 @@ __p_queue_enqueue_entry(struct p_queue_entry *entry)
  * Find and return a queued entry matched by cmpfn, or return the last
  * entry if cmpfn is NULL.
  */
-static inline struct p_queue_entry *
-__p_queue_find_entry(p_queue_cmpfn cmpfn, unsigned long data)
+static inline struct p_queue_entry *__p_queue_find_entry(p_queue_cmpfn cmpfn, unsigned long data)
 {
 	struct list_head *p;
 
@@ -75,15 +67,13 @@ __p_queue_find_entry(p_queue_cmpfn cmpfn, unsigned long data)
 	return NULL;
 }
 
-static inline void
-__p_queue_dequeue_entry(struct p_queue_entry *entry)
+static inline void __p_queue_dequeue_entry(struct p_queue_entry *entry)
 {
 	list_del(&entry->list);
 	queue_total--;
 }
 
-static inline struct p_queue_entry *
-__p_queue_find_dequeue_entry(p_queue_cmpfn cmpfn, unsigned long data)
+static inline struct p_queue_entry *__p_queue_find_dequeue_entry(p_queue_cmpfn cmpfn, unsigned long data)
 {
 	struct p_queue_entry *entry;
 
@@ -96,28 +86,26 @@ __p_queue_find_dequeue_entry(p_queue_cmpfn cmpfn, unsigned long data)
 }
 
 
-static inline void
-__p_queue_flush(void)
+static inline void __p_queue_flush(void)
 {
 	struct p_queue_entry *entry;
 	int n = 0;
 	
 	while ((entry = __p_queue_find_dequeue_entry(NULL, 0))) {
-	    kfree_skb(entry->skb);
+	    kfree_skb(entry->dp->skb);
+	    dsr_pkt_free(entry->dp);
 	    kfree(entry);
 	    n++;
 	}
 	DEBUG("%d pkts flushed\n", n);
 }
 
-static inline void
-__p_queue_reset(void)
+static inline void __p_queue_reset(void)
 {
     __p_queue_flush();
 }
 
-static struct p_queue_entry *
-p_queue_find_dequeue_entry(p_queue_cmpfn cmpfn, unsigned long data)
+static struct p_queue_entry *p_queue_find_dequeue_entry(p_queue_cmpfn cmpfn, unsigned long data)
 {
 	struct p_queue_entry *entry;
 	
@@ -167,10 +155,9 @@ err_out_unlock:
 	return status;
 }
 
-static inline int
-dest_cmp(struct p_queue_entry *e, unsigned long daddr)
+static inline int dest_cmp(struct p_queue_entry *e, unsigned long daddr)
 {
-	return (daddr == e->rt_info.daddr);
+	return (daddr == e->dp->dst.s_addr);
 }
 
 int p_queue_find(__u32 daddr)
@@ -191,7 +178,6 @@ int p_queue_find(__u32 daddr)
 int p_queue_set_verdict(int verdict, __u32 daddr)
 {
     struct p_queue_entry *entry;
-    dsr_srt_t *srt;
     int pkts = 0;
     
     if (verdict == P_QUEUE_DROP) {
@@ -205,9 +191,10 @@ int p_queue_set_verdict(int verdict, __u32 daddr)
 	    /* Send an ICMP message informing the application that the
 	     * destination was unreachable. */
 	    if (pkts == 0)
-		icmp_send(entry->skb, ICMP_DEST_UNREACH, ICMP_HOST_UNREACH, 0);
+		icmp_send(entry->dp->skb, ICMP_DEST_UNREACH, ICMP_HOST_UNREACH, 0);
 	    
-	    kfree_skb(entry->skb);
+	    kfree_skb(entry->dp->skb);
+	    dsr_pkt_free(entry->dp);
 	    kfree(entry);
 	    pkts++;
 	}
@@ -222,12 +209,12 @@ int p_queue_set_verdict(int verdict, __u32 daddr)
 	    if (entry == NULL)
 		return pkts;
 	    	    
-	    srt = dsr_rtc_find(entry->skb->nh.iph->daddr);
+	    entry->dp->srt = dsr_rtc_find(entry->dp->dst);
 	    
 	    /* Add source route */
-	    if (!srt || dsr_dev_srt_add(skb, srt) < 0) {
+	    if (!entry->dp->srt || dsr_srt_add(entry->dp) < 0) {
 		    kfree_skb(entry->dp->skb);
-		    kfree(entry->dp);
+		    dsr_pkt_free(entry->dp);
 		    kfree(entry);
 		    continue;
 	    }

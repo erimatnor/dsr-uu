@@ -49,7 +49,7 @@ static inline void __dsr_rtc_set_next_timeout(void)
     
 	if (list_empty(&rtc_head)) 
 		return;
-
+	
 	/* Get first entry */
 	ne = (struct rtc_entry *)rtc_head.next;
 
@@ -159,14 +159,14 @@ static inline int __dsr_rtc_del(struct rtc_entry *e)
 	return 1;
 }
 
-int dsr_rtc_del(__u32 daddr)
+int dsr_rtc_del(struct in_addr addr)
 {
 	int res;
 	struct rtc_entry *e;
   
 	write_lock_bh(&rtc_lock); 
     
-	e = __dsr_rtc_find(daddr);
+	e = __dsr_rtc_find(addr.s_addr);
 
 	if (e == NULL) {
 		res = 0;
@@ -183,14 +183,14 @@ int dsr_rtc_del(__u32 daddr)
 	return res;
 }
 
-dsr_srt_t *dsr_rtc_find(__u32 daddr)
+dsr_srt_t *dsr_rtc_find(struct in_addr addr)
 {
 	struct rtc_entry *e;
 	dsr_srt_t *srt;
     
 /*     printk("Checking activeness\n"); */
 	read_lock_bh(&rtc_lock);
-	e = __dsr_rtc_find(daddr);
+	e = __dsr_rtc_find(addr.s_addr);
     
 	if (e) {
 		/* We must make a copy of the source route so that we do not
@@ -210,7 +210,7 @@ int dsr_rtc_add(dsr_srt_t *srt, unsigned long time,
 	struct rtc_entry *e;
 	int status = 0;
     
-	if (!srt || dsr_rtc_find(srt->dst.s_addr))
+	if (!srt || dsr_rtc_find(srt->dst))
 		return 0;
     
 	DEBUG("Adding source route to route cache\n");
