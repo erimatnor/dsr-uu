@@ -21,6 +21,9 @@ $(MODNAME)-objs := $(SRC:%.c=%.o)
 obj-m += $(RTC_TRG).o
 $(RTC_TRG)-objs := $(RTC_SRC:%.c=%.o)
 
+clean-files := *~
+clean-dirs := .tmp_versions
+
 else
 
 export-objs := link-cache.o
@@ -73,9 +76,11 @@ MIPSDEFS=-mips2 -fno-pic -mno-abicalls -mlong-calls -G0 -msoft-float $(KDEFS)
 # Check for kernel version
 ifeq ($(PATCHLEVEL),6)
 default: $(MODNAME).ko $(RTC_TRG).ko TODO
+clean: clean-2.6
 else 
 # Assume kernel 2.4
 default: $(MODNAME).o $(RTC_TRG).o TODO
+clean: clean-2.4
 endif
 
 mips:  
@@ -84,10 +89,10 @@ mips:
 
 $(MODNAME).ko: $(SRC) Makefile
 	@echo "Compiling for $(PWD)"
-	$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) MODVERDIR=$(PWD) modules
+	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) modules
 
 $(RTC_TRG).ko: $(RTC_SRC) Makefile
-	$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) MODVERDIR=$(PWD) modules
+	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) modules
 
 $(KOBJS): %.o: %.c Makefile
 	@echo "Compiling for $(PWD)"
@@ -127,8 +132,12 @@ TODO:
 TAGS: *.c *.h
 	etags.emacs $(SRC) *.h
 
-clean:
-	rm -rf .*ko* $(RTC_TRG).*mod* $(MODNAME).*mod* .*cmd .tmp_versions *~ *.ko *.o *.ver Makefile.bak .*o.d TAGS TODO endian endian.h $(NS_TARGET)
+clean-2.6:
+	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) clean
+	rm -rf Makefile.bak TAGS TODO endian endian.h
+
+clean-2.4:
+	rm -rf *.o Makefile.bak TAGS TODO endian endian.h $(NS_TARGET)
 endif
 # DO NOT DELETE
 
