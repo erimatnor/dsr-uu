@@ -360,18 +360,19 @@ static unsigned int dsr_pre_routing_recv(unsigned int hooknum,
 	struct iphdr *iph = (*skb)->nh.iph;
 	struct in_addr myaddr = my_addr();
 	
-	if (in == NULL || in->ifindex != get_slave_dev_ifindex() ||
-	    iph == NULL || iph->protocol != IPPROTO_DSR || iph->daddr == myaddr.s_addr)
-		return NF_ACCEPT;
-
-	dsr_ip_recv(*skb);
-
-	return NF_STOLEN;
+	if (in && in->ifindex == get_slave_dev_ifindex() && iph && 
+	    iph->protocol == IPPROTO_DSR && 
+	    iph->daddr != myaddr.s_addr) {
+		
+		DEBUG("Packet for ip_rcv\n");
+		
+		(*skb)->data = (*skb)->nh.raw + (iph->ihl << 2);
+		dsr_ip_recv(*skb);
+		
+		return NF_STOLEN;
+	}
+	return NF_ACCEPT;	
 }
-/* static struct file_operations config_proc_fops = { */
-/* 	.read		= dsr_config_proc_read, */
-/* 	.write          = dsr_config_proc_write, */
-/* }; */
 
 static struct nf_hook_ops dsr_pre_routing_hook = {
 	
@@ -429,7 +430,7 @@ static int __init dsr_module_init(void)
 	if (res < 0) 
 		goto cleanup_rreq_tbl;
 
-/* 	res = nf_register_hook(&dsr_pre_routing_hook); */
+	res = nf_register_hook(&dsr_pre_routing_hook);
 
 	if (res < 0)
 		goto cleanup_neigh_tbl;
@@ -439,7 +440,6 @@ static int __init dsr_module_init(void)
 		goto cleanup_nf_hook;
 	
 	proc->owner = THIS_MODULE;
-/* 	proc->proc_fops = &config_proc_fops; */
 	proc->read_proc = dsr_config_proc_read;
 	proc->write_proc = dsr_config_proc_write;
 
@@ -461,7 +461,7 @@ static int __init dsr_module_init(void)
 	proc_net_remove(CONFIG_PROC_NAME);
 #endif
  cleanup_nf_hook:
-/* 	nf_unregister_hook(&dsr_pre_routing_hook); */
+	nf_unregister_hook(&dsr_pre_routing_hook);
  cleanup_neigh_tbl:
 	neigh_tbl_cleanup();
  cleanup_rreq_tbl:
@@ -483,7 +483,7 @@ static void __exit dsr_module_cleanup(void)
 #else
 	inet_del_protocol(&dsr_inet_prot);
 #endif
-/* 	nf_unregister_hook(&dsr_pre_routing_hook); */
+	nf_unregister_hook(&dsr_pre_routing_hook);
 	send_buf_cleanup();
 	dsr_dev_cleanup();
 	rreq_tbl_cleanup();
