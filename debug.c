@@ -10,6 +10,10 @@
 #include <asm/uaccess.h>
 #include <asm/io.h>
 
+#include "debug.h"
+
+atomic_t num_pkts = ATOMIC_INIT(0);
+
 /* Most of this is shamelessly stolen from the linux kernel log routines */
 #define DBG_LOG_BUF_LEN	(16384)
 //#define DBG_LOG_BUF_LEN (1 << CONFIG_LOG_BUF_SHIFT)
@@ -166,7 +170,8 @@ int dsr_vprintk(const char *func, const char *fmt, va_list args)
 	/* This stops the holder of console_sem just where we want him */
 	spin_lock_irqsave(&dbg_logbuf_lock, flags);
 
-	prefix_len = sprintf(printk_buf, "%s: ", func);
+	prefix_len = sprintf(printk_buf, "%d:%s: ", 
+			     atomic_read(&num_pkts), func);
 	
 	/* Emit the output into the temporary buffer */
 	printed_len = vsnprintf(printk_buf+prefix_len, sizeof(printk_buf) - prefix_len, fmt, args);

@@ -18,6 +18,8 @@
 
 #define DEBUG_BUFLEN 256
 
+extern atomic_t num_pkts;
+
 static inline char *print_ip(__u32 addr)
 {
 	static char buf[16 * 4];
@@ -47,21 +49,8 @@ static inline char *print_eth(char *addr)
 
 	return buf;
 }
-int dsr_printk(const char *fmt, ...);
+int dsr_printk(const char *func, const char *fmt, ...);
 
-/* static inline void dsr_print(const char *func, char *fmt, ...) */
-/* { */
-/*     char buf[DEBUG_BUFLEN]; */
-/*     va_list args; */
-    
-/*     va_start(args, fmt); */
-
-/*     vsnprintf(buf, DEBUG_BUFLEN, fmt, args); */
-
-/*     va_end(args); */
-
-/*     printk(KERN_DEBUG "DSR: %s: %s", func, buf); */
-/* } */
 void __init dbg_init(void);
 void __exit dbg_cleanup(void);
 

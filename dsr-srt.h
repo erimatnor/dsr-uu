@@ -49,7 +49,8 @@ struct dsr_srt {
 	struct in_addr addrs[0];  /* Intermediate nodes */
 };
 
-struct in_addr dsr_srt_next_hop(struct dsr_srt *srt);
+struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, int index);
+struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt);
 char *print_srt(struct dsr_srt *srt);
 struct dsr_srt *dsr_srt_new(struct in_addr src, struct in_addr dst, 
 		       unsigned int length, char *addrs);

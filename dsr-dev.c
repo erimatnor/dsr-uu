@@ -233,7 +233,7 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
        
 	/* Create hardware header */
 	if (dsr_hw_header_create(dp, skb) < 0) {
-		DEBUG("Could not create harware header\n");
+		DEBUG("Could not create hardware header\n");
 		kfree_skb(skb);
 		return -1;
 	}
@@ -255,7 +255,9 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	struct ethhdr *ethh;
 	struct dsr_pkt dp;
 	int res = 0;
-			
+#ifdef DEBUG
+	atomic_inc(&num_pkts);
+#endif 		
 	DEBUG("headroom=%d skb->data=%lu skb->nh.iph=%lu\n", 
 	      skb_headroom(skb), (unsigned long)skb->data, 
 	      (unsigned long)skb->nh.iph);
@@ -282,10 +284,6 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 				DEBUG("Could not add source route\n");
 				break;
 			}
-			
-			/* Set next hop */
-			dp.nxt_hop = dsr_srt_next_hop(dp.srt);
-		
 			/* Send packet */
 			dsr_dev_xmit(&dp);
 

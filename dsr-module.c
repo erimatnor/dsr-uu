@@ -128,6 +128,9 @@ static int dsr_ip_recv(struct sk_buff *skb)
 	struct dsr_pkt dp;
 	int action;
 
+#ifdef DEBUG
+	atomic_inc(&num_pkts);
+#endif 
 	DEBUG("Received DSR packet\n");
 
 	memset(&dp, 0, sizeof(dp));
@@ -162,28 +165,16 @@ static int dsr_ip_recv(struct sk_buff *skb)
 		struct sockaddr hw_addr;
 		struct in_addr prev_hop;
 		struct ethhdr *eth;
-		int n;
 		
 		eth = (struct ethhdr *)skb->mac.raw;
 			
 		memcpy(hw_addr.sa_data, eth->h_source, ETH_ALEN);
-		n = dp.srt->laddrs / sizeof(u_int32_t);
 		
-		/* Find the previous hop */
-		if (n == 0)
-			prev_hop.s_addr = dp.srt->src.s_addr;
-		else
-			prev_hop.s_addr = dp.srt->addrs[n-1].s_addr;
-		
+		prev_hop = dsr_srt_prev_hop(dp.srt);
+
 		dsr_arpset(prev_hop, &hw_addr, skb->dev);
 	}
 
-	/* Check action... */
-
-	/* if (action & DSR_PKT_SRT_REMOVE) { */
-/* 		DEBUG("DSR srt options remove!\n"); */
-		
-/* 	} */
 	if (action & DSR_PKT_DROP || action & DSR_PKT_ERROR) {
 		DEBUG("DSR_PKT_DROP or DSR_PKT_ERROR\n");
 		kfree_skb(skb);
@@ -191,9 +182,10 @@ static int dsr_ip_recv(struct sk_buff *skb)
 	}
 
 	if (action & DSR_PKT_FORWARD) {
-		DEBUG("Forwarding %s", print_ip(dp.src.s_addr));
-		printk(" %s", print_ip(dp.dst.s_addr));		
-		printk(" nh %s\n", print_ip(dp.nxt_hop.s_addr));
+		DEBUG("Forwarding %s %s nh %s\n", 
+		      print_ip(dp.src.s_addr), 
+		      print_ip(dp.dst.s_addr), 
+		      print_ip(dp.nxt_hop.s_addr));
 
 		if (dp.nh.iph->ttl < 1) {
 			DEBUG("ttl=0, dropping!\n");
@@ -211,7 +203,7 @@ static int dsr_ip_recv(struct sk_buff *skb)
 		/* We need to add ourselves to the source route in the RREQ */
 		n = DSR_RREQ_ADDRS_LEN(dp.rreq_opt) / sizeof(struct in_addr);
 	
-		dsr_len = ntohs(dp.dh.opth->p_len) + 2;
+		dsr_len = ntohs(dp.dh.opth->p_len) + DSR_OPT_HDR_LEN;
 		len_to_rreq = (char *)dp.rreq_opt - dp.dh.raw;
 
 		tmp = kmalloc(dsr_len + sizeof(struct in_addr), GFP_ATOMIC);
@@ -231,7 +223,7 @@ static int dsr_ip_recv(struct sk_buff *skb)
 
 			
 		} else {
-			memcpy(tmp, dp.dh.raw, ntohs(dp.dh.opth->p_len) + 2);
+			memcpy(tmp, dp.dh.raw, dsr_len);
 		}
 		dp.dh.raw = tmp;
 		dp.dh.opth->p_len = htons(dsr_len + sizeof(struct in_addr));
@@ -457,8 +449,6 @@ static unsigned int dsr_pre_routing_recv(unsigned int hooknum,
 	struct iphdr *iph = (*skb)->nh.iph;
 	struct in_addr myaddr = my_addr();
 	
-	return NF_ACCEPT;
-
 	if (in && in->ifindex == get_slave_dev_ifindex() && 
 	    (*skb)->protocol == htons(ETH_P_IP)) {
 		
@@ -468,7 +458,7 @@ static unsigned int dsr_pre_routing_recv(unsigned int hooknum,
 		if (iph && iph->protocol == IPPROTO_DSR && 
 		    iph->daddr != myaddr.s_addr) {
 		
-			DEBUG("Packet for ip_rcv\n");
+		/* 	DEBUG("Packet for ip_rcv\n"); */
 			
 			(*skb)->data = (*skb)->nh.raw + (iph->ihl << 2);
 			dsr_ip_recv(*skb);

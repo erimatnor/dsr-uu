@@ -205,7 +205,7 @@ int dsr_rrep_send(struct dsr_srt *srt)
 
 	dp.dst = srt->dst;
 	dp.src = my_addr();
-	dp.nxt_hop = dsr_srt_next_hop(srt);
+	dp.nxt_hop = dsr_srt_next_hop(srt, 0);
 	dp.srt = srt;
 	dp.dsr_opts_len = len;
 	dp.data = NULL;
@@ -312,6 +312,7 @@ int dsr_rrep_opt_recv(struct dsr_pkt *dp)
 	}
 	
 	DEBUG("I am not RREP destination\n");
+
 	/* Forward */
 	return DSR_PKT_FORWARD;	
 }

@@ -9,14 +9,60 @@
 #include "debug.h"
 
 
-struct in_addr dsr_srt_next_hop(struct dsr_srt *srt)
+struct in_addr dsr_srt_next_hop(struct dsr_srt *srt, int index)
 {
+	int n = srt->laddrs / sizeof(struct in_addr);
+	struct in_addr nxt_hop, myaddr = my_addr();
+	
+	if (srt->src.s_addr == myaddr.s_addr) {
+		if (srt->laddrs == 0)
+			nxt_hop = srt->dst;
+		else
+			nxt_hop = srt->addrs[0];
+	} else {
+		
+		/* The draft's usage of indexes into the source route is a bit
+		 * confusing since they use arrays that start at position 1 */
+		
+		if ((index - n) == 0)
+			nxt_hop = srt->dst;
+		else
+			nxt_hop = srt->addrs[index-1];
+	}
+	
+	DEBUG("Next hop for %s is %s\n", print_ip(srt->dst.s_addr), 
+	      print_ip(nxt_hop.s_addr));
 
-	/* TODO: This function should be fixed for multihop */
-	if (srt->laddrs == 0)
-		return srt->dst;
-	else
-		return srt->addrs[0];
+	return nxt_hop;
+}
+
+struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt)
+{
+	struct in_addr prev_hop;
+	int n = srt->laddrs / sizeof(u_int32_t);
+		
+	/* Find the previous hop */
+	if (n == 0)
+		prev_hop = srt->src;
+	else {
+		int i;
+		struct in_addr myaddr = my_addr();
+		
+		for (i = 0; i < n; i++) {
+			if (srt->addrs[i].s_addr == myaddr.s_addr) {
+				if (i == 0)
+					prev_hop = srt->src;
+				else 
+					prev_hop = srt->addrs[i-1];
+				goto out;
+			}
+			DEBUG("Error! Previous hop not found!\n");
+			return prev_hop;
+		}
+	}
+ out:
+	DEBUG("Previous hop=%s\n", print_ip(prev_hop.s_addr));
+	return prev_hop;
 }
 
 char *print_srt(struct dsr_srt *srt)
@@ -28,11 +74,11 @@ char *print_srt(struct dsr_srt *srt)
 	if (!srt)
 		return NULL;
 	
-	len = sprintf(buf, "%s-", print_ip(srt->src.s_addr));
+	len = sprintf(buf, "%s<->", print_ip(srt->src.s_addr));
 	
 	for (i = 0; i < (srt->laddrs / sizeof(u_int32_t)) && 
 		     (len + 16) < BUFLEN; i++)
-		len += sprintf(buf+len, "%s-", print_ip(srt->addrs[i].s_addr));
+		len += sprintf(buf+len, "%s<->", print_ip(srt->addrs[i].s_addr));
 	
 	if ((len + 16) < BUFLEN)
 		len = sprintf(buf+len, "%s", print_ip(srt->dst.s_addr));
@@ -119,7 +165,7 @@ int dsr_srt_add(struct dsr_pkt *dp)
 	if (!dp || !dp->srt || !dp->nh.iph)
 		return -1;
 
-	dp->nxt_hop = dsr_srt_next_hop(dp->srt);
+	dp->nxt_hop = dsr_srt_next_hop(dp->srt, 0);
 
 	/* Calculate extra space needed */
 	add_ack_req = dsr_ack_add_ack_req(dp->nxt_hop);
@@ -205,6 +251,8 @@ int dsr_srt_opt_recv(struct dsr_pkt *dp)
 		return DSR_PKT_ERROR;
 	}
 	
+	DEBUG("Source route: %s\n", print_srt(dp->srt));
+
 	/* We should add this source route info to the cache... */
 	n = (dp->srt_opt->length - 2) / sizeof(struct in_addr);
 
@@ -220,13 +268,22 @@ int dsr_srt_opt_recv(struct dsr_pkt *dp)
 		return DSR_PKT_SEND_ICMP;
 	} else {
 		int i;
-
-		dp->srt_opt->sleft--;		
+		
+		if (dp->srt_opt->sleft > n) {
+			DEBUG("segments left=%d larger than n=%d\n", 
+			      dp->srt_opt->sleft, n);
+			return DSR_PKT_ERROR;
+		}
+		
+		dp->srt_opt->sleft--;	
 		i = n - dp->srt_opt->sleft;
+		
 
 		/* Fill in next hop */
-		dp->nxt_hop.s_addr = dp->srt_opt->addrs[i];
-		DEBUG("Setting next hop and forward\n");
+		dp->nxt_hop = dsr_srt_next_hop(dp->srt, i);
+
+		DEBUG("Setting next hop %s and forward n=%d i=%d\n", 
+		      print_ip(dp->nxt_hop.s_addr), n, i);
 		/* TODO: check for multicast address in next hop or dst */
 		/* TODO: check MTU and compare to pkt size */
 	
