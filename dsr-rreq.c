@@ -510,7 +510,6 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		return DSR_PKT_DROP;
 
 	myaddr = my_addr();
-
 	
 	trg.s_addr = rreq_opt->target;
 
@@ -583,14 +582,18 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		}
 
 	/* TODO: Check Blacklist */
+	srt_rc = lc_srt_find(myaddr, trg);
 	
-	
-	if ((srt_rc = lc_srt_find(myaddr, trg))) {
+	if (srt_rc) {
 		struct dsr_srt *srt_cat;
 		/* Send cached route reply */
 		
-		srt_cat = dsr_srt_concatenate(dp->srt, srt_rc);
+		DEBUG("Send cached RREP\n");
+		DEBUG("cat1: %s\n", print_srt(dp->srt));
+		DEBUG("cat2: %s\n", print_srt(srt_rc));
 
+		srt_cat = dsr_srt_concatenate(dp->srt, srt_rc);
+		
 		FREE(srt_rc);
 
 		if (!srt_cat) {
@@ -611,7 +614,7 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		dp->nh.iph->daddr = rreq_opt->target;
 #endif
 		DEBUG("Sending cached RREP to %s\n", print_ip(dp->src));
-		dsr_rrep_send(srt_cat, dp->srt);
+		dsr_rrep_send(srt_rev, srt_cat);
 		
 		action = DSR_PKT_NONE;	
 		

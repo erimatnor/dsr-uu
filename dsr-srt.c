@@ -238,7 +238,7 @@ struct dsr_srt *dsr_srt_concatenate(struct dsr_srt *srt1, struct dsr_srt *srt2)
 	srt_cat->laddrs = n * sizeof(struct in_addr);
 	
 	memcpy(srt_cat->addrs, srt1->addrs, n1 * sizeof(struct in_addr));
-	memcpy(srt_cat->addrs + n1, &srt1->src, sizeof(struct in_addr));
+	memcpy(srt_cat->addrs + n1, &srt2->src, sizeof(struct in_addr));
 	memcpy(srt_cat->addrs + n1 + 1, srt2->addrs, n2 * sizeof(struct in_addr));
 	return srt_cat;
 }

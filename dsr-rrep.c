@@ -318,15 +318,17 @@ int NSCLASS dsr_rrep_send(struct dsr_srt *srt, struct dsr_srt *srt_to_me)
 
 int NSCLASS dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 {
-	struct in_addr myaddr;
+	struct in_addr myaddr, srt_dst;
 	struct dsr_srt *rrep_opt_srt;
 
 	if (!dp || !dp->rrep_opt || dp->flags & PKT_PROMISC_RECV)
 		return DSR_PKT_ERROR;
 
 	myaddr = my_addr();
+	
+	srt_dst.s_addr = rrep_opt->addrs[DSR_RREP_ADDRS_LEN(rrep_opt) - 1];
 
-	rrep_opt_srt = dsr_srt_new(dp->dst, dp->src,
+	rrep_opt_srt = dsr_srt_new(dp->dst, srt_dst,
 				   DSR_RREP_ADDRS_LEN(rrep_opt),
 				   (char *)rrep_opt->addrs);
 

@@ -211,6 +211,8 @@ int NSCLASS neigh_tbl_add(struct in_addr neigh_addr, struct ethhdr *ethh)
 	int mac_src = ETHER_ADDR(mh_802_11->dh_ta);
 
 	inttoeth(&mac_src, (char *)&hw_addr);
+
+	DEBUG("ADD %s, %d\n", print_ip(neigh_addr), mac_src);
 #else
 	memcpy(hw_addr.sa_data, ethh->h_source, ETH_ALEN);
 #endif
