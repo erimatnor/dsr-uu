@@ -15,6 +15,7 @@
 #include "p-queue.h"
 #include "debug.h"
 #include "dsr-rtc.h"
+#include "kdsr.h"
 /*
  * This is basically a shameless rippoff of the linux kernel's ip_queue module.
  */
@@ -178,7 +179,9 @@ int p_queue_set_verdict(int verdict, unsigned long daddr)
 {
     struct p_queue_entry *entry;
     int pkts = 0;
-    
+    dsr_srt_t *srt = NULL;
+    struct in_addr dst;
+	
     if (verdict == P_QUEUE_DROP) {
 	
 	while (1) {
@@ -211,7 +214,60 @@ int p_queue_set_verdict(int verdict, unsigned long daddr)
 			    DEBUG("No packets for dest %s\n", print_ip(daddr));
 		    break;
 	    }
-	    /* entry->dp->srt = dsr_rtc_find(entry->dp->dst); */
+
+
+	    srt = dsr_rtc_find(dst);
+		
+	    if (srt) {
+		    dsr_pkt_t *dp;
+		    struct sockaddr hw_addr;
+		    
+		    struct ethhdr *ethh;
+		    
+		    /* Allocate a DSR packet */
+		    dp = dsr_pkt_alloc();
+		    dp->skb = entry->skb;
+		    dp->data = entry->skb->data;
+		    dp->len = entry->skb->len;
+		    
+		    dp->src.s_addr = entry->skb->nh.iph->saddr;
+		    dp->dst.s_addr = entry->skb->nh.iph->daddr;
+		    
+		    dp->srt = srt;
+		    
+		    ethh = (struct ethhdr *)entry->skb->data;
+
+		    if (dp->srt->laddrs == 0)
+			    dp->nh.s_addr = dp->srt->dst.s_addr;
+		    else
+			    dp->nh.s_addr = dp->srt->addrs[0].s_addr;
+		    
+		    /* Add source route */
+		    if (dsr_srt_add(dp) < 0) {
+			    DEBUG("SRT add failed\n");
+			    dev_kfree_skb(entry->skb);
+			    dsr_pkt_free(dp);
+			    goto out;
+		    }
+		    
+		    if (kdsr_get_hwaddr(dp->nh, &hw_addr, entry->skb->dev) < 0) {
+			    DEBUG("Could not get hardware addressn");
+			    dev_kfree_skb(entry->skb);
+			    dsr_pkt_free(dp);
+			    goto out;
+		    }
+		    
+		    dp->skb->dev->rebuild_header(dp->skb);
+		    
+		    memcpy(ethh->h_source, entry->skb->dev->dev_addr, entry->skb->dev->addr_len);
+		    
+		    /* Inject packet */
+		    entry->okfn(entry->skb); 
+
+		    /* We must free the DSR packet */
+		    dsr_pkt_free(dp);
+	    }
+	    /*  entry->dp->srt = dsr_rtc_find(entry->dp->dst); */
 	    
 /* 	    /\* Add source route *\/ */
 /* 	    if (!entry->dp->srt || dsr_srt_add(entry->dp) < 0) { */
@@ -220,17 +276,16 @@ int p_queue_set_verdict(int verdict, unsigned long daddr)
 /* 		    kfree(entry); */
 /* 		    continue; */
 /* 	    } */
-	    /* Set next hop address */
-	    /* if (entry->dp->srt->laddrs == 0) { */
+	  /*   Set next hop address */
+/* 	    if (entry->dp->srt->laddrs == 0) { */
 /* 		    entry->dp->nh.s_addr = entry->dp->srt->dst.s_addr; */
 /* 	    } else */
 /* 		    entry->dp->nh.s_addr = entry->dp->srt->addrs[0].s_addr; */
 	    
 	    pkts++;
 	    
-	    /* Inject packet */
-	    entry->okfn(entry->skb); 
 /* 	    dsr_dev_queue_xmit(entry->dp); */
+	out:
 	    kfree(entry);
 	}
 	DEBUG("Sent %d queued pkts\n", pkts);
