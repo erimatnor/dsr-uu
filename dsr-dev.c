@@ -171,16 +171,13 @@ static void __init dsr_dev_setup(struct net_device *dev)
 	dev->open = dsr_dev_open;
 	dev->stop = dsr_dev_stop;
 
-	/* Reduce the MTU to allow DSR options of 100 bytes. If larger, drop or
-	 * implement fragmentation... ;-)  */
-	dev->mtu -= 100;
+	
 	dev->hard_start_xmit = dsr_dev_start_xmit;
 	dev->set_multicast_list = set_multicast_list;
 	dev->set_mac_address = dsr_dev_set_address;
 #ifdef CONFIG_NET_FASTROUTE
 	dev->accept_fastpath = dsr_dev_accept_fastpath;
 #endif
-
 	dev->tx_queue_len = 0;
 	dev->flags |= IFF_NOARP;
 	dev->flags &= ~IFF_MULTICAST;
@@ -258,6 +255,7 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 		goto out_err;
 	}
 		
+	/* TODO: Should consider using ip_finish_output instead */
 	res = dev_queue_xmit(skb);
 	
 	if (res >= 0) {
@@ -403,12 +401,18 @@ int __init dsr_dev_init(char *ifname)
 	}
 	
 	DEBUG("Setting %s as slave interface\n", dnode->slave_dev->name);
-
+	
+	/* Reduce the MTU to allow DSR options of 100 bytes. If larger, drop or
+	 * implement fragmentation... ;-) Alternatively find a way to
+	 * dynamically reduce the data size of packets depending on the size of
+	 * the DSR header. */
+	dsr_dev->mtu = dnode->slave_dev->mtu - DSR_OPTS_MAX_SIZE;
+	
 	res = register_netdev(dsr_dev);
-
+	
 	if (res < 0)
 		goto cleanup_netdev;
-
+	
 	res = register_netdevice_notifier(&netdev_notifier);
 	
 	if (res < 0)
