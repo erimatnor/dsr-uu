@@ -7,6 +7,7 @@
 #include <linux/string.h>
 #include <linux/ctype.h>
 #include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/if_ether.h>
 #include <linux/in.h>
 extern atomic_t num_pkts;
@@ -81,7 +82,7 @@ int trace(const char *func, const char *fmt, ...);
 #endif /* NO_DECLS */
 
 #ifdef __KERNEL__
-void __init dbg_init(void);
+int __init dbg_init(void);
 void __exit dbg_cleanup(void);
 #endif
 

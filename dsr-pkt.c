@@ -169,6 +169,9 @@ struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb)
 		
 		dp->payload_len = ntohs(dp->nh.iph->tot_len) - 
 			(dp->nh.iph->ihl << 2) - dsr_opts_len;
+
+		if (dp->payload_len)
+			dp->flags |= PKT_REQUEST_ACK;
 	}
 	return dp;
 }

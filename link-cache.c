@@ -8,7 +8,7 @@
 #include "ns-agent.h"
 #endif
 
-#include "debug.h"
+//#include "debug.h"
 #include "dsr-rtc.h"
 #include "dsr-srt.h"
 #include "tbl.h"
