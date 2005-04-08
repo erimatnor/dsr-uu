@@ -190,9 +190,6 @@ dsr_rrep_add_srt(struct dsr_rrep_opt *rrep_opt, struct dsr_srt *srt)
 
 	foo.s_addr = rrep_opt->addrs[n];
 	
-
-	printf("dst=%s\n", print_ip(foo));
-
 	return 0;
 }
 
@@ -221,7 +218,6 @@ int NSCLASS dsr_rrep_send(struct dsr_srt *srt, struct dsr_srt *srt_to_me)
 {
 	struct dsr_pkt *dp = NULL;
 	char *buf;
-	struct dsr_pad1_opt *pad1_opt;
 	int len, ttl, n;
 
 	if (!srt || !srt_to_me)
