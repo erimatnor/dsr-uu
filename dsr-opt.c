@@ -40,17 +40,22 @@ struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src,
 	struct iphdr *iph;
 
 	dp->nh.iph = iph = (struct iphdr *)dp->ip_data;
-
-	iph->version = IPVERSION;
-	iph->ihl = (ip_len >> 2);
-	iph->tos = 0;
+	
+	if (dp->skb && dp->skb->nh.raw) {
+		memcpy(dp->ip_data, dp->skb->nh.raw, ip_len);
+	} else {
+		iph->version = IPVERSION;
+		iph->ihl = 5;
+		iph->tos = 0;
+		iph->id = 0;
+		iph->frag_off = 0;
+		iph->ttl = (ttl ? ttl : IPDEFTTL);
+		iph->saddr = src.s_addr;
+		iph->daddr = dst.s_addr;
+	}
+	
 	iph->tot_len = htons(tot_len);
-	iph->id = 0;
-	iph->frag_off = 0;
-	iph->ttl = (ttl ? ttl : IPDEFTTL);
 	iph->protocol = protocol;
-	iph->saddr = src.s_addr;
-	iph->daddr = dst.s_addr;
 
 	ip_send_check(iph);
 

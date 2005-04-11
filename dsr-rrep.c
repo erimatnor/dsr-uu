@@ -178,7 +178,6 @@ static inline int
 dsr_rrep_add_srt(struct dsr_rrep_opt *rrep_opt, struct dsr_srt *srt)
 {
 	int n;
-	struct in_addr foo;
 
 	if (!rrep_opt | !srt)
 		return -1;
@@ -188,8 +187,6 @@ dsr_rrep_add_srt(struct dsr_rrep_opt *rrep_opt, struct dsr_srt *srt)
 	memcpy(rrep_opt->addrs, srt->addrs, srt->laddrs);
 	rrep_opt->addrs[n] = srt->dst.s_addr;
 
-	foo.s_addr = rrep_opt->addrs[n];
-	
 	return 0;
 }
 

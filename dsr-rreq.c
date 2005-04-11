@@ -598,8 +598,8 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		/* Send cached route reply */
 		
 		DEBUG("Send cached RREP\n");
-		DEBUG("cat1: %s\n", print_srt(dp->srt));
-		DEBUG("cat2: %s\n", print_srt(srt_rc));
+/* 		DEBUG("cat1: %s\n", print_srt(dp->srt)); */
+/* 		DEBUG("cat2: %s\n", print_srt(srt_rc)); */
 
 		srt_cat = dsr_srt_concatenate(dp->srt, srt_rc);
 		
