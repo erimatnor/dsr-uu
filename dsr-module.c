@@ -149,7 +149,8 @@ int dsr_ip_recv(struct sk_buff *skb)
 
 	if (!dp) {
 		DEBUG("Could not allocate DSR packet\n");
-		return -1;
+		kfree_skb(skb);
+		return 0;
 	}
 
 	if (skb->pkt_type == PACKET_OTHERHOST) {
@@ -161,7 +162,7 @@ int dsr_ip_recv(struct sk_buff *skb)
 		     skb->len + (dp->nh.iph->ihl << 2),
 		     ntohs(dp->nh.iph->tot_len));
 		dsr_pkt_free(dp);
-		return -1;
+		return 0;
 	}
 
 	DEBUG("iph_len=%d iph_totlen=%d dsr_opts_len=%d data_len=%d\n",

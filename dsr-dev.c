@@ -388,20 +388,20 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 	skb->ip_summed = CHECKSUM_UNNECESSARY;
 
 	/* Super ugly hack to fix record route in ping */
-	if (skb->nh.iph->ihl > 5) {
-		struct ipopt {
-			u_int8_t code;
-			u_int8_t len;
-			u_int8_t ptr;
-		} *rr = (struct ipopt *)skb->nh.raw + 20;
+	/* if (skb->nh.iph->ihl > 5) { */
+/* 		struct ipopt { */
+/* 			u_int8_t code; */
+/* 			u_int8_t len; */
+/* 			u_int8_t ptr; */
+/* 		} *rr = (struct ipopt *)skb->nh.raw + 20; */
 		
-		DEBUG("Record Route, rr->code=%u\n", rr->code);
+/* 		DEBUG("Record Route, rr->code=%u\n", rr->code); */
 
-		if (rr->code == 7) {
-			DEBUG("Record Route, rr->ptr=%u\n", rr->ptr);
-			rr->ptr -= 4;
-		}
-	}
+/* 		if (rr->code == 7) { */
+/* 			DEBUG("Record Route, rr->ptr=%u\n", rr->ptr); */
+/* 			rr->ptr -= 4; */
+/* 		} */
+/* 	} */
 	ethh = (struct ethhdr *)skb->mac.raw;
 
 	memcpy(ethh->h_dest, dsr_dev->dev_addr, ETH_ALEN);
@@ -432,6 +432,7 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 	if (dp->flags & PKT_REQUEST_ACK)
 		maint_buf_add(dp);
 
+
 	dsr_node_lock(dsr_node);
 	slave_dev = dsr_node->slave_dev;
 	dsr_node_unlock(dsr_node);
@@ -443,13 +444,14 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 		goto out_err;
 	}
 
+
 	/* Create hardware header */
 	if (dsr_hw_header_create(dp, skb) < 0) {
 		DEBUG("Could not create hardware header\n");
 		kfree_skb(skb);
 		goto out_err;
 	}
-
+	
 	/* TODO: Should consider using ip_finish_output instead */
 	res = dev_queue_xmit(skb);
 

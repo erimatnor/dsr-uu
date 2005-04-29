@@ -19,7 +19,7 @@
 #include "debug.h"
 #include "send-buf.h"
 
-void NSCLASS dsr_recv(struct dsr_pkt *dp)
+int NSCLASS dsr_recv(struct dsr_pkt *dp)
 {
 	int i = 0, action;
 	int mask = DSR_PKT_NONE;
@@ -31,7 +31,7 @@ void NSCLASS dsr_recv(struct dsr_pkt *dp)
 
 	if (dp->flags & PKT_PROMISC_RECV) {
 		dsr_pkt_free(dp);
-		return;
+		return 0;
 	}
 	for (i = 0; i < DSR_PKT_ACTION_LAST; i++) {
 		//DEBUG("i=%d action=0x%08x mask=0x%08x (action & mask)=0x%08x\n", i, action, (mask), (action & mask));
@@ -43,7 +43,7 @@ void NSCLASS dsr_recv(struct dsr_pkt *dp)
 		case DSR_PKT_ERROR:
 			DEBUG("DSR_PKT_DROP or DSR_PKT_ERROR\n");
 			dsr_pkt_free(dp);
-			return;
+			return 0;
 		case DSR_PKT_SEND_ACK:
 			/*      if (dp->ack_req_opt && dp->srt) { */
 /* 				unsigned short id = ntohs(dp->ack_req_opt->id); */
@@ -71,19 +71,19 @@ void NSCLASS dsr_recv(struct dsr_pkt *dp)
 			{
 				DEBUG("ttl=0, dropping!\n");
 				dsr_pkt_free(dp);
-				return;
+				return 0;
 			} else {
 				DEBUG("Forwarding %s %s nh %s\n",
 				      print_ip(dp->src),
 				      print_ip(dp->dst), print_ip(dp->nxt_hop));
 				XMIT(dp);
-				return;
+				return 0;
 			}
 			break;
 		case DSR_PKT_FORWARD_RREQ:
 			//DEBUG("Forward RREQ\n");
 			XMIT(dp);
-			return;
+			return 0;
 		case DSR_PKT_SEND_RREP:
 
 /* 			if (dp->srt) { */
@@ -109,7 +109,7 @@ void NSCLASS dsr_recv(struct dsr_pkt *dp)
 		case DSR_PKT_DELIVER:
 			DEBUG("Deliver to DSR device\n");
 			DELIVER(dp);
-			return;
+			return 0;
 		case 0:
 			break;
 		default:
@@ -117,7 +117,10 @@ void NSCLASS dsr_recv(struct dsr_pkt *dp)
 		}
 		mask = (mask << 1);
 	}
+
 	dsr_pkt_free(dp);
+
+	return 0;
 }
 
 void NSCLASS dsr_start_xmit(struct dsr_pkt *dp)
