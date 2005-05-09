@@ -246,7 +246,7 @@ void NSCLASS maint_buf_set_timeout(void)
 	else {
 		DEBUG("ACK Timer: exp=%ld.%06ld now=%ld.%06ld\n",
 		      expires.tv_sec, expires.tv_usec, now.tv_sec, now.tv_usec);
-		ack_timer.data = (unsigned long)m;
+/* 		ack_timer.data = (unsigned long)m; */
 		set_timer(&ack_timer, &expires);
 	}
 }
@@ -278,15 +278,9 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 	if (!m)
 		return -1;
 	
-	if (tbl_add_tail(&maint_buf, &m->l) < 0) {
-		DEBUG("Buffer full - not buffering!\n");
-			FREE(m);
-			return -1;
-	}
-	
 	/* Check if we should add an ACK REQ */
 	if (dp->flags & PKT_REQUEST_ACK &&
-	    !timer_pending(&ack_timer) &&
+/* 	    !timer_pending(&ack_timer) && */
 	    (usecs_t) timeval_diff(&now, &neigh_info.last_ack_req) >
 	    ConfValToUsecs(MaintHoldoffTime)) {
 
@@ -302,10 +296,16 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 
 		maint_buf_set_timeout();
 	} else {
-		DEBUG("Deferring ACK REQ for %s since_last=%ld\n",
-		      print_ip(dp->nxt_hop), timeval_diff(&now, &neigh_info.last_ack_req));
+		DEBUG("Deferring ACK REQ for %s since_last=%ld limit=%ld\n",
+		      print_ip(dp->nxt_hop), timeval_diff(&now, &neigh_info.last_ack_req), ConfValToUsecs(MaintHoldoffTime));
 	}
-
+	
+	if (tbl_add_tail(&maint_buf, &m->l) < 0) {
+		DEBUG("Buffer full - not buffering!\n");
+		FREE(m);
+/* 		return -1; */
+	}
+	
 /* 	maint_buf_print(&maint_buf, buf); */
 
 /* 	DEBUG("\n%s\n", buf); */

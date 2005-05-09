@@ -106,15 +106,15 @@ class DSRUU:public Tap, public Agent {
 	}
 	/*      void mod_timer (DSRUUTimer *t, unsinged long expires_)  *//*            { t->expires = expires_ ; t->resched(t->expires); } */
 	    void del_timer(DSRUUTimer * t) {
-		printf("Cancelling timer %s\n", t->get_name());
+		    //printf("Cancelling timer %s\n", t->get_name());
 		t->cancel();
 	}
 	void set_timer(DSRUUTimer * t, struct timeval *expires) {
 		//printf("In set_timer\n");
-		printf("Set timer %s to %f\n", t->get_name(), t->expires - Scheduler::instance().clock());
 		t->expires = expires->tv_usec;
 		t->expires /= 1000000l;
 		t->expires += expires->tv_sec;
+		printf("Set timer %s to %f\n", t->get_name(), t->expires - Scheduler::instance().clock());
 		add_timer(t);
 	}
 	static const unsigned int get_confval(enum confval cv) {
