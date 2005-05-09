@@ -35,7 +35,7 @@ KERNEL_DIR=/lib/modules/$(KERNEL)/build
 KERNEL_INC=$(KERNEL_DIR)/include
 
 CC=gcc
-CPP=g++
+CXX=g++
 
 MIPS_CC=mipsel-linux-gcc
 MIPS_LD=mipsel-linux-ld
@@ -54,10 +54,10 @@ NS_CFLAGS=$(OPTS) $(CPP_OPTS) $(DEBUG) $(NS_DEFS) $(EXTRA_NS_DEFS)
 
 NS_INC= # DON'T CHANGE (overridden by NS Makefile)
 
-NS_TARGET=libdsruu-ns2.a
+NS_TARGET=libdsr-uu.a
 # Archiver and options
 AR=ar
-AR_FLAGS=rcs
+AR_FLAGS=rc
 
 #######
 VERSION=$(shell if [ ! -d $(KERNEL_DIR) ]; then echo "No linux source found!!! Check your setup..."; exit; fi; grep ^VERSION $(KERNEL_DIR)/Makefile | cut -d' ' -f 3)
@@ -105,17 +105,13 @@ $(RTC_TRG).o: $(RTC_SRC) Makefile
 	$(CC) $(KCFLAGS) -c -o $@ $<
 
 $(OBJS_NS_CPP): %-ns.o: %.cc Makefile
-	$(CPP) $(NS_CFLAGS) $(NS_INC) -c -o $@ $<
+	$(CXX) $(NS_CFLAGS) $(NS_INC) -c -o $@ $<
 
 $(OBJS_NS): %-ns.o: %.c Makefile
-	$(CPP) $(NS_CFLAGS) $(NS_INC) -c -o $@ $<
+	$(CXX) $(NS_CFLAGS) $(NS_INC) -c -o $@ $<
 
-ns: dsr-uu.o $(NS_TARGET)
-
-dsr-uu.o: endian.h $(OBJS_NS_CPP) $(OBJS_NS)
-
-$(NS_TARGET): dsr-uu.o
-	$(AR) $(AR_FLAGS) $@ $(OBJS_NS_CPP) $(OBJS_NS) > /dev/null
+$(NS_TARGET): endian.h $(OBJS_NS_CPP) $(OBJS_NS) 
+	$(AR) $(AR_FLAGS) $@ $(OBJS_NS_CPP) $(OBJS_NS) 
 
 endian.h: endian.c
 	$(CC) $(CFLAGS) -o endian endian.c
@@ -128,7 +124,6 @@ depend:
 TODO:
 	grep -n "TODO:" *.c *.h > TODO
 	cat TODO
-
 TAGS: *.c *.h
 	etags.emacs $(SRC) *.h
 

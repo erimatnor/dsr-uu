@@ -194,8 +194,22 @@ DSRUU::ns_packet_create(struct dsr_pkt *dp)
 	if (!dp)
 		return NULL;
 
-	if (!dp->p)
+	if (dp->p) {
+		// Packet *old_p;
+		
+// 		old_p = dp->p;
+		
+// 		dp->p = old_p->copy();
+		
+// 		Packet::free(old_p);		
+
+		DEBUG("p->uid_=%d\n", dp->p->uid_);
+		(void)Scheduler::instance().cancel(dp->p);
+
+		
+	} else {
 		dp->p = allocpkt();
+	}
 
 	tot_len = IP_HDR_LEN + dsr_opts_len + dp->payload_len;
 	
@@ -264,8 +278,8 @@ DSRUU::ns_xmit(struct dsr_pkt *dp)
 	struct hdr_ip *iph; 
 	double jitter = 0;
 
-	if (dp->flags & PKT_REQUEST_ACK)	
-		maint_buf_add(dp);
+ 	if (dp->flags & PKT_REQUEST_ACK)	
+ 		maint_buf_add(dp);
 	
 	p = ns_packet_create(dp);
 
@@ -294,12 +308,17 @@ DSRUU::ns_xmit(struct dsr_pkt *dp)
 		jitter = ConfVal(BroadCastJitter);
 		/* Broadcast packet */
 		jitter = Random::uniform(jitter / 1000);
-		DEBUG("xmit jitter=%f\n", jitter);
-	}
-		
+		//DEBUG("xmit jitter=%f\n", jitter);
+	}		
+
+	DEBUG("1:p->uid_=%d\n", p->uid_);
 	Scheduler::instance().schedule(ll_, p, jitter);
+	DEBUG("2:p->uid_=%d\n", p->uid_);
  out:
+	dp->p = NULL;
+
 	dsr_pkt_free(dp);
+	DEBUG("3:p->uid_=%d\n", p->uid_);
 }
 
 void 

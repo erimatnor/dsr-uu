@@ -208,13 +208,14 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 
 	return;
 }
+
 void NSCLASS maint_buf_set_timeout(void)
 {
 	struct maint_entry *m;
 	usecs_t rto;
 	struct timeval tx_time, now, expires;
 
-	if (tbl_empty(&maint_buf))
+	if (tbl_empty(&maint_buf)/*  || timer_pending(&ack_timer) */)
 		return;
 
 	gettime(&now);
@@ -243,8 +244,8 @@ void NSCLASS maint_buf_set_timeout(void)
 	if (timeval_diff(&now, &tx_time) > (int)rto)
 		maint_buf_timeout(0);
 	else {
-		DEBUG("ACK Timer: exp=%ld.%06ld now=%ld.%06ld\n",
-		      expires.tv_sec, expires.tv_usec, now.tv_sec, now.tv_usec);
+		DEBUG("ACK Timer: exp=%ld.%06ld now=%ld.%06ld status=%d\n",
+		      expires.tv_sec, expires.tv_usec, now.tv_sec, now.tv_usec, ack_timer.status());
 		ack_timer.data = (unsigned long)m;
 		set_timer(&ack_timer, &expires);
 	}
@@ -255,6 +256,7 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 	struct neighbor_info neigh_info;
 	struct timeval now;
 	int res;
+	struct maint_entry *m;
 /* 	char buf[2048]; */
 
        	if (!dp) {
@@ -271,24 +273,24 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 		return -1;
 	}
 	
+	m = maint_entry_create(dp, neigh_info.id, neigh_info.rto);
+		
+	if (!m)
+		return -1;
+	
+	if (tbl_add_tail(&maint_buf, &m->l) < 0) {
+		DEBUG("Buffer full - not buffering!\n");
+			FREE(m);
+			return -1;
+	}
+	
 	/* Check if we should add an ACK REQ */
 	if (dp->flags & PKT_REQUEST_ACK &&
 	    !timer_pending(&ack_timer) &&
 	    (usecs_t) timeval_diff(&now, &neigh_info.last_ack_req) >
 	    ConfValToUsecs(MaintHoldoffTime)) {
-		struct maint_entry *m;
 
 		/* Set last_ack_req time */
-		m = maint_entry_create(dp, neigh_info.id, neigh_info.rto);
-		
-		if (!m)
-			return -1;
-
-		if (tbl_add_tail(&maint_buf, &m->l) < 0) {
-			DEBUG("Buffer full - not buffering!\n");
-			FREE(m);
-			return -1;
-		}
 		
 		m->ack_req_sent = 1;
 		
@@ -298,7 +300,6 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 	
 		dsr_ack_req_opt_add(dp, m->id);
 
-	/* 	if (!timer_pending(&ack_timer)) */
 		maint_buf_set_timeout();
 	} else {
 		DEBUG("Deferring ACK REQ for %s since_last=%ld\n",
