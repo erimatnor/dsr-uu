@@ -244,8 +244,8 @@ void NSCLASS maint_buf_set_timeout(void)
 	if (timeval_diff(&now, &tx_time) > (int)rto)
 		maint_buf_timeout(0);
 	else {
-		DEBUG("ACK Timer: exp=%ld.%06ld now=%ld.%06ld status=%d\n",
-		      expires.tv_sec, expires.tv_usec, now.tv_sec, now.tv_usec, ack_timer.status());
+		DEBUG("ACK Timer: exp=%ld.%06ld now=%ld.%06ld\n",
+		      expires.tv_sec, expires.tv_usec, now.tv_sec, now.tv_usec);
 		ack_timer.data = (unsigned long)m;
 		set_timer(&ack_timer, &expires);
 	}
