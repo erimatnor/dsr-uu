@@ -1,6 +1,6 @@
 diff -uprN ns-2.28.orig/common/packet.h ns-2.28/common/packet.h
 --- ns-2.28.orig/common/packet.h	2005-01-19 19:23:18.000000000 +0100
-+++ ns-2.28/common/packet.h	2005-05-03 14:24:22.000000000 +0200
++++ ns-2.28/common/packet.h	2005-05-09 17:07:09.754886621 +0200
 @@ -163,6 +163,11 @@ enum packet_t {
  	// XCP packet
  	PT_XCP,
@@ -24,7 +24,6 @@ diff -uprN ns-2.28.orig/common/packet.h ns-2.28/common/packet.h
  
  		name_[PT_XCP]="xcp";
  
-Binary files ns-2.28.orig/indep-utils/cmu-scen-gen/setdest/calcdest and ns-2.28/indep-utils/cmu-scen-gen/setdest/calcdest differ
 diff -uprN ns-2.28.orig/mac/wireless-phy.h~ ns-2.28/mac/wireless-phy.h~
 --- ns-2.28.orig/mac/wireless-phy.h~	2005-01-26 22:58:52.000000000 +0100
 +++ ns-2.28/mac/wireless-phy.h~	1970-01-01 01:00:00.000000000 +0100
@@ -166,7 +165,7 @@ diff -uprN ns-2.28.orig/mac/wireless-phy.h~ ns-2.28/mac/wireless-phy.h~
 -#endif /* !ns_WirelessPhy_h */
 diff -uprN ns-2.28.orig/Makefile.in ns-2.28/Makefile.in
 --- ns-2.28.orig/Makefile.in	2005-01-25 23:27:16.000000000 +0100
-+++ ns-2.28/Makefile.in	2005-05-03 15:55:12.000000000 +0200
++++ ns-2.28/Makefile.in	2005-05-09 17:07:18.142645930 +0200
 @@ -52,13 +52,26 @@ PERL	= @PERL@
  # for diffusion
  #DIFF_INCLUDES = "./diffusion3/main ./diffusion3/lib ./diffusion3/nr ./diffusion3/ns"
@@ -259,7 +258,7 @@ diff -uprN ns-2.28.orig/Makefile.in ns-2.28/Makefile.in
  AUTOCONF_GEN = tcl/lib/ns-autoconf.tcl
 diff -uprN ns-2.28.orig/queue/priqueue.cc ns-2.28/queue/priqueue.cc
 --- ns-2.28.orig/queue/priqueue.cc	2005-01-25 23:38:47.000000000 +0100
-+++ ns-2.28/queue/priqueue.cc	2005-05-03 14:24:23.000000000 +0200
++++ ns-2.28/queue/priqueue.cc	2005-05-09 17:07:18.154644156 +0200
 @@ -92,7 +92,11 @@ PriQueue::recv(Packet *p, Handler *h)
                  case PT_AODV:
                          recvHighPriority(p, h);
@@ -275,16 +274,7 @@ diff -uprN ns-2.28.orig/queue/priqueue.cc ns-2.28/queue/priqueue.cc
                  }
 diff -uprN ns-2.28.orig/tcl/lib/ns-agent.tcl ns-2.28/tcl/lib/ns-agent.tcl
 --- ns-2.28.orig/tcl/lib/ns-agent.tcl	2005-01-19 19:23:37.000000000 +0100
-+++ ns-2.28/tcl/lib/ns-agent.tcl	2005-05-03 14:24:23.000000000 +0200
-@@ -30,7 +30,7 @@
- # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
- # SUCH DAMAGE.
- #
--# @(#) $Header$
-+# @(#) $Header$
- #
- 
- #
++++ ns-2.28/tcl/lib/ns-agent.tcl	2005-05-09 17:07:18.155644008 +0200
 @@ -192,3 +192,10 @@ Agent/AODV instproc init args {
  Agent/AODV set sport_   0
  Agent/AODV set dport_   0
@@ -298,7 +288,7 @@ diff -uprN ns-2.28.orig/tcl/lib/ns-agent.tcl ns-2.28/tcl/lib/ns-agent.tcl
 +Agent/AODVUU set dport_   0
 diff -uprN ns-2.28.orig/tcl/lib/ns-default.tcl ns-2.28/tcl/lib/ns-default.tcl
 --- ns-2.28.orig/tcl/lib/ns-default.tcl	2005-01-19 19:23:37.000000000 +0100
-+++ ns-2.28/tcl/lib/ns-default.tcl	2005-05-03 14:24:23.000000000 +0200
++++ ns-2.28/tcl/lib/ns-default.tcl	2005-05-09 17:07:18.160643268 +0200
 @@ -1343,3 +1343,19 @@ Queue set util_records_ 0
  # Quick Start definitions end here
  
@@ -321,16 +311,7 @@ diff -uprN ns-2.28.orig/tcl/lib/ns-default.tcl ns-2.28/tcl/lib/ns-default.tcl
 +Agent/AODVUU set internet_gw_mode_ 0
 diff -uprN ns-2.28.orig/tcl/lib/ns-lib.tcl ns-2.28/tcl/lib/ns-lib.tcl
 --- ns-2.28.orig/tcl/lib/ns-lib.tcl	2005-01-24 21:03:43.000000000 +0100
-+++ ns-2.28/tcl/lib/ns-lib.tcl	2005-05-03 14:49:14.000000000 +0200
-@@ -32,7 +32,7 @@
- # SUCH DAMAGE.
- #
- 
--# @(#) $Header$
-+# @(#) $Header$
- 
- 
- #
++++ ns-2.28/tcl/lib/ns-lib.tcl	2005-05-09 17:07:18.172641494 +0200
 @@ -597,9 +597,16 @@ Simulator instproc create-wireless-node 
  	    DSR {
  		    $self at 0.0 "$node start-dsr"
@@ -385,16 +366,7 @@ diff -uprN ns-2.28.orig/tcl/lib/ns-lib.tcl ns-2.28/tcl/lib/ns-lib.tcl
  }
 diff -uprN ns-2.28.orig/tcl/lib/ns-mobilenode.tcl ns-2.28/tcl/lib/ns-mobilenode.tcl
 --- ns-2.28.orig/tcl/lib/ns-mobilenode.tcl	2005-01-26 00:29:14.000000000 +0100
-+++ ns-2.28/tcl/lib/ns-mobilenode.tcl	2005-05-03 14:47:37.000000000 +0200
-@@ -31,7 +31,7 @@
- # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
- # SUCH DAMAGE.
- #
--# $Header$
-+# $Header$
- #
- # Ported from CMU-Monarch project's mobility extensions -Padma, 10/98.
- #
++++ ns-2.28/tcl/lib/ns-mobilenode.tcl	2005-05-09 17:07:18.174641198 +0200
 @@ -775,7 +775,12 @@ SRNodeNew instproc init args {
  		# Use the default mash and shift
  		set dmux_ [new Classifier/Port]
@@ -516,7 +488,7 @@ diff -uprN ns-2.28.orig/tcl/lib/ns-mobilenode.tcl ns-2.28/tcl/lib/ns-mobilenode.
 +}
 diff -uprN ns-2.28.orig/tcl/lib/ns-packet.tcl ns-2.28/tcl/lib/ns-packet.tcl
 --- ns-2.28.orig/tcl/lib/ns-packet.tcl	2005-01-26 00:29:15.000000000 +0100
-+++ ns-2.28/tcl/lib/ns-packet.tcl	2005-05-03 14:24:23.000000000 +0200
++++ ns-2.28/tcl/lib/ns-packet.tcl	2005-05-09 17:07:18.174641198 +0200
 @@ -158,6 +158,7 @@ foreach prot {
  	SCTP
  	Smac
@@ -527,7 +499,7 @@ diff -uprN ns-2.28.orig/tcl/lib/ns-packet.tcl ns-2.28/tcl/lib/ns-packet.tcl
  }
 diff -uprN ns-2.28.orig/trace/cmu-trace.cc ns-2.28/trace/cmu-trace.cc
 --- ns-2.28.orig/trace/cmu-trace.cc	2005-02-03 19:29:19.000000000 +0100
-+++ ns-2.28/trace/cmu-trace.cc	2005-05-03 14:24:23.000000000 +0200
++++ ns-2.28/trace/cmu-trace.cc	2005-05-09 17:07:18.000000000 +0200
 @@ -51,6 +51,9 @@
  #include <tora/tora_packet.h> //TORA
  #include <imep/imep_spec.h>         // IMEP
@@ -725,7 +697,7 @@ diff -uprN ns-2.28.orig/trace/cmu-trace.cc ns-2.28/trace/cmu-trace.cc
  			fprintf(stderr, "%s - invalid packet type (%s).\n",
 diff -uprN ns-2.28.orig/trace/cmu-trace.h ns-2.28/trace/cmu-trace.h
 --- ns-2.28.orig/trace/cmu-trace.h	2005-01-26 00:29:16.000000000 +0100
-+++ ns-2.28/trace/cmu-trace.h	2005-05-03 14:24:23.000000000 +0200
++++ ns-2.28/trace/cmu-trace.h	2005-05-09 17:07:18.000000000 +0200
 @@ -132,6 +132,9 @@ private:
  	void	format_tora(Packet *p, int offset);
          void    format_imep(Packet *p, int offset);
