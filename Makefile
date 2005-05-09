@@ -137,6 +137,9 @@ clean-2.6:
 clean-2.4:
 	rm -rf *~ *.o Makefile.bak TAGS TODO endian endian.h $(NS_TARGET)
 
+clean-ns:
+	rm -rf Makefile.bak TAGS TODO endian endian.h $(OBJS_NS_CPP) $(OBJS_NS)  *~ $(NS_TARGET)
+
 endif
 # DO NOT DELETE
 
