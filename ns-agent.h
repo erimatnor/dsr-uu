@@ -98,7 +98,7 @@ class DSRUU:public Tap, public Agent {
 				    struct in_addr dst, int ip_len,
 				    int tot_len, int protocol, int ttl);
 	void add_timer(DSRUUTimer * t) {
-		printf("Setting timer %s to %f\n", t->get_name(), t->expires - Scheduler::instance().clock());
+		/* printf("Setting timer %s to %f\n", t->get_name(), t->expires - Scheduler::instance().clock()); */
 		if (t->expires - Scheduler::instance().clock() < 0)
 			t->resched(0);
 		else
@@ -114,7 +114,7 @@ class DSRUU:public Tap, public Agent {
 		t->expires = expires->tv_usec;
 		t->expires /= 1000000l;
 		t->expires += expires->tv_sec;
-		printf("Set timer %s to %f\n", t->get_name(), t->expires - Scheduler::instance().clock());
+	/* 	printf("Set timer %s to %f\n", t->get_name(), t->expires - Scheduler::instance().clock()); */
 		add_timer(t);
 	}
 	static const unsigned int get_confval(enum confval cv) {

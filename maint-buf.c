@@ -152,12 +152,10 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 	if (timer_pending(&ack_timer))
 		return;
 
-	/* Remove the first packet that has the ack_req_sent flag */
-	m = (struct maint_entry *)data;	/* tbl_find_detach(&maint_buf, NULL,  */
-/* 						  crit_ack_req_sent); */
-
-	tbl_detach(&maint_buf, &m->l);
-
+	/* Remove the first packet */
+/* 	m = (struct maint_entry *)tbl_find_detach(&maint_buf, NULL, crit_none); */
+	m = (struct maint_entry *)tbl_detach_first(&maint_buf);
+		
 	if (!m) {
 		DEBUG("Nothing in maint buf\n");
 		return;
@@ -169,14 +167,24 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 
 	/* Increase the number of retransmits */
 	if (m->rexmt >= ConfVal(MaxMaintRexmt)) {
-		int n;
 
 		DEBUG("MaxMaintRexmt reached!\n");
-		lc_link_del(my_addr(), m->nxt_hop);
 
+		if (m->ack_req_sent) {
+			int n;
+
+			lc_link_del(my_addr(), m->nxt_hop);
+			
 /* 		neigh_tbl_del(m->nxt_hop); */
+			
+			dsr_rerr_send(m->dp, m->nxt_hop);
+			
+			n = maint_buf_del_all_id(m->nxt_hop, m->id);
 
-		dsr_rerr_send(m->dp, m->nxt_hop);
+			DEBUG("Deleted %d packets from maint_buf\n", n);
+		} else {
+			DEBUG("No ACK REQ sent for this packet\n");
+		}
 
 		if (m->dp) {
 #ifdef NS2
@@ -185,9 +193,7 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 #endif
 			dsr_pkt_free(m->dp);
 		}
-		n = maint_buf_del_all_id(m->nxt_hop, m->id);
 
-		DEBUG("Deleted %d packets from maint_buf\n", n);
 		FREE(m);
 		goto out;
 	}
@@ -198,11 +204,12 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 	timeval_add_usecs(&m->expires, m->rto);
 
 	/* Send new ACK REQ */
-	dsr_ack_req_send(m->nxt_hop, m->id);
+	if (m->ack_req_sent)
+		dsr_ack_req_send(m->nxt_hop, m->id);
 
 	/* Add at end of buffer */
-/* 	tbl_add(&maint_buf, &m->l, crit_expires); */
-	tbl_add_tail(&maint_buf, &m->l);
+	tbl_add(&maint_buf, &m->l, crit_expires);
+/* 	tbl_add_tail(&maint_buf, &m->l); */
       out:
 	maint_buf_set_timeout();
 
@@ -279,31 +286,30 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 		return -1;
 	
 	/* Check if we should add an ACK REQ */
-	if (dp->flags & PKT_REQUEST_ACK &&
-/* 	    !timer_pending(&ack_timer) && */
-	    (usecs_t) timeval_diff(&now, &neigh_info.last_ack_req) >
-	    ConfValToUsecs(MaintHoldoffTime)) {
-
-		/* Set last_ack_req time */
+	if (dp->flags & PKT_REQUEST_ACK) {
+		if ((usecs_t) timeval_diff(&now, &neigh_info.last_ack_req) > 
+		    ConfValToUsecs(MaintHoldoffTime)) {
+			m->ack_req_sent = 1;
+			
+			/* Set last_ack_req time */
+			neigh_tbl_set_ack_req_time(m->nxt_hop);
 		
-		m->ack_req_sent = 1;
+			neigh_tbl_id_inc(m->nxt_hop);	
+			
+			dsr_ack_req_opt_add(dp, m->id);
+		}
 		
-		neigh_tbl_set_ack_req_time(m->nxt_hop);
+		if (tbl_add_tail(&maint_buf, &m->l) < 0) {
+			DEBUG("Buffer full - not buffering!\n");
+			FREE(m);
+			return -1;
+		}
 		
-		neigh_tbl_id_inc(m->nxt_hop);	
-	
-		dsr_ack_req_opt_add(dp, m->id);
-
 		maint_buf_set_timeout();
+	       
 	} else {
 		DEBUG("Deferring ACK REQ for %s since_last=%ld limit=%ld\n",
 		      print_ip(dp->nxt_hop), timeval_diff(&now, &neigh_info.last_ack_req), ConfValToUsecs(MaintHoldoffTime));
-	}
-	
-	if (tbl_add_tail(&maint_buf, &m->l) < 0) {
-		DEBUG("Buffer full - not buffering!\n");
-		FREE(m);
-/* 		return -1; */
 	}
 	
 /* 	maint_buf_print(&maint_buf, buf); */
