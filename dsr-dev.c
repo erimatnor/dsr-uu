@@ -385,7 +385,10 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 				u_int8_t len;
 				u_int8_t off;
 			} *rr = (struct ipopt *)&ptr[opt->rr];
-
+			
+			/* Remove the last recorded address since it will
+			 * recorded again when passed up the IP stack for the
+			 * second time on the virtual interface. */
 			rr->off -= 4;
 			rr->len -= 4;
 			opt->optlen -= 4;
