@@ -379,8 +379,6 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 		struct ip_options *opt = &(IPCB(dp->skb)->opt);
 		unsigned char *ptr = dp->skb->nh.raw;
 	
-		DEBUG("IP header > 5 optlen=%d\n", opt->optlen);
-
 		if (opt->rr) {	
 			struct ipopt {
 				u_int8_t code;
@@ -388,11 +386,9 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 				u_int8_t off;
 			} *rr = (struct ipopt *)&ptr[opt->rr];
 
-			DEBUG("optlen=%d offset=%d\n", rr->len, rr->off);
 			rr->off -= 4;
 			rr->len -= 4;
 			opt->optlen -= 4;
-			DEBUG("optlen=%d offset=%d\n", rr->len, rr->off);
 		}
 	}
 
