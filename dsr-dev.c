@@ -371,6 +371,31 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 	struct ethhdr *ethh;
 	int len;
 
+	if (!dp)
+		return -1;
+
+	/* Super ugly hack to fix record route options */
+	if (dp->skb->nh.iph->ihl > 5) {
+		struct ip_options *opt = &(IPCB(dp->skb)->opt);
+		unsigned char *ptr = dp->skb->nh.raw;
+	
+		DEBUG("IP header > 5 optlen=%d\n", opt->optlen);
+
+		if (opt->rr) {	
+			struct ipopt {
+				u_int8_t code;
+				u_int8_t len;
+				u_int8_t off;
+			} *rr = (struct ipopt *)&ptr[opt->rr];
+
+			DEBUG("optlen=%d offset=%d\n", rr->len, rr->off);
+			rr->off -= 4;
+			rr->len -= 4;
+			opt->optlen -= 4;
+			DEBUG("optlen=%d offset=%d\n", rr->len, rr->off);
+		}
+	}
+
 	if (dp->dh.raw)
 		len = dsr_opts_remove(dp);
 
@@ -386,22 +411,7 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 	 * layer */
 	skb->mac.raw = skb->data - dsr_dev->hard_header_len;
 	skb->ip_summed = CHECKSUM_UNNECESSARY;
-
-	/* Super ugly hack to fix record route in ping */
-	/* if (skb->nh.iph->ihl > 5) { */
-/* 		struct ipopt { */
-/* 			u_int8_t code; */
-/* 			u_int8_t len; */
-/* 			u_int8_t ptr; */
-/* 		} *rr = (struct ipopt *)skb->nh.raw + 20; */
-		
-/* 		DEBUG("Record Route, rr->code=%u\n", rr->code); */
-
-/* 		if (rr->code == 7) { */
-/* 			DEBUG("Record Route, rr->ptr=%u\n", rr->ptr); */
-/* 			rr->ptr -= 4; */
-/* 		} */
-/* 	} */
+	
 	ethh = (struct ethhdr *)skb->mac.raw;
 
 	memcpy(ethh->h_dest, dsr_dev->dev_addr, ETH_ALEN);
