@@ -82,6 +82,10 @@ struct sk_buff *dsr_skb_create(struct dsr_pkt *dp, struct net_device *dev)
 
 	memcpy(buf, dp->nh.raw, ip_len);
 
+	/* For some reason the checksum has to be recalculated here, at least
+	 * when there is a record route IP option */
+	ip_send_check((struct iphdr *)buf);
+
 	buf += ip_len;
 
 	/* Add DSR header if it exists */
@@ -386,12 +390,16 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 				u_int8_t off;
 			} *rr = (struct ipopt *)&ptr[opt->rr];
 			
-			/* Remove the last recorded address since it will
-			 * recorded again when passed up the IP stack for the
-			 * second time on the virtual interface. */
-			rr->off -= 4;
-			rr->len -= 4;
-			opt->optlen -= 4;
+			if (rr->off < 32) {
+				
+				/* Remove the last recorded address since it will
+				 * recorded again when passed up the IP stack for the
+				 * second time on the virtual interface. */
+				rr->off -= 4;
+				rr->len -= 4;
+				opt->optlen -= 4;
+			}
+			/* ip_send_check(dp->skb->nh.iph); */
 		}
 	}
 

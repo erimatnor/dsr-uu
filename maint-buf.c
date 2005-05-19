@@ -309,7 +309,9 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 	       
 	} else {
 		DEBUG("Deferring ACK REQ for %s since_last=%ld limit=%ld\n",
-		      print_ip(dp->nxt_hop), timeval_diff(&now, &neigh_info.last_ack_req), ConfValToUsecs(MaintHoldoffTime));
+		      print_ip(dp->nxt_hop), 
+		      timeval_diff(&now, &neigh_info.last_ack_req), 
+		      ConfValToUsecs(MaintHoldoffTime));
 	}
 	
 /* 	maint_buf_print(&maint_buf, buf); */
