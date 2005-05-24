@@ -404,7 +404,7 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 	}
 
 	if (dp->dh.raw)
-		len = dsr_opts_remove(dp);
+		len = dsr_opt_remove(dp);
 
 	skb = dsr_skb_create(dp, dsr_dev);
 

@@ -272,7 +272,7 @@ int dsr_srt_check_duplicate(struct dsr_srt *srt)
 	
 	return 0;
 }
-struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt)
+struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, int flags, int salvage, struct dsr_srt *srt)
 {
 	struct dsr_srt_opt *srt_opt;
 
@@ -283,11 +283,13 @@ struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, struct dsr_srt *srt)
 
 	srt_opt->type = DSR_OPT_SRT;
 	srt_opt->length = srt->laddrs + 2;
-	srt_opt->f = 0;
-	srt_opt->l = 0;
+	srt_opt->f = (flags & SRT_FIRST_HOP_EXT) ? 1 : 0;
+	srt_opt->l = (flags & SRT_LAST_HOP_EXT) ? 1 : 0;
 	srt_opt->res = 0;
-	SET_SALVAGE(srt_opt, 0);
+	srt_opt->salv = salvage;
 	srt_opt->sleft = (srt->laddrs / sizeof(struct in_addr));
+
+	srt_opt->fields = htons(srt_opt->fields);
 
 	memcpy(srt_opt->addrs, srt->addrs, srt->laddrs);
 
@@ -353,7 +355,7 @@ int NSCLASS dsr_srt_add(struct dsr_pkt *dp)
 	buf += DSR_OPT_HDR_LEN;
 	len -= DSR_OPT_HDR_LEN;
 
-	dp->srt_opt = dsr_srt_opt_add(buf, len, dp->srt);
+	dp->srt_opt = dsr_srt_opt_add(buf, len, 0, dp->salvage, dp->srt);
 
 	if (!dp->srt_opt) {
 /* 		DEBUG("Could not create Source Route option header!\n"); */
@@ -377,6 +379,8 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 	
 	dp->srt_opt = srt_opt;
 
+	dp->srt_opt->fields = ntohs(dp->srt_opt->fields);
+
 	/* We should add this source route info to the cache... */
 	dp->srt = dsr_srt_new(dp->src, dp->dst, srt_opt->length,
 			      (char *)srt_opt->addrs);
@@ -388,6 +392,10 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 	n = dp->srt->laddrs / sizeof(struct in_addr);
 
 	DEBUG("SR: %s sleft=%d\n", print_srt(dp->srt), srt_opt->sleft);
+
+	
+	/* Copy salvage field */
+	dp->salvage = dp->srt_opt->salv;
 
 	next_hop_intended = dsr_srt_next_hop(dp->srt, srt_opt->sleft);
 	dp->prv_hop = dsr_srt_prev_hop(dp->srt, srt_opt->sleft - 1);

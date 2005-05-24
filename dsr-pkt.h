@@ -21,6 +21,7 @@ struct dsr_pkt {
 	struct in_addr nxt_hop;
 	struct in_addr prv_hop;
 	int flags;
+	int salvage;
 #ifdef NS2
 	union {
 		struct hdr_mac *ethh;
@@ -36,17 +37,20 @@ struct dsr_pkt {
 		struct ethhdr *ethh;
 		char *raw;
 	} mac;
-	char ip_data[60];
 	union {
 		struct iphdr *iph;
 		char *raw;
 	} nh;
+	char ip_data[60];
 #endif
-	union {
-		struct dsr_opt_hdr *opth;
-		char *raw;
+	struct {
+		union {
+			struct dsr_opt_hdr *opth;
+			char *raw;
+		};		
+		char *tail, *end;  
 	} dh;
-
+		
 	int num_rrep_opts, num_rerr_opts, num_rreq_opts, num_ack_opts;
 	struct dsr_srt_opt *srt_opt;
 	struct dsr_rreq_opt *rreq_opt;	/* Can only be one */
@@ -56,7 +60,6 @@ struct dsr_pkt {
 	struct dsr_ack_req_opt *ack_req_opt;
 	struct dsr_srt *srt;	/* Source route */
 
-	char *dsr_opts, *tail, *end;	/* Data we can allocate for DSR opts */
 
 	int payload_len;
 #ifdef NS2
@@ -91,12 +94,12 @@ struct dsr_pkt {
 
 static inline int dsr_pkt_opts_len(struct dsr_pkt *dp)
 {
-	return dp->tail - dp->dsr_opts;
+	return dp->dh.tail - dp->dh.raw;
 }
 
 static inline int dsr_pkt_tailroom(struct dsr_pkt *dp)
 {
-	return dp->end - dp->tail;
+	return dp->dh.end - dp->dh.tail;
 }
 
 #ifdef NS2

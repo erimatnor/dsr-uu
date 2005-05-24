@@ -59,7 +59,7 @@ int NSCLASS dsr_recv(struct dsr_pkt *dp)
 			//DEBUG("Remove source route\n");
 			// Hmm, we remove the DSR options when we deliver a
 			//packet
-			//dsr_opts_remove(dp);
+			//dsr_opt_remove(dp);
 			break;
 		case DSR_PKT_FORWARD:
 

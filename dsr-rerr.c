@@ -59,7 +59,7 @@ int NSCLASS dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 	struct dsr_rerr_opt *rerr_opt;
 	struct in_addr dst, err_src, err_dst, myaddr;
 	char *buf;
-	int n, len, salv /* , i */ ;
+	int n, len/* , i */ ;
 
 	myaddr = my_addr();
 
@@ -74,9 +74,7 @@ int NSCLASS dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 		return -1;
 	}
 
-	GET_SALVAGE(dp_trigg->srt_opt, salv);
-
-	if (salv == 0)
+	if (dp_trigg->salvage == 0)
 		dst = dp_trigg->src;
 	else
 		dst.s_addr = dp_trigg->srt_opt->addrs[1];
@@ -135,7 +133,7 @@ int NSCLASS dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 	buf += DSR_OPT_HDR_LEN;
 	len -= DSR_OPT_HDR_LEN;
 
-	dp->srt_opt = dsr_srt_opt_add(buf, len, dp->srt);
+	dp->srt_opt = dsr_srt_opt_add(buf, len, 0, dp->salvage, dp->srt);
 
 	if (!dp->srt_opt) {
 		DEBUG("Could not create Source Route option header\n");
@@ -147,7 +145,7 @@ int NSCLASS dsr_rerr_send(struct dsr_pkt *dp_trigg, struct in_addr unr_addr)
 
 	rerr_opt =
 	    dsr_rerr_opt_add(buf, len, NODE_UNREACHABLE, dp->src, dp->dst,
-			     unr_addr, salv);
+			     unr_addr, dp->salvage);
 
 	if (!rerr_opt)
 		goto out_err;

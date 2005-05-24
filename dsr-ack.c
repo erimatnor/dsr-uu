@@ -190,7 +190,7 @@ dsr_ack_req_opt_add(struct dsr_pkt *dp, unsigned short id)
 			     tot_len + DSR_ACK_REQ_HDR_LEN, IPPROTO_DSR, ttl);
 
 		dp->dh.opth =
-		    dsr_opt_hdr_add(dp->dsr_opts,
+		    dsr_opt_hdr_add(dp->dh.raw,
 				    DSR_OPT_HDR_LEN +
 				    ntohs(dp->dh.opth->p_len) +
 				    DSR_ACK_REQ_HDR_LEN, dp->dh.opth->nh);

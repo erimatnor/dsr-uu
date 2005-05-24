@@ -312,7 +312,7 @@ DSRUU::ns_deliver(struct dsr_pkt *dp)
 	struct hdr_cmn *cmh= hdr_cmn::access(dp->p);
 	
 	if (dp->dh.raw)
-		len = dsr_opts_remove(dp);
+		len = dsr_opt_remove(dp);
 	
 	if (len) {
 		dsr_len = len; //- sizeof(struct dsr_opt_hdr) + DSR_FIXED_HDR_LEN;

@@ -14,6 +14,9 @@
 #include "dsr-ack.h"
 #include "link-cache.h"
 #include "dsr-rerr.h"
+#include "dsr-dev.h"
+#include "dsr-srt.h"
+#include "dsr-opt.h"
 #include "timer.h"
 #include "maint-buf.h"
 
@@ -145,6 +148,125 @@ static struct maint_entry *maint_entry_create(struct dsr_pkt *dp,
 	return m;
 }
 
+
+int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
+{
+	struct dsr_srt *srt, srt_prefix;
+	int old_srt_opt_len, new_srt_opt_len;
+
+	if (!dp)
+		return -1;
+	
+	if (dp->srt) {
+		DEBUG("old source route exists\n");
+		FREE(dp->srt);
+	}
+
+	srt = dsr_rtc_find(my_addr(), dp->dst);
+	
+	if (!srt) {
+		DEBUG("No alt. source route - cannot salvage packet\n");
+		return -1;
+	}
+	
+	DEBUG("Salvage packet src->dst %s->%s srt: %s\n", 
+	      print_ip(dp->src), print_ip(dp->dst), print_srt(srt));
+
+	
+	/* Must create a source route with me as the "first" hop */
+	srt_prefix.src = dp->src;
+	srt_prefix.dst = my_addr();
+	srt_prefix.laddrs = 0;
+	srt_prefix.flags = 0;
+	srt_prefix.index = 0;
+
+	dp->srt = dsr_srt_concatenate(&srt_prefix, srt);
+
+	FREE(srt);
+
+	if (!dp->srt)
+		return -1;
+
+	/* TODO: Check unidirectional MAC tx support and potentially discard
+	 * RREP option... */
+
+	/* TODO: Check/set First and Last hop external bits */
+	
+	if (!dp->srt_opt)
+		old_srt_opt_len = 0;
+	else		
+		old_srt_opt_len = dp->srt_opt->length + 2;
+
+	new_srt_opt_len = DSR_SRT_OPT_LEN(dp->srt);
+
+	if (old_srt_opt_len == 0) {
+		DEBUG("srt_opt_len=0\n");
+		return -1;
+	}
+
+	if (new_srt_opt_len == old_srt_opt_len) {
+		DEBUG("Salvage - source route same length\n");
+		dsr_srt_opt_add((char *)dp->srt_opt, new_srt_opt_len, 0, dp->srt_opt->salv + 1, dp->srt);
+	} else {
+		int old_opt_len, new_opt_len, tmp_len, salv;
+		char *tmp;
+		/* Modify space for new source route... */
+		
+		DEBUG("Salvage - source route length new=%d old=%d\n",
+		      new_srt_opt_len, old_srt_opt_len);
+
+		old_opt_len = dsr_pkt_opts_len(dp);
+		new_opt_len = old_opt_len - old_srt_opt_len + new_srt_opt_len;
+
+		/* Save pointer to old options */
+		tmp = dp->dh.raw;
+
+		tmp_len = (char *)dp->srt_opt - dp->dh.raw;
+		
+		salv = dp->srt_opt->salv;
+
+		/* Allocate new options space */
+		dp->dh.raw = dsr_pkt_alloc_opts(dp, new_opt_len);
+		
+		if (!dp->dh.raw) {
+			DEBUG("Could not allocate new options\n");
+			return -1;
+		}
+		
+		/* Copy everything from old DSR option up til the source
+		 * route */
+		memcpy(dp->dh.raw, tmp, tmp_len);
+		
+		/* Add new source route */
+		dp->srt_opt = dsr_srt_opt_add(dp->dh.raw + tmp_len,
+					      new_srt_opt_len, 0, 
+					      salv + 1, dp->srt);
+				
+		/* Copy everything beginning after the old source route and
+		 * to the end of the old DSR options */
+		memcpy(dp->dh.raw + tmp_len + new_srt_opt_len, 
+		       tmp + tmp_len + old_srt_opt_len, 
+		       old_opt_len - tmp_len - old_srt_opt_len);
+		
+		dp->dh.opth->p_len = htons(new_opt_len);
+		
+		/* Free old options memory */
+		FREE(tmp);
+	}
+	/* Simulate that we got this packet directly from the source */
+	dp->nxt_hop = dsr_srt_next_hop(dp->srt, --dp->srt_opt->sleft);
+
+	XMIT(dp);
+
+	DEBUG("Salvaged packet to %s nxt_hop=%s\n", 
+	      print_ip(dp->dst), print_ip(dp->nxt_hop));
+
+	DEBUG("Route: %s\n", print_srt(dp->srt));
+
+	return 0;
+}
+
+
 void NSCLASS maint_buf_timeout(unsigned long data)
 {
 	struct maint_entry *m;
@@ -152,8 +274,7 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 	if (timer_pending(&ack_timer))
 		return;
 
-	/* Remove the first packet */
-/* 	m = (struct maint_entry *)tbl_find_detach(&maint_buf, NULL, crit_none); */
+	/* Get the first packet */
 	m = (struct maint_entry *)tbl_detach_first(&maint_buf);
 		
 	if (!m) {
@@ -167,6 +288,7 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 
 	/* Increase the number of retransmits */
 	if (m->rexmt >= ConfVal(MaxMaintRexmt)) {
+		int salv = -1;
 
 		DEBUG("MaxMaintRexmt reached!\n");
 
@@ -179,21 +301,23 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 			
 			dsr_rerr_send(m->dp, m->nxt_hop);
 			
+			salv = maint_buf_salvage(m->dp);
+			
 			n = maint_buf_del_all_id(m->nxt_hop, m->id);
 
 			DEBUG("Deleted %d packets from maint_buf\n", n);
 		} else {
 			DEBUG("No ACK REQ sent for this packet\n");
 		}
-
-		if (m->dp) {
+		
+		if (m->dp && salv < 0) {
 #ifdef NS2
 			if (m->dp->p)
 				drop(m->dp->p, DROP_RTR_SALVAGE);
 #endif
 			dsr_pkt_free(m->dp);
 		}
-
+		
 		FREE(m);
 		goto out;
 	}
@@ -207,7 +331,7 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 	if (m->ack_req_sent)
 		dsr_ack_req_send(m->nxt_hop, m->id);
 
-	/* Add at end of buffer */
+	/* Add to maintenence buffer again */
 	tbl_add(&maint_buf, &m->l, crit_expires);
 /* 	tbl_add_tail(&maint_buf, &m->l); */
       out:

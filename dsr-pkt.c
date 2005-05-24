@@ -15,15 +15,15 @@ char *dsr_pkt_alloc_opts(struct dsr_pkt *dp, int len)
 	if (!dp && len)
 		return NULL;
 
-	dp->dsr_opts = (char *)MALLOC(len + DEFAULT_TAILROOM, GFP_ATOMIC);
+	dp->dh.raw = (char *)MALLOC(len + DEFAULT_TAILROOM, GFP_ATOMIC);
 
-	if (!dp->dsr_opts)
+	if (!dp->dh.raw)
 		return NULL;
 
-	dp->end = dp->dsr_opts + len + DEFAULT_TAILROOM;
-	dp->tail = dp->dsr_opts + len;
+	dp->dh.end = dp->dh.raw + len + DEFAULT_TAILROOM;
+	dp->dh.tail = dp->dh.raw + len;
 
-	return dp->dsr_opts;
+	return dp->dh.raw;
 }
 
 char *dsr_pkt_alloc_opts_expand(struct dsr_pkt *dp, int len)
@@ -31,40 +31,40 @@ char *dsr_pkt_alloc_opts_expand(struct dsr_pkt *dp, int len)
 	char *tmp;
 	int old_len;
 
-	if (!dp || !dp->dsr_opts)
+	if (!dp || !dp->dh.raw)
 		return NULL;
 
 	if (dsr_pkt_tailroom(dp) > len) {
-		tmp = dp->tail;
-		dp->tail = dp->tail + len;
+		tmp = dp->dh.tail;
+		dp->dh.tail += len;
 		return tmp;
 	}
 
-	tmp = dp->dsr_opts;
+	tmp = dp->dh.raw;
 	old_len = dsr_pkt_opts_len(dp);
 
 	if (!dsr_pkt_alloc_opts(dp, old_len + len))
 		return NULL;
 
-	memcpy(dp->dsr_opts, tmp, old_len);
+	memcpy(dp->dh.raw, tmp, old_len);
 
 	FREE(tmp);
 
-	return (dp->dsr_opts + old_len);
+	return (dp->dh.raw + old_len);
 }
 
 int dsr_pkt_free_opts(struct dsr_pkt *dp)
 {
 	int len;
 
-	if (!dp->dsr_opts)
+	if (!dp->dh.raw)
 		return -1;
 
 	len = dsr_pkt_opts_len(dp);
 
-	FREE(dp->dsr_opts);
+	FREE(dp->dh.raw);
 
-	dp->dh.raw = dp->dsr_opts = dp->end = dp->tail = NULL;
+	dp->dh.raw = dp->dh.end = dp->dh.tail = NULL;
 	dp->srt_opt = NULL;
 	dp->rreq_opt = NULL;
 	memset(dp->rrep_opt, 0, sizeof(struct dsr_rrep_opt *) * MAX_RREP_OPTS);
@@ -102,18 +102,20 @@ struct dsr_pkt *dsr_pkt_alloc(Packet * p)
 		    Address::instance().get_nodeaddr(dp->nh.iph->daddr());
 
 		if (cmh->ptype() == PT_DSR) {
-			dp->dh.opth = hdr_dsr::access(p);
+			struct dsr_opt_hdr *opth;
+			
+			opth = hdr_dsr::access(p);
 
-			dsr_opts_len = ntohs(dp->dh.opth->p_len) +
-			    DSR_OPT_HDR_LEN;
+			dsr_opts_len = ntohs(opth->p_len) + DSR_OPT_HDR_LEN;
 
 			if (!dsr_pkt_alloc_opts(dp, dsr_opts_len)) {
 				FREE(dp);
 				return NULL;
 			}
 
-			memcpy(dp->dsr_opts, dp->dh.raw, dsr_opts_len);
-			dp->dh.raw = dp->dsr_opts;
+			memcpy(dp->dh.raw, (char *)opth, dsr_opts_len);
+
+			dsr_opt_parse(dp);
 
 			if (DATA_PACKET(dp->dh.opth->nh) ||
 			    dp->dh.opth->nh == PT_PING)
@@ -151,17 +153,19 @@ struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb)
 		dp->dst.s_addr = skb->nh.iph->daddr;
 
 		if (dp->nh.iph->protocol == IPPROTO_DSR) {
-			dp->dh.raw = dp->nh.raw + (dp->nh.iph->ihl << 2);
-			dsr_opts_len =
-			    ntohs(dp->dh.opth->p_len) + DSR_OPT_HDR_LEN;
+			struct dsr_opt_hdr *opth;
+			
+			opth = (struct dsr_opt_hdr *)dp->nh.raw + (dp->nh.iph->ihl << 2);
+			dsr_opts_len = ntohs(opth->p_len) + DSR_OPT_HDR_LEN;
 
 			if (!dsr_pkt_alloc_opts(dp, dsr_opts_len)) {
 				FREE(dp);
 				return NULL;
 			}
 
-			memcpy(dp->dsr_opts, dp->dh.raw, dsr_opts_len);
-			dp->dh.raw = dp->dsr_opts;
+			memcpy(dp->dh.raw, (char *)opth, dsr_opts_len);
+			
+			dsr_opt_parse(dp);
 		}
 
 		dp->payload = dp->nh.raw +

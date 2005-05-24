@@ -83,7 +83,7 @@ struct dsr_opt *dsr_opt_find_opt(struct dsr_pkt *dp, int type)
 	return NULL;
 }
 
-int NSCLASS dsr_opts_remove(struct dsr_pkt *dp)
+int NSCLASS dsr_opt_remove(struct dsr_pkt *dp)
 {
 	int len, ip_len, prot, ttl;
 
@@ -105,6 +105,99 @@ int NSCLASS dsr_opts_remove(struct dsr_pkt *dp)
 
 	/* Return bytes removed */
 	return len;
+}
+
+int dsr_opt_parse(struct dsr_pkt *dp)
+{
+	int dsr_len, l, n = 0;
+	struct dsr_opt *dopt;
+
+	if (!dp)
+		return -1;
+
+	dsr_len = dsr_pkt_opts_len(dp);
+
+	l = DSR_OPT_HDR_LEN;
+	dopt = DSR_GET_OPT(dp->dh.opth);
+	
+	dp->num_rrep_opts = dp->num_rerr_opts = dp->num_rreq_opts = dp->num_ack_opts = 0;
+	
+	dp->srt_opt = NULL;
+	dp->ack_req_opt = NULL;
+
+	while (l < dsr_len && (dsr_len - l) > 2) {
+		switch (dopt->type) {
+		case DSR_OPT_PADN:
+			break;
+		case DSR_OPT_RREQ:
+			if (dp->num_rreq_opts == 0)
+				dp->rreq_opt = (struct dsr_rreq_opt *)dopt;
+#ifndef NS2
+			else
+				DEBUG("ERROR: More than one RREQ option!!\n");
+#endif
+			break;
+		case DSR_OPT_RREP:
+			if (dp->num_rrep_opts < MAX_RREP_OPTS)
+				dp->rrep_opt[dp->num_rrep_opts++] = (struct dsr_rrep_opt *)dopt;
+#ifndef NS2
+			else
+				DEBUG("Maximum RREP opts in one packet reached\n");
+#endif
+			break;
+		case DSR_OPT_RERR:
+			if (dp->num_rerr_opts < MAX_RERR_OPTS)
+				dp->rerr_opt[dp->num_rerr_opts++] = (struct dsr_rerr_opt *)dopt;
+#ifndef NS2
+			else
+				DEBUG("Maximum RERR opts in one packet reached\n");
+#endif
+			break;
+		case DSR_OPT_PREV_HOP:
+			break;
+		case DSR_OPT_ACK:
+			if (dp->num_ack_opts < MAX_ACK_OPTS)
+				dp->ack_opt[dp->num_ack_opts++] = (struct dsr_ack_opt *)dopt;
+#ifndef NS2
+			else
+				DEBUG("Maximum ACK opts in one packet reached\n");
+#endif
+			break;
+		case DSR_OPT_SRT:
+			if (!dp->srt_opt)
+				dp->srt_opt = (struct dsr_srt_opt *)dopt;
+#ifndef NS2
+			else
+				DEBUG("More than one source route in packet\n");
+#endif
+			break;
+		case DSR_OPT_TIMEOUT:
+			break;
+		case DSR_OPT_FLOWID:
+			break;
+		case DSR_OPT_ACK_REQ:
+			if (!dp->ack_req_opt)
+				dp->ack_req_opt = (struct dsr_ack_req_opt *)dopt;
+#ifndef NS2
+			else
+				DEBUG("More than one ACK REQ in packet\n");
+#endif
+			break;
+		case DSR_OPT_PAD1:
+			l++;
+			dopt++;
+			continue;
+#ifndef NS2
+		default:
+			DEBUG("Unknown DSR option type=%d\n", dopt->type);
+#endif
+		}
+		l += dopt->length + 2;
+		dopt = DSR_GET_NEXT_OPT(dopt);
+		n++;
+	}
+	
+	return n;
 }
 
 int NSCLASS dsr_opt_recv(struct dsr_pkt *dp)

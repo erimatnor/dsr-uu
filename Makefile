@@ -125,7 +125,7 @@ TODO:
 	grep -n "TODO:" *.c *.h > TODO
 	cat TODO
 TAGS: *.c *.h
-	etags.emacs $(SRC) *.h
+	etags $(SRC) *.h
 
 indent:
 	indent -kr -i8 -ts8 -sob -l80 -ss -ncs *.c *.h
@@ -144,9 +144,9 @@ endif
 # DO NOT DELETE
 
 dsr-module.o: dsr.h dsr-pkt.h timer.h dsr-dev.h dsr-io.h debug.h neigh.h
-dsr-module.o: dsr-rreq.h maint-buf.h send-buf.h
+dsr-module.o: dsr-rreq.h maint-buf.h send-buf.h link-cache.h tbl.h list.h
 dsr-pkt.o: dsr-opt.h dsr.h dsr-pkt.h timer.h
-dsr-dev.o: debug.h dsr.h dsr-pkt.h timer.h kdsr.h dsr-opt.h dsr-rreq.h
+dsr-dev.o: debug.h dsr.h dsr-pkt.h timer.h neigh.h dsr-opt.h dsr-rreq.h
 dsr-dev.o: link-cache.h tbl.h list.h dsr-srt.h dsr-ack.h send-buf.h
 dsr-dev.o: maint-buf.h dsr-io.h
 dsr-io.o: dsr-dev.h dsr.h dsr-pkt.h timer.h dsr-rreq.h dsr-rrep.h dsr-srt.h
@@ -169,4 +169,4 @@ send-buf.o: link-cache.h dsr-srt.h
 debug.o: debug.h dsr.h dsr-pkt.h timer.h
 neigh.o: tbl.h list.h neigh.h dsr.h dsr-pkt.h timer.h debug.h
 maint-buf.o: dsr.h dsr-pkt.h timer.h debug.h tbl.h list.h neigh.h dsr-ack.h
-maint-buf.o: link-cache.h dsr-rerr.h maint-buf.h
+maint-buf.o: link-cache.h dsr-rerr.h dsr-dev.h maint-buf.h

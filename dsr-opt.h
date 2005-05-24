@@ -84,6 +84,7 @@ struct dsr_pad1_opt {
 
 struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, int len, unsigned int protocol);
 struct dsr_opt *dsr_opt_find_opt(struct dsr_pkt *dp, int type);
+int dsr_opt_parse(struct dsr_pkt *dp);
 
 #ifdef __KERNEL__
 struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src,
@@ -95,7 +96,7 @@ struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src,
 
 #ifndef NO_DECLS
 
-int dsr_opts_remove(struct dsr_pkt *dp);
+int dsr_opt_remove(struct dsr_pkt *dp);
 int dsr_opt_recv(struct dsr_pkt *dp);
 
 #endif				/* NO_DECLS */
