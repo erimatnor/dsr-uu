@@ -42,8 +42,8 @@ struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt, int sleft)
 	return prev_hop;
 }
 
-static int 
-dsr_srt_find_addr(struct dsr_srt *srt, struct in_addr addr, int index)
+static int dsr_srt_find_addr(struct dsr_srt *srt, struct in_addr addr, 
+			      int index)
 {
 	int n = srt->laddrs / sizeof(struct in_addr);
 
@@ -247,32 +247,41 @@ struct dsr_srt *dsr_srt_concatenate(struct dsr_srt *srt1, struct dsr_srt *srt2)
 int dsr_srt_check_duplicate(struct dsr_srt *srt)
 {
 	struct in_addr *buf;
-	int n, i;
+	int n, i, res = 0;
 	
 	n = srt->laddrs / sizeof(struct in_addr);
 
 	buf = (struct in_addr *)MALLOC(sizeof(struct in_addr) * (n + 1), 
 				       GFP_ATOMIC);
 	
+	if (!buf) 
+		return -1;
+
 	buf[0] = srt->src;
 		
 	for (i = 0; i < n; i++) {
 		int j;
 		
 		for (j = 0; j < i + 1; j++)
-			if (buf[j].s_addr == srt->addrs[i].s_addr)
-				return 1;
-		
+			if (buf[j].s_addr == srt->addrs[i].s_addr) {
+				res = 1;
+				goto out;
+			}		
 		buf[i+1] = srt->addrs[i];
 	}
 	
 	for (i = 0; i < n + 1; i++)
-		if (buf[i].s_addr == srt->dst.s_addr)
-			return 1;
-	
-	return 0;
+		if (buf[i].s_addr == srt->dst.s_addr) {
+			res = 1;
+			goto out;
+		}
+ out:
+	FREE(buf);
+
+	return res;
 }
-struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, int flags, int salvage, struct dsr_srt *srt)
+struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, int flags, 
+				    int salvage, struct dsr_srt *srt)
 {
 	struct dsr_srt_opt *srt_opt;
 

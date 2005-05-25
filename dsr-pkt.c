@@ -20,8 +20,8 @@ char *dsr_pkt_alloc_opts(struct dsr_pkt *dp, int len)
 	if (!dp->dh.raw)
 		return NULL;
 
-	dp->dh.end = dp->dh.raw + len + DEFAULT_TAILROOM;
 	dp->dh.tail = dp->dh.raw + len;
+	dp->dh.end = dp->dh.tail + DEFAULT_TAILROOM;
 
 	return dp->dh.raw;
 }

@@ -143,6 +143,7 @@ static struct maint_entry *maint_entry_create(struct dsr_pkt *dp,
 #else
 	m->dp = dsr_pkt_alloc(skb_copy(dp->skb, GFP_ATOMIC));
 #endif
+
 	m->dp->nxt_hop = dp->nxt_hop;
 
 	return m;
@@ -151,88 +152,141 @@ static struct maint_entry *maint_entry_create(struct dsr_pkt *dp,
 
 int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 {
-	struct dsr_srt *srt, srt_prefix;
-	int old_srt_opt_len, new_srt_opt_len;
+	struct dsr_srt *alt_srt, *old_srt, *srt_to_me;
+	int old_srt_opt_len, new_srt_opt_len, sleft, salv;
 
 	if (!dp)
 		return -1;
 	
 	if (dp->srt) {
-		DEBUG("old source route exists\n");
+		DEBUG("old internal source route exists\n");
 		FREE(dp->srt);
 	}
 
-	srt = dsr_rtc_find(my_addr(), dp->dst);
+	alt_srt = dsr_rtc_find(my_addr(), dp->dst);
 	
-	if (!srt) {
+	if (!alt_srt) {
 		DEBUG("No alt. source route - cannot salvage packet\n");
 		return -1;
 	}
 	
-	DEBUG("Salvage packet src->dst %s->%s srt: %s\n", 
-	      print_ip(dp->src), print_ip(dp->dst), print_srt(srt));
+	if (!dp->srt_opt) {
+		DEBUG("No old source route\n");
+		FREE(alt_srt);
+		return -1;
+	}
 
+	old_srt = dsr_srt_new(dp->src, dp->dst, dp->srt_opt->length - 2, 
+			      (char *)dp->srt_opt->addrs);
+
+	if (!old_srt) {
+		FREE(alt_srt);
+		return -1;
+	}
+
+	DEBUG("opt_len old srt: %s\n", print_srt(old_srt));
+
+	/* Salvaging as described in the draft does not really make that much
+	 * sense to me... For example, why should the new source route be
+	 * <orig_src> -> <this_node> -> < ... > -> <dst> ?. Then it looks like
+	 * this node has one hop connectivity with the src? Further, the draft
+	 * does not mention anything about checking for loops or "going back"
+	 * the same way the packet arrived, i.e, <orig_src> -> <this_node> ->
+	 * <orig_src> -> <...> -> <dst>. */
+
+	/* Rip out the source route to me */
+
+	srt_to_me = dsr_srt_new_split(old_srt, my_addr());
 	
-	/* Must create a source route with me as the "first" hop */
-	srt_prefix.src = dp->src;
-	srt_prefix.dst = my_addr();
-	srt_prefix.laddrs = 0;
-	srt_prefix.flags = 0;
-	srt_prefix.index = 0;
+	if (!srt_to_me) { 
+		FREE(alt_srt);
+		FREE(old_srt);
+		return -1;
+	}
+	
+	dp->srt = dsr_srt_concatenate(srt_to_me, alt_srt);
+	
+	sleft = (dp->srt->laddrs) / 4 - (srt_to_me->laddrs / 4);
 
-	dp->srt = dsr_srt_concatenate(&srt_prefix, srt);
-
-	FREE(srt);
-
+	DEBUG("old_srt: %s\n", print_srt(old_srt));
+	DEBUG("alt_srt: %s\n", print_srt(alt_srt));
+	
+	FREE(alt_srt);
+	FREE(old_srt);
+	FREE(srt_to_me);
+	
 	if (!dp->srt)
 		return -1;
+	
+	DEBUG("Salvage packet sleft=%d srt: %s\n", sleft, print_srt(dp->srt));
 
+	if (dsr_srt_check_duplicate(dp->srt)) {
+		DEBUG("Duplicate address in new source route, aborting salvage\n");
+		FREE(dp->srt);
+		return -1;
+	}
+	
 	/* TODO: Check unidirectional MAC tx support and potentially discard
 	 * RREP option... */
 
 	/* TODO: Check/set First and Last hop external bits */
-	
-	if (!dp->srt_opt)
-		old_srt_opt_len = 0;
-	else		
-		old_srt_opt_len = dp->srt_opt->length + 2;
 
+	old_srt_opt_len = dp->srt_opt->length + 2;
 	new_srt_opt_len = DSR_SRT_OPT_LEN(dp->srt);
+	salv = dp->srt_opt->salv;
 
-	if (old_srt_opt_len == 0) {
-		DEBUG("srt_opt_len=0\n");
-		return -1;
-	}
+	DEBUG("Salvage - source route length new=%d old=%d\n",
+	      new_srt_opt_len, old_srt_opt_len);
 
 	if (new_srt_opt_len == old_srt_opt_len) {
 		DEBUG("Salvage - source route same length\n");
-		dsr_srt_opt_add((char *)dp->srt_opt, new_srt_opt_len, 0, dp->srt_opt->salv + 1, dp->srt);
+		dsr_srt_opt_add((char *)dp->srt_opt, new_srt_opt_len, 0, 
+				salv + 1, dp->srt);
+	} else if (new_srt_opt_len < old_srt_opt_len) {
+		DEBUG("New srt shorter than old\n");
+		return -1;
 	} else {
-		int old_opt_len, new_opt_len, tmp_len, salv;
+		int old_opt_len, new_opt_len, tmp_len;
 		char *tmp;
 		/* Modify space for new source route... */
 		
-		DEBUG("Salvage - source route length new=%d old=%d\n",
-		      new_srt_opt_len, old_srt_opt_len);
-
 		old_opt_len = dsr_pkt_opts_len(dp);
 		new_opt_len = old_opt_len - old_srt_opt_len + new_srt_opt_len;
 
+		DEBUG("opt_len old=%d new=%d srt: %s\n", 
+		      old_opt_len, new_opt_len, print_srt(dp->srt));
+
+
+
+		tmp = (char *)MALLOC(old_opt_len, GFP_ATOMIC);
+		
+		memcpy(tmp, dp->dh.raw, old_opt_len);
+
 		/* Save pointer to old options */
-		tmp = dp->dh.raw;
+		/* tmp = dp->dh.raw; */
 
 		tmp_len = (char *)dp->srt_opt - dp->dh.raw;
-		
-		salv = dp->srt_opt->salv;
 
+		DEBUG("opt_len old tmp_len=%d\n", tmp_len);
+
+	/* 	dsr_pkt_free_opts(dp); */
+		
 		/* Allocate new options space */
-		dp->dh.raw = dsr_pkt_alloc_opts(dp, new_opt_len);
 		
-		if (!dp->dh.raw) {
-			DEBUG("Could not allocate new options\n");
-			return -1;
-		}
-		
+	/* 	dp->dh.raw = dsr_pkt_alloc_opts(dp, new_opt_len); */
+
+		/* WHY DOES IT NOT WORK HERE!!!! */
+		FREE(tmp);
+
+		return -1;
+
+		dsr_pkt_alloc_opts_expand(dp, new_opt_len - old_opt_len);
+
+	
+		/* if (!dp->dh.raw) { */
+/* 			DEBUG("Could not allocate new options\n"); */
+/* 			return -1; */
+/* 		} */
 		/* Copy everything from old DSR option up til the source
 		 * route */
 		memcpy(dp->dh.raw, tmp, tmp_len);
@@ -253,15 +307,15 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 		/* Free old options memory */
 		FREE(tmp);
 	}
-	/* Simulate that we got this packet directly from the source */
-	dp->nxt_hop = dsr_srt_next_hop(dp->srt, --dp->srt_opt->sleft);
+       
+	/* We got this packet directly from the previous hop */
+	dp->srt_opt->sleft = sleft;
+	
+	dp->nxt_hop = dsr_srt_next_hop(dp->srt, dp->srt_opt->sleft);
 
-	XMIT(dp);
+	DEBUG("Next hop=%s\n", print_ip(dp->nxt_hop));
 
-	DEBUG("Salvaged packet to %s nxt_hop=%s\n", 
-	      print_ip(dp->dst), print_ip(dp->nxt_hop));
-
-	DEBUG("Route: %s\n", print_srt(dp->srt));
+/* 	XMIT(dp); */
 
 	return 0;
 }
@@ -310,9 +364,9 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 			DEBUG("No ACK REQ sent for this packet\n");
 		}
 		
-		if (m->dp && salv < 0) {
+		if (m->dp) {
 #ifdef NS2
-			if (m->dp->p)
+			if (m->dp->p && salv < 0)
 				drop(m->dp->p, DROP_RTR_SALVAGE);
 #endif
 			dsr_pkt_free(m->dp);

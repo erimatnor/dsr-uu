@@ -233,9 +233,9 @@ static inline struct lc_link *__lc_link_find(struct tbl *t, struct in_addr src,
 	return (struct lc_link *)__tbl_find(t, &q, crit_link_query);
 }
 
-static int
-__lc_link_tbl_add(struct tbl *t, struct lc_node *src,
-		  struct lc_node *dst, usecs_t timeout, int status, int cost)
+static int __lc_link_tbl_add(struct tbl *t, struct lc_node *src,
+			     struct lc_node *dst, usecs_t timeout, 
+			     int status, int cost)
 {
 	struct lc_link *link;
 	int res;
@@ -246,13 +246,12 @@ __lc_link_tbl_add(struct tbl *t, struct lc_node *src,
 	link = (struct lc_link *)__lc_link_find(t, src->addr, dst->addr);
 
 	if (!link) {
-		link =
-		    (struct lc_link *)MALLOC(sizeof(struct lc_link),
-					     GFP_ATOMIC);
+		link = (struct lc_link *)MALLOC(sizeof(struct lc_link),
+						GFP_ATOMIC);
 
-		if (!link) {
+		if (!link)
 			return -1;
-		}
+		
 		memset(link, 0, sizeof(struct lc_link));
 
 		__tbl_add_tail(t, &link->l);
@@ -274,9 +273,8 @@ __lc_link_tbl_add(struct tbl *t, struct lc_node *src,
 	return res;
 }
 
-int NSCLASS
-lc_link_add(struct in_addr src, struct in_addr dst,
-	    usecs_t timeout, int status, int cost)
+int NSCLASS lc_link_add(struct in_addr src, struct in_addr dst,
+			usecs_t timeout, int status, int cost)
 {
 	struct lc_node *sn, *dn;
 	int res;
@@ -463,8 +461,7 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 		int k = (dst_node->hops - 1);
 		int i = 0;
 
-		srt =
-		    (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) +
+		srt = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) +
 					     (k * sizeof(struct in_addr)),
 					     GFP_ATOMIC);
 
@@ -618,9 +615,8 @@ static int lc_print(struct lc_graph *LC, char *buf)
 
 	DSR_READ_LOCK(&LC->lock);
 
-	len +=
-	    sprintf(buf, "# %-15s %-15s %-4s Timeout\n", "Src Addr", "Dst Addr",
-		    "Cost");
+	len += sprintf(buf, "# %-15s %-15s %-4s Timeout\n", "Src Addr", 
+		       "Dst Addr", "Cost");
 
 	list_for_each(pos, &LC->links.head) {
 		struct lc_link *link = (struct lc_link *)pos;
@@ -632,9 +628,8 @@ static int lc_print(struct lc_graph *LC, char *buf)
 			       timeval_diff(&link->expires, &now) / 1000000);
 	}
 
-	len +=
-	    sprintf(buf + len, "\n# %-15s %-4s %-4s %-5s %12s %12s\n", "Addr",
-		    "Hops", "Cost", "Links", "This", "Pred");
+	len += sprintf(buf + len, "\n# %-15s %-4s %-4s %-5s %12s %12s\n", 
+		       "Addr", "Hops", "Cost", "Links", "This", "Pred");
 
 	list_for_each(pos, &LC->nodes.head) {
 		struct lc_node *n = (struct lc_node *)pos;

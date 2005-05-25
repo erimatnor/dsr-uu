@@ -32,10 +32,10 @@
 #define IPPROTO_DSR 168		/* Is this correct? */
 #endif
 #define IP_HDR_LEN 20
-#define DSR_OPTS_MAX_SIZE 100	/* This is used to reduce the MTU of the dsr
+#define DSR_OPTS_MAX_SIZE 50	/* This is used to reduce the MTU of the DSR *
 				 * device so that packets are not too big after
-				 * adding the dsr header. A better solution should
-				 * probably be found... */
+				 * adding the DSR header. A better solution
+				 * should probably be found... */
 
 enum confval {
 #ifdef DEBUG
