@@ -355,7 +355,7 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 			
 			dsr_rerr_send(m->dp, m->nxt_hop);
 			
-			salv = maint_buf_salvage(m->dp);
+/* 			salv = maint_buf_salvage(m->dp); */
 			
 			n = maint_buf_del_all_id(m->nxt_hop, m->id);
 
