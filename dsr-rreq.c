@@ -369,6 +369,7 @@ int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
 		      print_ip(target));
 		goto out;
 	}
+	DEBUG("Route discovery for %s\n", print_ip(target));
 
 	gettime(&e->last_used);
 	e->ttl = ttl = TTL_START;

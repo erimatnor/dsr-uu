@@ -176,9 +176,8 @@ int dsr_vprintk(const char *func, const char *fmt, va_list args)
 
 	gettime(&now);
 
-	prefix_len = sprintf(printk_buf, "%ld:%ld:%03lu:%s: ",
-			     now.tv_sec / 60, now.tv_sec % 60,
-			     now.tv_usec / 1000, func);
+	prefix_len = sprintf(printk_buf, "%ld.%03ld: %s: ",
+			     now.tv_sec, now.tv_usec / 1000, func);
 
 	/* Emit the output into the temporary buffer */
 	printed_len = vsnprintf(printk_buf + prefix_len,

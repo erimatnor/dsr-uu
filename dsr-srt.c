@@ -298,8 +298,6 @@ struct dsr_srt_opt *dsr_srt_opt_add(char *buf, int len, int flags,
 	srt_opt->salv = salvage;
 	srt_opt->sleft = (srt->laddrs / sizeof(struct in_addr));
 
-	srt_opt->fields = htons(srt_opt->fields);
-
 	memcpy(srt_opt->addrs, srt->addrs, srt->laddrs);
 
 	return srt_opt;
@@ -388,8 +386,6 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 	
 	dp->srt_opt = srt_opt;
 
-	dp->srt_opt->fields = ntohs(dp->srt_opt->fields);
-
 	/* We should add this source route info to the cache... */
 	dp->srt = dsr_srt_new(dp->src, dp->dst, srt_opt->length,
 			      (char *)srt_opt->addrs);
@@ -402,7 +398,6 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 
 	DEBUG("SR: %s sleft=%d\n", print_srt(dp->srt), srt_opt->sleft);
 
-	
 	/* Copy salvage field */
 	dp->salvage = dp->srt_opt->salv;
 
@@ -455,7 +450,6 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 
 		FREE(srt_cut);
 		FREE(srt);
-
 	}
 
 	if (dp->flags & PKT_PROMISC_RECV)

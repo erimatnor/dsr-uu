@@ -53,7 +53,7 @@ static inline int crit_garbage(void *pos, void *n)
 	struct send_buf_entry *e = (struct send_buf_entry *)pos;
 
 	if (timeval_diff(now, &e->qtime) >=
-	    (int)ConfValToUsecs(SendBufferTimeout) - 1000) {
+	    (int)ConfValToUsecs(SendBufferTimeout)) {
 		if (e->dp)
 			dsr_pkt_free(e->dp);
 		return 1;
@@ -95,7 +95,7 @@ void NSCLASS send_buf_timeout(unsigned long data)
 
 	timeval_add_usecs(&expires, ConfValToUsecs(SendBufferTimeout));
 
-	//DEBUG("now=%s qtime=%s exp=%s\n", print_timeval(&now), print_timeval(&e->qtime), print_timeval(&expires));
+	DEBUG("now=%s qtime=%s exp=%s\n", print_timeval(&now), print_timeval(&e->qtime), print_timeval(&expires));
 	DSR_READ_UNLOCK(&send_buf.lock);
 
 	set_timer(&send_buf_timer, &expires);

@@ -73,6 +73,7 @@ struct sk_buff *dsr_skb_create(struct dsr_pkt *dp, struct net_device *dev)
 #else
 	skb_reserve(skb, (dev->hard_header_len + 15) & ~15);
 #endif
+	skb->mac.raw = skb->data - 14;
 	skb->nh.raw = skb->data;
 	skb->dev = dev;
 	skb->protocol = htons(ETH_P_IP);
@@ -461,7 +462,6 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 		goto out_err;
 	}
 
-
 	/* Create hardware header */
 	if (dsr_hw_header_create(dp, skb) < 0) {
 		DEBUG("Could not create hardware header\n");
@@ -473,8 +473,13 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 	res = dev_queue_xmit(skb);
 
 	if (res >= 0) {
-		DEBUG("Sent %d bytes skb->data_len=%d\n",
-		      skb->len, skb->data_len);
+		struct in_addr dst;
+		dst.s_addr = skb->nh.iph->daddr;
+		
+		DEBUG("Sent %d bytes data_len=%d %s : %s\n",
+		      skb->len, skb->data_len, 
+		      print_eth(skb->mac.raw), 
+		      print_ip(dst));
 
 		dsr_node_lock(dsr_node);
 		dsr_node->stats.tx_packets++;

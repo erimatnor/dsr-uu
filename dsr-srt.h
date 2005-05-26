@@ -15,17 +15,12 @@ struct dsr_srt_opt {
 	u_int8_t type;
 	u_int8_t length;
 #if defined(__LITTLE_ENDIAN_BITFIELD)	
-	union {
-		struct {
-			u_int16_t sleft:6;
-			u_int16_t salv:4;
-			u_int16_t res:4;
-			u_int16_t l:1;
-			u_int16_t f:1;
-		};
-		u_int16_t fields; /* This is a trick to easily convert the
-				   * byte/bit order on little endian systems. */
-	};
+/* TODO: Fix bit/byte order */
+	u_int16_t f:1;
+	u_int16_t l:1;
+	u_int16_t res:4;
+	u_int16_t salv:4;
+	u_int16_t sleft:6;
 #elif defined (__BIG_ENDIAN_BITFIELD)
 	u_int16_t f:1;
 	u_int16_t l:1;

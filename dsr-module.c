@@ -156,11 +156,13 @@ int dsr_ip_recv(struct sk_buff *skb)
 	if (skb->pkt_type == PACKET_OTHERHOST) {
 		DEBUG("Setting flag PKT_PROMISC_RECV\n");
 		dp->flags |= PKT_PROMISC_RECV;
+		dsr_pkt_free(dp);
+		return 0;
 	}
 	if ((skb->len + (dp->nh.iph->ihl << 2)) < ntohs(dp->nh.iph->tot_len)) {
-		DEBUG("data to short according to IP header len=%d tot_len=%d!\n",
-		     skb->len + (dp->nh.iph->ihl << 2),
-		     ntohs(dp->nh.iph->tot_len));
+		DEBUG("Data to short! IP header len=%d tot_len=%d!\n", 
+		      skb->len + (dp->nh.iph->ihl << 2), 
+		      ntohs(dp->nh.iph->tot_len));
 		dsr_pkt_free(dp);
 		return 0;
 	}

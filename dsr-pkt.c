@@ -7,6 +7,7 @@
 #include "ns-agent.h"
 #endif
 
+#include "debug.h"
 #include "dsr-opt.h"
 #include "dsr.h"
 
@@ -144,6 +145,8 @@ struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb)
 	memset(dp, 0, sizeof(struct dsr_pkt));
 
 	if (skb) {
+	/* 	skb_unlink(skb); */
+
 		dp->skb = skb;
 
 		dp->mac.raw = skb->mac.raw;
@@ -154,8 +157,9 @@ struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb)
 
 		if (dp->nh.iph->protocol == IPPROTO_DSR) {
 			struct dsr_opt_hdr *opth;
-			
-			opth = (struct dsr_opt_hdr *)dp->nh.raw + (dp->nh.iph->ihl << 2);
+			int n;
+
+			opth = (struct dsr_opt_hdr *)(dp->nh.raw + (dp->nh.iph->ihl << 2));
 			dsr_opts_len = ntohs(opth->p_len) + DSR_OPT_HDR_LEN;
 
 			if (!dsr_pkt_alloc_opts(dp, dsr_opts_len)) {
@@ -165,7 +169,9 @@ struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb)
 
 			memcpy(dp->dh.raw, (char *)opth, dsr_opts_len);
 			
-			dsr_opt_parse(dp);
+			n = dsr_opt_parse(dp);
+			
+			DEBUG("Packet has %d DSR option(s)\n", n);
 		}
 
 		dp->payload = dp->nh.raw +
