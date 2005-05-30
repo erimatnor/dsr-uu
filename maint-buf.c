@@ -152,7 +152,7 @@ static struct maint_entry *maint_entry_create(struct dsr_pkt *dp,
 
 int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 {
-	struct dsr_srt *alt_srt, *old_srt, *srt_to_me;
+	struct dsr_srt *alt_srt, *old_srt, *srt_to_me, *srt;
 	int old_srt_opt_len, new_srt_opt_len, sleft, salv;
 
 	if (!dp)
@@ -204,9 +204,9 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 		return -1;
 	}
 	
-	dp->srt = dsr_srt_concatenate(srt_to_me, alt_srt);
+	srt = dsr_srt_concatenate(srt_to_me, alt_srt);
 	
-	sleft = (dp->srt->laddrs) / 4 - (srt_to_me->laddrs / 4);
+	sleft = (srt->laddrs) / 4 - (srt_to_me->laddrs / 4) - 1;
 
 	DEBUG("old_srt: %s\n", print_srt(old_srt));
 	DEBUG("alt_srt: %s\n", print_srt(alt_srt));
@@ -215,14 +215,14 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 	FREE(old_srt);
 	FREE(srt_to_me);
 	
-	if (!dp->srt)
+	if (!srt)
 		return -1;
 	
-	DEBUG("Salvage packet sleft=%d srt: %s\n", sleft, print_srt(dp->srt));
+	DEBUG("Salvage packet sleft=%d srt: %s\n", sleft, print_srt(srt));
 
-	if (dsr_srt_check_duplicate(dp->srt)) {
+	if (dsr_srt_check_duplicate(srt)) {
 		DEBUG("Duplicate address in new source route, aborting salvage\n");
-		FREE(dp->srt);
+		FREE(srt);
 		return -1;
 	}
 	
@@ -232,90 +232,75 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 	/* TODO: Check/set First and Last hop external bits */
 
 	old_srt_opt_len = dp->srt_opt->length + 2;
-	new_srt_opt_len = DSR_SRT_OPT_LEN(dp->srt);
+	new_srt_opt_len = DSR_SRT_OPT_LEN(srt);
 	salv = dp->srt_opt->salv;
 
 	DEBUG("Salvage - source route length new=%d old=%d\n",
 	      new_srt_opt_len, old_srt_opt_len);
 
-	if (new_srt_opt_len == old_srt_opt_len) {
-		DEBUG("Salvage - source route same length\n");
-		dsr_srt_opt_add((char *)dp->srt_opt, new_srt_opt_len, 0, 
-				salv + 1, dp->srt);
-	} else if (new_srt_opt_len < old_srt_opt_len) {
-		DEBUG("New srt shorter than old\n");
-		return -1;
+	if (old_srt_opt_len == new_srt_opt_len) {
+		DEBUG("new and old srt of same length\n");
+		
+		dp->srt_opt = dsr_srt_opt_add((char *)dp->srt_opt, 
+					      new_srt_opt_len, 0, 
+					      salv + 1, srt);
 	} else {
-		int old_opt_len, new_opt_len, tmp_len;
-		char *tmp;
-		/* Modify space for new source route... */
+		int old_opt_len, new_opt_len;
+		char *old_opt = dp->dh.raw;
+		char *old_srt_opt = (char *)dp->srt_opt;
+		char *buf;
+		
+		DEBUG("Creating new options header\n");
 		
 		old_opt_len = dsr_pkt_opts_len(dp);
 		new_opt_len = old_opt_len - old_srt_opt_len + new_srt_opt_len;
-
+		
 		DEBUG("opt_len old=%d new=%d srt: %s\n", 
-		      old_opt_len, new_opt_len, print_srt(dp->srt));
+		      old_opt_len, new_opt_len, print_srt(srt));
 
-
-
-		tmp = (char *)MALLOC(old_opt_len, GFP_ATOMIC);
-		
-		memcpy(tmp, dp->dh.raw, old_opt_len);
-
-		/* Save pointer to old options */
-		/* tmp = dp->dh.raw; */
-
-		tmp_len = (char *)dp->srt_opt - dp->dh.raw;
-
-		DEBUG("opt_len old tmp_len=%d\n", tmp_len);
-
-	/* 	dsr_pkt_free_opts(dp); */
-		
 		/* Allocate new options space */
+		buf = dsr_pkt_alloc_opts(dp, new_opt_len);
 		
-	/* 	dp->dh.raw = dsr_pkt_alloc_opts(dp, new_opt_len); */
-
-		/* WHY DOES IT NOT WORK HERE!!!! */
-		FREE(tmp);
-
-		return -1;
-
-		dsr_pkt_alloc_opts_expand(dp, new_opt_len - old_opt_len);
-
-	
-		/* if (!dp->dh.raw) { */
-/* 			DEBUG("Could not allocate new options\n"); */
-/* 			return -1; */
-/* 		} */
-		/* Copy everything from old DSR option up til the source
-		 * route */
-		memcpy(dp->dh.raw, tmp, tmp_len);
-		
-		/* Add new source route */
-		dp->srt_opt = dsr_srt_opt_add(dp->dh.raw + tmp_len,
-					      new_srt_opt_len, 0, 
-					      salv + 1, dp->srt);
+		if (!buf) {
+			FREE(srt);
+			return -1;
+		}
 				
-		/* Copy everything beginning after the old source route and
-		 * to the end of the old DSR options */
-		memcpy(dp->dh.raw + tmp_len + new_srt_opt_len, 
-		       tmp + tmp_len + old_srt_opt_len, 
-		       old_opt_len - tmp_len - old_srt_opt_len);
+		/* Copy everything up to old source route option */
+		memcpy(buf, old_opt, old_srt_opt - old_opt);
 		
-		dp->dh.opth->p_len = htons(new_opt_len);
+		buf += (old_srt_opt - old_opt);
 		
-		/* Free old options memory */
-		FREE(tmp);
+		/* Add new source route option */
+		dp->srt_opt = dsr_srt_opt_add(buf, new_srt_opt_len, 0, 
+					      salv + 1, srt);
+
+		buf += new_srt_opt_len;
+		
+		/* Copy everything from after old source route option and to the
+		 * end */
+		memcpy(buf, old_srt_opt + old_srt_opt_len, 
+		       old_opt + old_opt_len - 
+		       (old_srt_opt + old_srt_opt_len));
+
+		FREE(old_opt);	
+		
+		/* Set new length in DSR header */
+		dp->dh.opth->p_len = htons(new_opt_len - DSR_OPT_HDR_LEN);
 	}
-       
+
 	/* We got this packet directly from the previous hop */
 	dp->srt_opt->sleft = sleft;
 	
-	dp->nxt_hop = dsr_srt_next_hop(dp->srt, dp->srt_opt->sleft);
+	dp->nxt_hop = dsr_srt_next_hop(srt, dp->srt_opt->sleft);
 
-	DEBUG("Next hop=%s\n", print_ip(dp->nxt_hop));
+	DEBUG("Next hop=%s p_len=%d\n", print_ip(dp->nxt_hop), ntohs(dp->dh.opth->p_len));
 
-/* 	XMIT(dp); */
+	dp->srt = srt;
+
+	XMIT(dp);
+	
+/* 	FREE(srt); */
 
 	return 0;
 }

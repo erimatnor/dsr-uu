@@ -62,22 +62,6 @@ typedef dsr_opt_hdr hdr_dsr;
 
 #define IPDEFTTL 64
 
-struct hdr_test {
-	int data;
-	/* Packet header access functions */
-	static int offset_;
-	inline static int &offset() {
-		return offset_;
-	}
-	inline static hdr_test *access(const Packet * p) {
-		return (hdr_test *) p->access(offset_);
-	}
-	int size() {
-		return data;
-	}
-
-};
-
 class DSRUU:public Tap, public Agent {
       public:
 	friend class DSRUUTimer;

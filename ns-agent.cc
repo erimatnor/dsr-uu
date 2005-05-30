@@ -68,7 +68,6 @@ DSRUU::~DSRUU()
 	send_buf_cleanup();
  	maint_buf_cleanup();
 
-	fprintf(stderr,"DFU: Don't do this! I haven't figured out ~DSRAgent\n");
 	exit(-1);
 }
 
@@ -194,7 +193,7 @@ DSRUU::ns_packet_create(struct dsr_pkt *dp)
 	if (!dp)
 		return NULL;
 
-	if (!dp->p)
+	if (!dp->p) 
 		dp->p = allocpkt();
 
 	tot_len = IP_HDR_LEN + dsr_opts_len + dp->payload_len;
@@ -230,13 +229,16 @@ DSRUU::ns_packet_create(struct dsr_pkt *dp)
 	// Clear DSR part of packet
 	memset(opth, 0, dsr_opts_len);
 	
+	
 	DEBUG("Building packet dsr_opts_len=%d p_len=%d\n", 
-	      dsr_opts_len, dp->dh.opth->p_len);
+	      dsr_opts_len, ntohs(dp->dh.opth->p_len));
 
 	// Copy message contents into packet
 	if (dsr_opts_len)
 		memcpy(opth, dp->dh.raw, dsr_opts_len);
-	
+
+	// DEBUG("p_len=%d\n", ntohs(opth->p_len));
+
 	/* Add payload */
 // 	if (dp->payload_len && dp->payload)
 // 		memcpy(dp->p->userdata(), dp->payload, dp->payload_len);
