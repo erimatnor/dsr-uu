@@ -340,7 +340,7 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 			
 			dsr_rerr_send(m->dp, m->nxt_hop);
 			
-/* 			salv = maint_buf_salvage(m->dp); */
+			salv = maint_buf_salvage(m->dp);
 			
 			n = maint_buf_del_all_id(m->nxt_hop, m->id);
 
@@ -617,6 +617,7 @@ void NSCLASS maint_buf_cleanup(void)
 			Packet::free(m->dp->p);
 #endif
 		dsr_pkt_free(m->dp);
+		FREE(m);
 	}
 #ifdef __KERNEL__
 	proc_net_remove(MAINT_BUF_PROC_FS_NAME);

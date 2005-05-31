@@ -6,12 +6,13 @@
 int hdr_dsr::offset_;
 
 static class DSRUUHeaderClass:public PacketHeaderClass {
-
-  public:
-    DSRUUHeaderClass():PacketHeaderClass("PacketHeader/DSRUU",
-					 sizeof(DSR_OPTS_MAX_SIZE)) {
-	    bind_offset(&hdr_dsr::offset_);
-}} class_rtProtoDSRUU_hdr;
+	
+public:
+	DSRUUHeaderClass():PacketHeaderClass("PacketHeader/DSRUU",
+					     DSR_OPTS_MAX_SIZE) {
+		bind_offset(&hdr_dsr::offset_);
+	}
+} class_rtProtoDSRUU_hdr;
 
 /* Link to OTcl name space */
 static class DSRUUClass : public TclClass {
@@ -186,22 +187,26 @@ DSRUU::ns_packet_create(struct dsr_pkt *dp)
 	hdr_mac *mh;
 	hdr_cmn *cmh;
 	hdr_ip *iph;	
-	dsr_opt_hdr *opth;
 	int tot_len;
-	int dsr_opts_len = dsr_pkt_opts_len(dp); 
 
 	if (!dp)
 		return NULL;
-
+	
 	if (!dp->p) 
 		dp->p = allocpkt();
+// 	else {
+// 		Packet *p_tmp = dp->p;
+		
+// 		dp->p = p_tmp->copy();
 
-	tot_len = IP_HDR_LEN + dsr_opts_len + dp->payload_len;
+// 		Packet::free(p_tmp);
+// 	}
+		
+	tot_len = IP_HDR_LEN + dsr_pkt_opts_len(dp) + dp->payload_len;
 	
 	mh = HDR_MAC(dp->p);
 	cmh = HDR_CMN(dp->p);
 	iph = HDR_IP(dp->p);
-	opth = HDR_DSRUU(dp->p);
 	
 	if (dp->dst.s_addr == DSR_BROADCAST) {
 		cmh->addr_type() = NS_AF_NONE;
@@ -226,17 +231,18 @@ DSRUU::ns_packet_create(struct dsr_pkt *dp)
 		// Generate fake ARP 
 		arpset(dp->nxt_hop, mac_dst);
 	}
-	// Clear DSR part of packet
-	memset(opth, 0, dsr_opts_len);
-	
-	
-	DEBUG("Building packet dsr_opts_len=%d p_len=%d\n", 
-	      dsr_opts_len, ntohs(dp->dh.opth->p_len));
 
 	// Copy message contents into packet
-	if (dsr_opts_len)
-		memcpy(opth, dp->dh.raw, dsr_opts_len);
+	if (dsr_pkt_opts_len(dp)) {
+		dsr_opt_hdr *opth = HDR_DSRUU(dp->p);
 
+		memset(opth, 0, dsr_pkt_opts_len(dp));
+		DEBUG("Building packet dsr_opts_len=%d p_len=%d opth->size=%d\n", 
+		      dsr_pkt_opts_len(dp), ntohs(dp->dh.opth->p_len), opth->size());
+		
+		// Clear DSR part of packet		
+		memcpy(opth, dp->dh.raw, dsr_pkt_opts_len(dp));
+	}
 	// DEBUG("p_len=%d\n", ntohs(opth->p_len));
 
 	/* Add payload */
