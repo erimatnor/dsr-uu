@@ -118,10 +118,13 @@ struct dsr_pkt *dsr_pkt_alloc(Packet * p)
 
 			dsr_opt_parse(dp);
 
-			if (DATA_PACKET(dp->dh.opth->nh) ||
-			    dp->dh.opth->nh == PT_PING)
+			if ((DATA_PACKET(dp->dh.opth->nh) ||
+			    dp->dh.opth->nh == PT_PING) && 
+				ConfVal(UseNetworkLayerAck))
 				dp->flags |= PKT_REQUEST_ACK;
-		} else if (DATA_PACKET(cmh->ptype()) || cmh->ptype() == PT_PING)
+		} else if ((DATA_PACKET(cmh->ptype()) || 
+			    cmh->ptype() == PT_PING) && 
+			   ConfVal(UseNetworkLayerAck))
 			dp->flags |= PKT_REQUEST_ACK;
 
 		/* A trick to calculate payload length... */

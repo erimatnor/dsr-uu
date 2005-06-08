@@ -152,7 +152,7 @@ static struct maint_entry *maint_entry_create(struct dsr_pkt *dp,
 
 int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 {
-	struct dsr_srt *alt_srt, *old_srt, *srt_to_me, *srt;
+	struct dsr_srt *alt_srt, *old_srt, *srt;
 	int old_srt_opt_len, new_srt_opt_len, sleft, salv;
 
 	if (!dp)
@@ -196,25 +196,32 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 
 	/* Rip out the source route to me */
 
-	srt_to_me = dsr_srt_new_split(old_srt, my_addr());
-	
-	if (!srt_to_me) { 
-		FREE(alt_srt);
-		FREE(old_srt);
-		return -1;
-	}
-	
-	srt = dsr_srt_concatenate(srt_to_me, alt_srt);
-	
-	sleft = (srt->laddrs) / 4 - (srt_to_me->laddrs / 4) - 1;
+	if (old_srt->addrs[0].s_addr == dp->nxt_hop.s_addr) {
+		srt = alt_srt;
+		sleft = (srt->laddrs) / 4;
+	} else {
+		struct dsr_srt *srt_to_me;
 
-	DEBUG("old_srt: %s\n", print_srt(old_srt));
-	DEBUG("alt_srt: %s\n", print_srt(alt_srt));
-	
-	FREE(alt_srt);
+		srt_to_me = dsr_srt_new_split(old_srt, my_addr());
+		
+		if (!srt_to_me) { 
+			FREE(alt_srt);
+			FREE(old_srt);
+			return -1;
+		}
+		srt = dsr_srt_concatenate(srt_to_me, alt_srt);
+		
+		sleft = (srt->laddrs) / 4 - (srt_to_me->laddrs / 4) - 1;
+		
+		DEBUG("old_srt: %s\n", print_srt(old_srt));
+		DEBUG("alt_srt: %s\n", print_srt(alt_srt));
+		
+		FREE(alt_srt);
+		FREE(srt_to_me);
+	}
+
 	FREE(old_srt);
-	FREE(srt_to_me);
-	
+		
 	if (!srt)
 		return -1;
 	
@@ -335,12 +342,19 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 			int n;
 
 			lc_link_del(my_addr(), m->nxt_hop);
-			
+#ifdef NS2
+			Packet *qp;
+
+			while ((qp = ifq_->prq_get_nexthop((nsaddr_t)m->nxt_hop.s_addr))) {
+				drop(qp, DROP_RTR_NO_ROUTE);
+			}
+
+#endif
 /* 		neigh_tbl_del(m->nxt_hop); */
 			
 			dsr_rerr_send(m->dp, m->nxt_hop);
 			
-/* 			salv = maint_buf_salvage(m->dp); */
+			salv = maint_buf_salvage(m->dp);
 			
 			n = maint_buf_del_all_id(m->nxt_hop, m->id);
 

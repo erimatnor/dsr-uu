@@ -43,9 +43,17 @@ DSRUU::DSRUU() : Agent(PT_DSR),
 	ll_ = NULL;
 	ifq_ = NULL;
 	node_ = NULL;
-
-	for (i = 0; i < CONFVAL_MAX; i++)
+	
+	for (i = 0; i < CONFVAL_MAX; i++) {
+		char name[40];
+		
 		confvals[i] = confvals_def[i].val;
+		
+		sprintf(name, "%s_", confvals_def[i].name);
+// 		bind(name,  &confvals[i]);
+	}
+	
+	set_confval(UseNetworkLayerAck, 1);
 
 	/* Initilize tables */
 	lc_init();
@@ -162,19 +170,52 @@ DSRUU::arpset(struct in_addr addr, unsigned int mac_addr)
 
 void DSRUU::xmit_failed(Packet *p)
 {
-	struct in_addr dst;
+	Packet *qp;
+	struct dsr_pkt *dp;
+	struct in_addr dst, nxt_hop;
 	hdr_mac *mh;
 	hdr_cmn *cmh;
-	hdr_ip *iph;	
+	hdr_ip *iph;
 	
 	mh = HDR_MAC(p);
 	cmh = HDR_CMN(p);
 	iph = HDR_IP(p);
 
 	dst.s_addr = iph->daddr();
+	nxt_hop.s_addr = cmh->next_hop();
 
-	DEBUG("Xmit failure for %s\n", print_ip(dst));
- 	
+	DEBUG("Xmit failure for %s nxt_hop=%s\n", 
+	      print_ip(dst), print_ip(nxt_hop));
+ 		
+	lc_link_del(my_addr(), nxt_hop);
+	
+	dp = dsr_pkt_alloc(qp);
+		
+	if (!dp) {
+		drop(qp, DROP_RTR_NO_ROUTE);
+	} else 
+		dsr_rerr_send(dp, nxt_hop);
+
+	dp->nxt_hop = nxt_hop;
+	
+	maint_buf_salvage(dp);
+
+	while ((qp = ifq_->prq_get_nexthop(cmh->next_hop()))) {
+	// 	DEBUG("Dropping pkt for %s uid=%d", 
+// 		      print_ip(nxt_hop), cmh->uid());
+// 		drop(qp, DROP_RTR_NO_ROUTE);    
+
+		dp = dsr_pkt_alloc(qp);
+		
+		if (!dp) {
+			drop(qp, DROP_RTR_NO_ROUTE);
+			continue;
+		}
+		
+		dp->nxt_hop = nxt_hop;
+		
+		maint_buf_salvage(dp);			
+	}
 	return;
 }
 

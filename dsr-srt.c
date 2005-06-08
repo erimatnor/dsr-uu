@@ -216,7 +216,7 @@ struct dsr_srt *dsr_srt_shortcut(struct dsr_srt *srt, struct in_addr a1,
 struct dsr_srt *dsr_srt_concatenate(struct dsr_srt *srt1, struct dsr_srt *srt2)
 {
 	struct dsr_srt *srt_cat;
-	int n, n1, n2;
+	int n, n1, n2, i, j;
 	
 	if (!srt1 || !srt2)
 		return NULL;
@@ -224,6 +224,8 @@ struct dsr_srt *dsr_srt_concatenate(struct dsr_srt *srt1, struct dsr_srt *srt2)
 	n1 = srt1->laddrs / sizeof(struct in_addr);
 	n2 = srt2->laddrs / sizeof(struct in_addr);
 	
+	/* We assume that the end node of the first srt is the same as the start
+	 * of the second. We therefore only count that node once. */
 	n = n1 + n2 + 1;
 	
 	srt_cat = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) +
@@ -237,9 +239,18 @@ struct dsr_srt *dsr_srt_concatenate(struct dsr_srt *srt1, struct dsr_srt *srt2)
 	srt_cat->dst = srt2->dst;
 	srt_cat->laddrs = n * sizeof(struct in_addr);
 	
+/* 	for (i = 0; i < n1; i++) */
+/* 		srt_cat->addrs[i].s_addr = srt1->addrs[i].s_addr; */
+
+/* 	srt_cat->addrs[i++].s_addr = srt2->src.s_addr; */
+
+/* 	for (j = 0; j < n2; j++, i++) */
+/* 		srt_cat->addrs[i].s_addr = srt2->addrs[j].s_addr; */
+
 	memcpy(srt_cat->addrs, srt1->addrs, n1 * sizeof(struct in_addr));
 	memcpy(srt_cat->addrs + n1, &srt2->src, sizeof(struct in_addr));
 	memcpy(srt_cat->addrs + n1 + 1, srt2->addrs, n2 * sizeof(struct in_addr));
+
 	return srt_cat;
 }
 
