@@ -340,7 +340,7 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 			
 			dsr_rerr_send(m->dp, m->nxt_hop);
 			
-			salv = maint_buf_salvage(m->dp);
+/* 			salv = maint_buf_salvage(m->dp); */
 			
 			n = maint_buf_del_all_id(m->nxt_hop, m->id);
 
@@ -609,6 +609,7 @@ int NSCLASS maint_buf_init(void)
 void NSCLASS maint_buf_cleanup(void)
 {
 	struct maint_entry *m;
+
 	del_timer_sync(&ack_timer);
 
 	while ((m = (struct maint_entry *)tbl_detach_first(&maint_buf))) {
@@ -617,6 +618,7 @@ void NSCLASS maint_buf_cleanup(void)
 			Packet::free(m->dp->p);
 #endif
 		dsr_pkt_free(m->dp);
+
 		FREE(m);
 	}
 #ifdef __KERNEL__

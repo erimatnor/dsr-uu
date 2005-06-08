@@ -77,6 +77,7 @@ class DSRUU:public Tap, public Agent {
 	Packet *ns_packet_create(struct dsr_pkt *dp);
 	void ns_xmit(struct dsr_pkt *dp);
 	void ns_deliver(struct dsr_pkt *dp);
+	void xmit_failed(Packet *p);
 
 	struct hdr_ip *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src,
 				    struct in_addr dst, int ip_len,

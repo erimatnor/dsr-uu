@@ -160,6 +160,31 @@ DSRUU::arpset(struct in_addr addr, unsigned int mac_addr)
 	return 1;
 }
 
+void DSRUU::xmit_failed(Packet *p)
+{
+	struct in_addr dst;
+	hdr_mac *mh;
+	hdr_cmn *cmh;
+	hdr_ip *iph;	
+	
+	mh = HDR_MAC(p);
+	cmh = HDR_CMN(p);
+	iph = HDR_IP(p);
+
+	dst.s_addr = iph->daddr();
+
+	DEBUG("Xmit failure for %s\n", print_ip(dst));
+ 	
+	return;
+}
+
+
+void xmit_failure(Packet *p, void *data)
+{
+	DSRUU *agent = (DSRUU *)data; // cast of trust
+	agent->xmit_failed(p);
+}
+
 
 struct hdr_ip *DSRUU::dsr_build_ip(struct dsr_pkt *dp, struct in_addr src, 
 				    struct in_addr dst, int ip_len, 
@@ -304,6 +329,11 @@ DSRUU::ns_xmit(struct dsr_pkt *dp)
 		jitter = Random::uniform(jitter / 1000);
 		//DEBUG("xmit jitter=%f\n", jitter);
 	}		
+
+	if (!ConfVal(UseNetworkLayerAck)) {
+		cmh->xmit_failure_ = xmit_failure;
+		cmh->xmit_failure_data_ = (void *) this;		
+	}
 
 	Scheduler::instance().schedule(ll_, p, jitter);
  out:
