@@ -1,3 +1,10 @@
+/* Copyright (C) Uppsala University
+ *
+ * This file is distributed under the terms of the GNU general Public
+ * License (GPL), see the file LICENSE
+ *
+ * Author: Erik Nordström, <erikn@it.uu.se>
+ */
 #ifdef __KERNEL__
 #include <linux/proc_fs.h>
 #include "dsr-dev.h"
@@ -36,7 +43,6 @@ int NSCLASS dsr_ack_send(struct in_addr dst, unsigned short id)
 {
 	struct dsr_pkt *dp;
 	struct dsr_ack_opt *ack_opt;
-/* 	struct dsr_srt *srt; */
 	int len;
 	char *buf;
 
@@ -254,8 +260,7 @@ int NSCLASS dsr_ack_req_send(struct in_addr neigh_addr, unsigned short id)
 	return -1;
 }
 
-int NSCLASS
-dsr_ack_req_opt_recv(struct dsr_pkt *dp, struct dsr_ack_req_opt *ack_req_opt)
+int NSCLASS dsr_ack_req_opt_recv(struct dsr_pkt *dp, struct dsr_ack_req_opt *ack_req_opt)
 {
 	unsigned short id;
 

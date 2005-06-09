@@ -1,24 +1,10 @@
-/*****************************************************************************
+/* Copyright (C) Uppsala University
  *
- * Copyright (C) 2002 Uppsala University.
+ * This file is distributed under the terms of the GNU general Public
+ * License (GPL), see the file LICENSE
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- *
- * Authors: Björn Wiberg <bjorn.wiberg@home.se>
- *
- *****************************************************************************/
+ * Author: Björn Wiberg <bjorn.wiberg@home.se>
+ */
 
 /*
   This code was partially borrowed from Per Kristian Hove

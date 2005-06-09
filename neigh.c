@@ -1,3 +1,10 @@
+/* Copyright (C) Uppsala University
+ *
+ * This file is distributed under the terms of the GNU general Public
+ * License (GPL), see the file LICENSE
+ *
+ * Author: Erik Nordström, <erikn@it.uu.se>
+ */
 #ifdef __KERNEL__
 #include <linux/proc_fs.h>
 #endif
@@ -143,7 +150,7 @@ static inline int rto_calc(void *pos, void *query)
 	}
 	return 0;
 }
-
+/* TODO: Implement neighbor table garbage collection */
 void NSCLASS neigh_tbl_garbage_timeout(unsigned long data)
 {
 	/* tbl_for_each_del(&neigh_tbl, NULL, crit_garbage); */

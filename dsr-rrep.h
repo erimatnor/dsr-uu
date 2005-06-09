@@ -1,3 +1,10 @@
+/* Copyright (C) Uppsala University
+ *
+ * This file is distributed under the terms of the GNU general Public
+ * License (GPL), see the file LICENSE
+ *
+ * Author: Erik Nordström, <erikn@it.uu.se>
+ */
 #ifndef _DSR_RREP_H
 #define _DSR_RREP_H
 

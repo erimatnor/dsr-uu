@@ -1,3 +1,10 @@
+/* Copyright (C) Uppsala University
+ *
+ * This file is distributed under the terms of the GNU general Public
+ * License (GPL), see the file LICENSE
+ *
+ * Author: Erik Nordström, <erikn@it.uu.se>
+ */
 #ifdef NS2
 #include "ns-agent.h"
 #else
@@ -34,8 +41,7 @@ int NSCLASS dsr_recv(struct dsr_pkt *dp)
 		return 0;
 	}
 	for (i = 0; i < DSR_PKT_ACTION_LAST; i++) {
-		//DEBUG("i=%d action=0x%08x mask=0x%08x (action & mask)=0x%08x\n", i, action, (mask), (action & mask));
-
+	
 		switch (action & mask) {
 		case DSR_PKT_NONE:
 			break;
@@ -45,15 +51,7 @@ int NSCLASS dsr_recv(struct dsr_pkt *dp)
 			dsr_pkt_free(dp);
 			return 0;
 		case DSR_PKT_SEND_ACK:
-			/*      if (dp->ack_req_opt && dp->srt) { */
-/* 				unsigned short id = ntohs(dp->ack_req_opt->id); */
-
-/* 				DEBUG("send ACK: src=%s prv=%s id=%u\n",  */
-/* 				      print_ip(dp->src),  */
-/* 				      print_ip(dp->prv_hop), id); */
-
-/* 				dsr_ack_send(dp->prv_hop, id); */
-/* 			} */
+			/* Moved to dsr-ack.c */
 			break;
 		case DSR_PKT_SRT_REMOVE:
 			//DEBUG("Remove source route\n");
@@ -81,15 +79,10 @@ int NSCLASS dsr_recv(struct dsr_pkt *dp)
 			}
 			break;
 		case DSR_PKT_FORWARD_RREQ:
-			//DEBUG("Forward RREQ\n");
 			XMIT(dp);
 			return 0;
 		case DSR_PKT_SEND_RREP:
-
-/* 			if (dp->srt) { */
-/* 				/\* send rrep.... *\/ */
-/* 				dsr_rrep_send(dp->srt); */
-/* 			} */
+			/* In dsr-rrep.c */
 			break;
 		case DSR_PKT_SEND_ICMP:
 			DEBUG("Send ICMP\n");

@@ -1,3 +1,10 @@
+/* Copyright (C) Uppsala University
+ *
+ * This file is distributed under the terms of the GNU general Public
+ * License (GPL), see the file LICENSE
+ *
+ * Author: Erik Nordström, <erikn@it.uu.se>
+ */
 #ifdef __KERNEL__
 #include <linux/slab.h>
 #include <net/ip.h>
@@ -322,8 +329,6 @@ int NSCLASS dsr_srt_add(struct dsr_pkt *dp)
 	/* Calculate extra space needed */
 
 	len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(dp->srt);
-
-/* 	DEBUG("dsr_opts_len=%d\n", len); */
 
 	DEBUG("SR: %s\n", print_srt(dp->srt));
 

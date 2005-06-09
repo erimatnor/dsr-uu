@@ -1,8 +1,15 @@
 DSR-UU is a DSR implementation that runs in Linux (kernel 2.4/2.6) and
 in the ns-2 network simulator.
 
+General Notes
+=============
+
 DSR-UU implements most of the basic DSR features specified in the DSR
 draft (version 10). One big exception is flow extensions.
+
+DSR-UU does NOT use ARP, so do not be surprised if you do not see ARP
+traffic. DSR-UU instead uses its own neighbor table that sets up the
+MAC-to-IP translation during route discovery.
 
 Ns-2 version
 ============
