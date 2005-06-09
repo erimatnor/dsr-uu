@@ -124,7 +124,6 @@ static inline int rto_calc(void *pos, void *query)
 		
 		gettime(&now);
 		
-		/* TODO: Calculate RTO */
 		if (n->t_srtt != 0) {
 			delta = rtt - 1 - (n->t_srtt >> RTT_SHIFT);
 			

@@ -54,6 +54,8 @@ struct maint_buf_query {
 
 static int maint_buf_print(struct tbl *t, char *buffer);
 
+/* Criteria function for deleting packets from buffer based on next hop and
+ * id */
 static inline int crit_addr_id_del(void *pos, void *data)
 {
 	struct maint_entry *m = (struct maint_entry *)pos;
@@ -71,7 +73,6 @@ static inline int crit_addr_id_del(void *pos, void *data)
 		if (m->dp) {
 #ifdef NS2
 			if (m->dp->p)
-/* 				drop(m->dp->p, DROP_RTR_SALVAGE); */
 				Packet::free(m->dp->p);
 #endif
 			dsr_pkt_free(m->dp);
@@ -81,12 +82,20 @@ static inline int crit_addr_id_del(void *pos, void *data)
 	return 0;
 }
 
+/* Criteria function for deleting packets from buffer based on next hop */
 static inline int crit_addr_del(void *pos, void *data)
 {
 	struct maint_entry *m = (struct maint_entry *)pos;
-	struct in_addr *nxt_hop = (struct in_addr *)data;
+	struct maint_buf_query *q = (struct maint_buf_query *)data;
 
-	if (m->nxt_hop.s_addr == nxt_hop->s_addr) {
+	if (m->nxt_hop.s_addr == q->nxt_hop->s_addr) {
+		struct timeval now;
+		
+		gettime(&now);
+		
+		if (m->rexmt == 0)
+			q->rtt = timeval_diff(&now, &m->tx_time);
+		
 		if (m->dp) {
 #ifdef NS2
 			if (m->dp->p)
@@ -99,6 +108,20 @@ static inline int crit_addr_del(void *pos, void *data)
 	return 0;
 }
 
+
+/* Criteria function for buffered packets based on next hop */
+static inline int crit_addr(void *pos, void *data)
+{
+	struct maint_entry *m = (struct maint_entry *)pos;
+	struct in_addr *nxt_hop = (struct in_addr *)data;
+
+	if (m->nxt_hop.s_addr == nxt_hop->s_addr)
+		return 1;
+
+	return 0;
+}
+
+/* Criteria function for buffered packets based on expire time */
 static inline int crit_expires(void *pos, void *data)
 {
 	struct maint_entry *m = (struct maint_entry *)pos;
@@ -110,6 +133,7 @@ static inline int crit_expires(void *pos, void *data)
 
 }
 
+/* Criteria function for buffered packets based on sent ACK REQ */
 static inline int crit_ack_req_sent(void *pos, void *data)
 {
 	struct maint_entry *m = (struct maint_entry *)pos;
@@ -314,15 +338,13 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 
 	XMIT(dp);
 	
-/* 	FREE(srt); */
-
 	return 0;
 }
 
 
 void NSCLASS maint_buf_timeout(unsigned long data)
 {
-	struct maint_entry *m;
+	struct maint_entry *m, *m2;
 
 	if (timer_pending(&ack_timer))
 		return;
@@ -341,42 +363,60 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 
 	/* Increase the number of retransmits */
 	if (m->rexmt >= ConfVal(MaxMaintRexmt)) {
-		int salv = -1;
 
 		DEBUG("MaxMaintRexmt reached!\n");
 
 		if (m->ack_req_sent) {
-			int n;
+			int n = 0;
 
 			lc_link_del(my_addr(), m->nxt_hop);
 #ifdef NS2
+			/* Remove packets from interface queue */
 			Packet *qp;
-
+			
 			while ((qp = ifq_->prq_get_nexthop((nsaddr_t)m->nxt_hop.s_addr))) {
-				drop(qp, DROP_RTR_NO_ROUTE);
+				Packet::free(qp);
 			}
 
-#endif
-/* 		neigh_tbl_del(m->nxt_hop); */
-			
+#endif			
 			dsr_rerr_send(m->dp, m->nxt_hop);
-			
-			salv = maint_buf_salvage(m->dp);
-			
-			n = maint_buf_del_all_id(m->nxt_hop, m->id);
 
-			DEBUG("Deleted %d packets from maint_buf\n", n);
+			/* Salvage timed out packet */
+			if (maint_buf_salvage(m->dp) < 0) {
+				
+#ifdef NS2
+				if (m->dp->p) 
+					drop(m->dp->p, DROP_RTR_SALVAGE);
+#endif
+				dsr_pkt_free(m->dp);
+			} else
+				n++;
+			/* Salvage other packets in maintenance buffer with the
+			 * same next hop */
+			while ((m2 = (struct maint_entry *)tbl_find_detach(&maint_buf, &m->nxt_hop, crit_addr))) {
+				
+				if (maint_buf_salvage(m2->dp) < 0) {
+#ifdef NS2
+					if (m2->dp->p)
+						drop(m2->dp->p, DROP_RTR_SALVAGE);
+#endif
+					dsr_pkt_free(m2->dp);
+				}
+				FREE(m2);
+				n++;
+			}
+			DEBUG("Salvaged %d packets from maint_buf\n", n);
 		} else {
 			DEBUG("No ACK REQ sent for this packet\n");
-		}
-		
-		if (m->dp) {
+
+			if (m->dp) {
 #ifdef NS2
-			if (m->dp->p && salv < 0)
-				drop(m->dp->p, DROP_RTR_SALVAGE);
+				if (m->dp->p)
+					drop(m->dp->p, DROP_RTR_SALVAGE);
 #endif
-			dsr_pkt_free(m->dp);
-		}
+				dsr_pkt_free(m->dp);
+			}			
+		}		
 		
 		FREE(m);
 		goto out;
@@ -393,7 +433,6 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 
 	/* Add to maintenence buffer again */
 	tbl_add(&maint_buf, &m->l, crit_expires);
-/* 	tbl_add_tail(&maint_buf, &m->l); */
       out:
 	maint_buf_set_timeout();
 
@@ -406,7 +445,7 @@ void NSCLASS maint_buf_set_timeout(void)
 	usecs_t rto;
 	struct timeval tx_time, now, expires;
 
-	if (tbl_empty(&maint_buf)/*  || timer_pending(&ack_timer) */)
+	if (tbl_empty(&maint_buf))
 		return;
 
 	gettime(&now);
@@ -448,7 +487,6 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 	struct timeval now;
 	int res;
 	struct maint_entry *m;
-/* 	char buf[2048]; */
 
        	if (!dp) {
 		DEBUG("dp is NULL!?\n");
@@ -492,28 +530,29 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 		maint_buf_set_timeout();
 	       
 	} else {
-		DEBUG("Deferring ACK REQ for %s since_last=%ld limit=%ld\n",
+		DEBUG("Delaying ACK REQ for %s since_last=%ld limit=%ld\n",
 		      print_ip(dp->nxt_hop), 
 		      timeval_diff(&now, &neigh_info.last_ack_req), 
 		      ConfValToUsecs(MaintHoldoffTime));
 	}
 	
-/* 	maint_buf_print(&maint_buf, buf); */
-
-/* 	DEBUG("\n%s\n", buf); */
-
 	return 1;
 }
 
 /* Remove all packets for a next hop */
 int NSCLASS maint_buf_del_all(struct in_addr nxt_hop)
 {
+	struct maint_buf_query q;
 	int n;
+
+	q.id = NULL;
+	q.nxt_hop = &nxt_hop;
+	q.rtt = 0;
 
 	if (timer_pending(&ack_timer))
 		del_timer_sync(&ack_timer);
 
-	n = tbl_for_each_del(&maint_buf, &nxt_hop, crit_addr_del);
+	n = tbl_for_each_del(&maint_buf, &q, crit_addr_del);
 
 	maint_buf_set_timeout();
 
@@ -540,6 +579,33 @@ int NSCLASS maint_buf_del_all_id(struct in_addr nxt_hop, unsigned short id)
 		struct neighbor_info neigh_info;
 		
 		neigh_info.id = id;
+		neigh_info.rtt = q.rtt;
+		neigh_tbl_set_rto(nxt_hop, &neigh_info);
+	}
+
+	maint_buf_set_timeout();
+
+	return n;
+}
+int NSCLASS maint_buf_del_addr(struct in_addr nxt_hop)
+{
+	struct maint_buf_query q;
+	int n;
+
+	q.id = NULL;
+	q.nxt_hop = &nxt_hop;
+	q.rtt = 0;
+
+	if (timer_pending(&ack_timer))
+		del_timer_sync(&ack_timer);
+
+	/* Find the buffered packet to mark as acked */
+	n = tbl_for_each_del(&maint_buf, &q, crit_addr_del);
+	
+	if (q.rtt > 0) {
+		struct neighbor_info neigh_info;
+		
+		neigh_info.id = 0;
 		neigh_info.rtt = q.rtt;
 		neigh_tbl_set_rto(nxt_hop, &neigh_info);
 	}

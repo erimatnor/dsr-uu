@@ -59,8 +59,10 @@ DSRUU::DSRUU() : Agent(PT_DSR),
 		bind(name,  &confvals[i]);
 	}
 	
+	/* Default values specific to simulation */
 	set_confval(UseNetworkLayerAck, 1);
-
+	set_confval(PrintDebug, 1);
+	
 	/* Initilize tables */
 	lc_init();
 	neigh_tbl_init();
@@ -160,6 +162,10 @@ int DSRUU::arpset(struct in_addr addr, unsigned int mac_addr)
 	return 1;
 }
 
+/* Xmit failure - salvage packets. With link layer feedback we do not really use
+ * the DSR mainenance buffer since we can grab the packets from the interface
+ * queue.
+ */
 void DSRUU::xmit_failed(Packet *p)
 {
 	Packet *qp;
@@ -193,7 +199,8 @@ void DSRUU::xmit_failed(Packet *p)
 		
 		maint_buf_salvage(dp);
 	}
-
+	/* Salvage the other packets still in the interface queue with the same
+	 * next hop */
 	while ((qp = ifq_->prq_get_nexthop(cmh->next_hop()))) {
 		
 		dp = dsr_pkt_alloc(qp);
@@ -415,27 +422,26 @@ void DSRUU::recv(Packet* p, Handler*)
 	return;
 }
 
-void DSRUU::tap(const Packet *p)
+void DSRUU::tap(const Packet *p_in)
 {
 	struct dsr_pkt *dp;
-	hdr_cmn *cmh = hdr_cmn::access(p);
-	hdr_ip *iph = hdr_ip::access(p);
+	hdr_cmn *cmh = hdr_cmn::access(p_in);
+	hdr_ip *iph = hdr_ip::access(p_in);
 	struct in_addr next_hop, prev_hop;
-	/* We need to make a copy since the original packet is "const" and is
-	 * not to be touched */
 
-	Packet *p_copy = p->copy();
+	/* Cast the packet so that we can touch it */
+	Packet *p = (Packet *)p_in;
 
 	/* Do nothing for my own packets... */
 	if ((unsigned int)iph->saddr() == myaddr_.s_addr)
-		goto out;
+		return;
 
 	next_hop.s_addr = cmh->next_hop_;
 	prev_hop.s_addr = cmh->prev_hop_;
 
 	/* Do nothing for packets I am going to receive anyway */
 	if (next_hop.s_addr == myaddr_.s_addr)
-		goto out;
+		return;
 	    
 	do {
 		struct in_addr src, dst, next_hop;
@@ -448,7 +454,7 @@ void DSRUU::tap(const Packet *p)
 		      print_ip(src), print_ip(dst), print_ip(prev_hop), print_ip(next_hop));
 	} while (0);
 	
-	dp = dsr_pkt_alloc(p_copy);
+	dp = dsr_pkt_alloc(p);
 	dp->flags |= PKT_PROMISC_RECV;
 
 	/* TODO: See if this node is the next hop. In that case do nothing */
@@ -470,8 +476,6 @@ void DSRUU::tap(const Packet *p)
 		
 		dsr_pkt_free(dp);
 	}
- out:
-	Packet::free(p_copy);
 
 	return;
 }

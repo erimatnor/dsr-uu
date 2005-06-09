@@ -20,7 +20,7 @@
 
 char *dsr_pkt_alloc_opts(struct dsr_pkt *dp, int len)
 {
-	if (!dp && len)
+	if (!dp)
 		return NULL;
 
 	dp->dh.raw = (char *)MALLOC(len + DEFAULT_TAILROOM, GFP_ATOMIC);

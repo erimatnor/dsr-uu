@@ -18,6 +18,8 @@
 #ifndef NO_GLOBALS
 
 /* Source route options header */
+/* TODO: This header is not byte order correct... is there a simple way to fix
+ * it? */
 struct dsr_srt_opt {
 	u_int8_t type;
 	u_int8_t length;

@@ -1,6 +1,14 @@
 DSR-UU is a DSR implementation that runs in Linux (kernel 2.4/2.6) and
 in the ns-2 network simulator.
 
+
+DISCLAIMER
+==========
+
+This is experimental software. It will probably crash your computer at
+some point. Use at your own risk. Bug reports are welcome.
+
+
 General Notes
 =============
 
@@ -102,7 +110,7 @@ Insert the kernel modules "dsr.{o,ko}" and "linkcache.{o,ko}" by doing:
 
 Bring the "dsr0" interface up:
 
-> ifconfig dsr0 192.168.2.2 up, for example:
+> ifconfig dsr0 192.168.2.2 up
 
 DSR is now running.
 
@@ -150,7 +158,7 @@ Ns-2
 ----
 
 Configuration values can be set at runtime from a ns-2 simulation
-script. To set a configuration value for a node, do:
+script. To set a configuration value for a node, do e.g.:
 
 set r [$node_($i) set ragent_]  # Get routing agent
 $r set UseNetworkLayerAck_ 1
