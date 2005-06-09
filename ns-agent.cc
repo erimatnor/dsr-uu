@@ -46,11 +46,10 @@ DSRUU::DSRUU() : Agent(PT_DSR),
 	
 	for (i = 0; i < CONFVAL_MAX; i++) {
 		char name[40];
-		
+		/* Override the default values in the ns-default.tcl file */
 		confvals[i] = confvals_def[i].val;
-		
 		sprintf(name, "%s_", confvals_def[i].name);
-// 		bind(name,  &confvals[i]);
+		bind(name,  &confvals[i]);
 	}
 	
 	set_confval(UseNetworkLayerAck, 1);
@@ -80,8 +79,7 @@ DSRUU::~DSRUU()
 	exit(-1);
 }
 
-int
-DSRUU::trace(const char *func, const char *fmt, ...)
+int DSRUU::trace(const char *func, const char *fmt, ...)
 {
 	va_list args;
 	int len;
@@ -103,6 +101,7 @@ DSRUU::trace(const char *func, const char *fmt, ...)
 	
 	buf[len-1] = '\0';
 
+/* Undefine to LOG to trace file */
 #define DBG_TO_STDOUT
 
 #ifdef DBG_TO_STDOUT
@@ -119,13 +118,8 @@ DSRUU::trace(const char *func, const char *fmt, ...)
 
 /* Should probably find a way to set the arp table entry manually... However,
  * sending a fake arp will do for now. */
-int
-DSRUU::arpset(struct in_addr addr, unsigned int mac_addr)
+int DSRUU::arpset(struct in_addr addr, unsigned int mac_addr)
 {
-	// ARPTable *arpt = ll_->arp_table();
-	
-	// if (arpt->arplookup((nsaddr_t)mac_addr))
-// 		return 0;
 	//create a new packet
 	Packet *p = Packet::alloc();
 
@@ -154,15 +148,6 @@ DSRUU::arpset(struct in_addr addr, unsigned int mac_addr)
 	ah->arp_spa = (nsaddr_t)addr.s_addr;
 	ah->arp_tpa = (nsaddr_t)myaddr_.s_addr;
 
-	// DEBUG("Setting ARP Table entry to %d for %s\n", 
-// 	      mac_addr, print_ip(addr));
-	// ARPTable *arpt = ll_->arp_table();
-	
-// 	if (arpt)
-// 		arpt->arpinput(p, ll_);
-// 	else
-// 		DEBUG("No ARP Table\n");
-
 	ll_->recv(p, 0);
 
 	return 1;
@@ -189,22 +174,21 @@ void DSRUU::xmit_failed(Packet *p)
  		
 	lc_link_del(my_addr(), nxt_hop);
 	
-	dp = dsr_pkt_alloc(qp);
+	dp = dsr_pkt_alloc(p);
 		
 	if (!dp) {
-		drop(qp, DROP_RTR_NO_ROUTE);
-	} else 
+		DEBUG("Could not allocate DSR packet\n");
+		drop(p, DROP_RTR_NO_ROUTE);
+	} else {
 		dsr_rerr_send(dp, nxt_hop);
 
-	dp->nxt_hop = nxt_hop;
-	
-	maint_buf_salvage(dp);
+		dp->nxt_hop = nxt_hop;
+		
+		maint_buf_salvage(dp);
+	}
 
 	while ((qp = ifq_->prq_get_nexthop(cmh->next_hop()))) {
-	// 	DEBUG("Dropping pkt for %s uid=%d", 
-// 		      print_ip(nxt_hop), cmh->uid());
-// 		drop(qp, DROP_RTR_NO_ROUTE);    
-
+		
 		dp = dsr_pkt_alloc(qp);
 		
 		if (!dp) {
@@ -222,7 +206,7 @@ void DSRUU::xmit_failed(Packet *p)
 
 void xmit_failure(Packet *p, void *data)
 {
-	DSRUU *agent = (DSRUU *)data; // cast of trust
+	DSRUU *agent = (DSRUU *)data;
 	agent->xmit_failed(p);
 }
 
@@ -247,8 +231,7 @@ struct hdr_ip *DSRUU::dsr_build_ip(struct dsr_pkt *dp, struct in_addr src,
 	return dp->nh.iph;
 }
 
-Packet *
-DSRUU::ns_packet_create(struct dsr_pkt *dp)
+Packet *DSRUU::ns_packet_create(struct dsr_pkt *dp)
 {
 	hdr_mac *mh;
 	hdr_cmn *cmh;
@@ -260,14 +243,7 @@ DSRUU::ns_packet_create(struct dsr_pkt *dp)
 	
 	if (!dp->p) 
 		dp->p = allocpkt();
-// 	else {
-// 		Packet *p_tmp = dp->p;
-		
-// 		dp->p = p_tmp->copy();
 
-// 		Packet::free(p_tmp);
-// 	}
-		
 	tot_len = IP_HDR_LEN + dsr_pkt_opts_len(dp) + dp->payload_len;
 	
 	mh = HDR_MAC(dp->p);
@@ -288,8 +264,6 @@ DSRUU::ns_packet_create(struct dsr_pkt *dp)
 
 		ethtoint((char *)&neigh_info.hw_addr, &mac_dst);
 
-// 		DEBUG("Mac dst=%d\n", mac_dst);
-
 		/* Broadcast packet */
 		mac_->hdr_dst((char*) HDR_MAC(dp->p), mac_dst);
 		cmh->addr_type() = NS_AF_INET;
@@ -309,8 +283,6 @@ DSRUU::ns_packet_create(struct dsr_pkt *dp)
 		// Clear DSR part of packet		
 		memcpy(opth, dp->dh.raw, dsr_pkt_opts_len(dp));
 	}
-	// DEBUG("p_len=%d\n", ntohs(opth->p_len));
-
 	/* Add payload */
 // 	if (dp->payload_len && dp->payload)
 // 		memcpy(dp->p->userdata(), dp->payload, dp->payload_len);
@@ -329,8 +301,7 @@ DSRUU::ns_packet_create(struct dsr_pkt *dp)
 	return dp->p;
 }
 	    
-void 
-DSRUU::ns_xmit(struct dsr_pkt *dp)
+void DSRUU::ns_xmit(struct dsr_pkt *dp)
 {
 	Packet *p;
 	
@@ -383,8 +354,7 @@ DSRUU::ns_xmit(struct dsr_pkt *dp)
 	dsr_pkt_free(dp);
 }
 
-void 
-DSRUU::ns_deliver(struct dsr_pkt *dp)
+void DSRUU::ns_deliver(struct dsr_pkt *dp)
 {
 	int len, dsr_len = 0;
 	
@@ -405,8 +375,7 @@ DSRUU::ns_deliver(struct dsr_pkt *dp)
 }
 
 
-void 
-DSRUU::recv(Packet* p, Handler*)
+void DSRUU::recv(Packet* p, Handler*)
 {
 	struct dsr_pkt *dp;
 	struct hdr_cmn *cmh = hdr_cmn::access(p);
@@ -418,7 +387,6 @@ DSRUU::recv(Packet* p, Handler*)
 	switch(cmh->ptype()) {
 	case PT_DSR:
 		if (dp->src.s_addr != myaddr_.s_addr) {
-// 			DEBUG("DSR packet from %s\n", print_ip(dp->src)); 
 			dsr_recv(dp);
 		} else {
 			
@@ -427,7 +395,6 @@ DSRUU::recv(Packet* p, Handler*)
 		break;
 	default:
 		if (dp->src.s_addr == myaddr_.s_addr) {
-			DEBUG("Locally generated non DSR packet\n");
 			dp->payload_len += IP_HDR_LEN;
 			
 			dsr_start_xmit(dp);
@@ -441,8 +408,7 @@ DSRUU::recv(Packet* p, Handler*)
 	return;
 }
 
-void 
-DSRUU::tap(const Packet *p)
+void DSRUU::tap(const Packet *p)
 {
 	struct dsr_pkt *dp;
 	hdr_cmn *cmh = hdr_cmn::access(p);
@@ -537,8 +503,7 @@ static int name2cmd(const char *name)
 	return -1;
 }
 
-int 
-DSRUU::command(int argc, const char* const* argv)
+int DSRUU::command(int argc, const char* const* argv)
 {	
 
 	//cerr << "cmd=" << argv[1] << endl;
@@ -576,11 +541,8 @@ DSRUU::command(int argc, const char* const* argv)
 	return TCL_OK;
 }
 
-void
-DSRUUTimer::expire (Event *e)
+void DSRUUTimer::expire (Event *e)
 {
-	if (a_) {
-		// a_->trace(__FUNCTION__, "%s Interrupt\n", name_);
+	if (a_)
 		(a_->*function)(data);
-	}
 }

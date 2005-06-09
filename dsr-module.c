@@ -54,7 +54,8 @@ MODULE_PARM(mackill, "s");
 static unsigned char mackill_list[MAX_MACKILL][ETH_ALEN];
 static int mackill_len = 0;
 
-static char *confval_names[CONFVAL_TYPE_MAX] = { "Seconds (s)",
+static char *confval_names[CONFVAL_TYPE_MAX] = { 
+	"Seconds (s)",
 	"Milliseconds (ms)",
 	"Microseconds (us)",
 	"Nanoseconds (ns)",
@@ -63,7 +64,7 @@ static char *confval_names[CONFVAL_TYPE_MAX] = { "Seconds (s)",
 	"Command"
 };
 
-/* Stolen from LUNAR <christian.tschudin@unibas.ch> */
+/* Shamelessly stolen from LUNAR <christian.tschudin@unibas.ch> */
 static int parse_mackill(void)
 {
 	char *pa[MAX_MACKILL], *cp;
@@ -112,31 +113,6 @@ int do_mackill(char *mac)
 	return 0;
 }
 
-#ifdef ENABLE_DISABLED
-static int
-dsr_arpset(struct in_addr addr, struct sockaddr *hw_addr,
-	   struct net_device *dev)
-{
-	struct neighbour *neigh;
-
-	DEBUG("Setting arp for %s %s\n", print_ip(addr),
-	      print_eth(hw_addr->sa_data));
-
-	neigh = __neigh_lookup_errno(&arp_tbl, &(addr.s_addr), dev);
-	//        err = PTR_ERR(neigh);
-	if (!IS_ERR(neigh)) {
-		neigh->parms->delay_probe_time = 0;
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,8)
-		neigh_update(neigh, hw_addr->sa_data, NUD_REACHABLE, 1);
-#else
-		neigh_update(neigh, hw_addr->sa_data, NUD_REACHABLE, 1, 0);
-#endif
-		neigh_release(neigh);
-	}
-	return 0;
-}
-#endif
-
 int dsr_ip_recv(struct sk_buff *skb)
 {
 	struct dsr_pkt *dp;
@@ -154,7 +130,6 @@ int dsr_ip_recv(struct sk_buff *skb)
 	}
 
 	if (skb->pkt_type == PACKET_OTHERHOST) {
-		DEBUG("Setting flag PKT_PROMISC_RECV\n");
 		dp->flags |= PKT_PROMISC_RECV;
 	}
 	if ((skb->len + (dp->nh.iph->ihl << 2)) < ntohs(dp->nh.iph->tot_len)) {
@@ -165,9 +140,9 @@ int dsr_ip_recv(struct sk_buff *skb)
 		return 0;
 	}
 
-	DEBUG("iph_len=%d iph_totlen=%d dsr_opts_len=%d data_len=%d\n",
-	      (dp->nh.iph->ihl << 2), ntohs(dp->nh.iph->tot_len),
-	      dsr_pkt_opts_len(dp), dp->payload_len);
+/* 	DEBUG("iph_len=%d iph_totlen=%d dsr_opts_len=%d data_len=%d\n", */
+/* 	      (dp->nh.iph->ihl << 2), ntohs(dp->nh.iph->tot_len), */
+/* 	      dsr_pkt_opts_len(dp), dp->payload_len); */
 
 	/* Add mac address of previous hop to the arp table */
 	dsr_recv(dp);
@@ -182,15 +157,18 @@ static void dsr_ip_recv_err(struct sk_buff *skb, u32 info)
 	kfree_skb(skb);
 }
 
-static int
-dsr_config_proc_read(char *buffer, char **start, off_t offset, int length,
-		     int *eof, void *data)
+static int dsr_config_proc_read(char *buffer, char **start, 
+				off_t offset, int length,
+				int *eof, void *data)
 {
 	int len = 0;
 	int i;
 
+	len += sprintf(buffer + len, 
+		       "# %-23s %-6s %s\n", "Name", "Value", "Type");
+
 	for (i = 0; i < CONFVAL_MAX; i++)
-		len += sprintf(buffer + len, "%s=%u %30s\n",
+		len += sprintf(buffer + len, "%-25s %-6u %s\n",
 			       confvals_def[i].name,
 			       get_confval(i),
 			       confval_names[confvals_def[i].type]);
@@ -203,9 +181,8 @@ dsr_config_proc_read(char *buffer, char **start, off_t offset, int length,
 		len = 0;
 	return len;
 }
-static int
-dsr_config_proc_write(struct file *file, const char *buffer,
-		      unsigned long count, void *data)
+static int dsr_config_proc_write(struct file *file, const char *buffer,
+				 unsigned long count, void *data)
 {
 #define CMD_MAX_LEN 256
 	char cmd[CMD_MAX_LEN];
@@ -242,7 +219,7 @@ dsr_config_proc_write(struct file *file, const char *buffer,
 			val_prev = ConfVal(i);
 			val = simple_strtol(from, &to, 10);
 
-			if (confvals_def[i].type == BIN)
+			if (confvals_def[i].type == BINARY)
 				val = (val ? 1 : 0);
 
 			set_confval(i, val);
@@ -278,12 +255,11 @@ dsr_config_proc_write(struct file *file, const char *buffer,
 
 /* This hook is used to do mac filtering or to receive promiscuously snooped
  * packets */
-static unsigned int
-dsr_pre_routing_recv(unsigned int hooknum,
-		     struct sk_buff **skb,
-		     const struct net_device *in,
-		     const struct net_device *out,
-		     int (*okfn) (struct sk_buff *))
+static unsigned int dsr_pre_routing_recv(unsigned int hooknum,
+					 struct sk_buff **skb,
+					 const struct net_device *in,
+					 const struct net_device *out,
+					 int (*okfn) (struct sk_buff *))
 {
 	if (in && in->ifindex == get_slave_dev_ifindex() &&
 	    (*skb)->protocol == htons(ETH_P_IP)) {
@@ -297,12 +273,11 @@ dsr_pre_routing_recv(unsigned int hooknum,
 /* This hook is the architecturally correct place to look at DSR packets that
  * are to be forwarded. This enables you to, for example, disable forwarding by
  * setting "/proc/sys/net/ipv4/conf/<eth*>/forwarding" to 0. */
-static unsigned int
-dsr_ip_forward_recv(unsigned int hooknum,
-		    struct sk_buff **skb,
-		    const struct net_device *in,
-		    const struct net_device *out,
-		    int (*okfn) (struct sk_buff *))
+static unsigned int dsr_ip_forward_recv(unsigned int hooknum,
+					struct sk_buff **skb,
+					const struct net_device *in,
+					const struct net_device *out,
+					int (*okfn) (struct sk_buff *))
 {
 	struct iphdr *iph = (*skb)->nh.iph;
 	struct in_addr myaddr = my_addr();
@@ -310,21 +285,16 @@ dsr_ip_forward_recv(unsigned int hooknum,
 	if (in && in->ifindex == get_slave_dev_ifindex() &&
 	    (*skb)->protocol == htons(ETH_P_IP)) {
 
-		/*      DEBUG("IP packet on nf hook\n"); */
-
 		if (iph && iph->protocol == IPPROTO_DSR &&
 		    iph->daddr != myaddr.s_addr &&
 		    iph->daddr != DSR_BROADCAST) {
 
-			/*      DEBUG("Packet for ip_rcv\n"); */
-
 			(*skb)->data = (*skb)->nh.raw + (iph->ihl << 2);
 			(*skb)->len = (*skb)->tail - (*skb)->data;
 			dsr_ip_recv(*skb);
-			/*      DEBUG("Stolen\n"); */
+
 			return NF_STOLEN;
 		}
-		/* DEBUG("Accepted\n"); */
 	}
 	return NF_ACCEPT;
 }

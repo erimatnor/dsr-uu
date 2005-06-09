@@ -95,7 +95,7 @@ struct dsr_pkt *dsr_pkt_alloc(Packet * p)
 
 		dp->p = p;
 		dp->mac.raw = p->access(hdr_mac::offset_);
-		dp->nh.iph = hdr_ip::access(p);
+		dp->nh.iph = HDR_IP(p);
 
 		dp->src.s_addr =
 		    Address::instance().get_nodeaddr(dp->nh.iph->saddr());

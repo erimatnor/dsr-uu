@@ -71,6 +71,12 @@ KINC=-nostdinc $(shell $(CC) -print-search-dirs | sed -ne 's/install: \(.*\)/-I 
 KCFLAGS=-Wall -fno-strict-aliasing -O2 $(KDEFS) $(KINC)
 MIPSDEFS=-mips2 -fno-pic -mno-abicalls -mlong-calls -G0 -msoft-float $(KDEFS)
 
+ifeq ($(PATCHLEVEL), 6)
+MODPREFIX=ko
+else
+MODPREFIX=o
+endif
+
 .PHONY: mips default depend clean ns clean-2.4 clean-2.6 indent
 
 # Check for kernel version
@@ -139,6 +145,16 @@ clean-2.4:
 
 clean-ns:
 	rm -rf Makefile.bak TAGS TODO endian endian.h $(OBJS_NS_CPP) $(OBJS_NS)  *~ $(NS_TARGET)
+
+install: default
+	mkdir -p /lib/modules/$(KERNEL)/dsr
+	install -m 644 $(MODNAME).$(MODPREFIX) /lib/modules/$(KERNEL)/dsr/
+	install -m 644 $(RTC_TRG).$(MODPREFIX) /lib/modules/$(KERNEL)/dsr/
+	/sbin/depmod -a
+
+uninstall:
+	rm -rf /lib/modules/$(KERNEL)/dsr
+	/sbin/depmod -a
 
 endif
 # DO NOT DELETE

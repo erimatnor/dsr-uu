@@ -70,7 +70,7 @@ enum confval_type {
 	MICROSECONDS,
 	NANOSECONDS,
 	QUANTA,
-	BIN,
+	BINARY,
 	COMMAND,
 	CONFVAL_TYPE_MAX,
 };
@@ -87,11 +87,11 @@ static struct {
 } confvals_def[CONFVAL_MAX] = {
 #ifdef DEBUG
 	{
-	"PrintDebug", 1, BIN},
+	"PrintDebug", 0, BINARY},
 #endif
 	{
 	"FlushLinkCache", 1, COMMAND}, {
-	"PromiscOperation", 1, BIN}, {
+	"PromiscOperation", 1, BINARY}, {
 	"BroadCastJitter", 20, MILLISECONDS}, {
 	"RouteCacheTimeout", 300, SECONDS}, {
 	"SendBufferTimeout", 30, SECONDS}, {
@@ -105,7 +105,7 @@ static struct {
 	"RexmtBufferSize", MAINT_BUF_MAX_LEN}, {
 	"MaintHoldoffTime", 250, MILLISECONDS}, {
 	"MaxMaintRexmt", 2, QUANTA}, {
-	"UseNetworkLayerAck", 1, BIN}, {
+	"UseNetworkLayerAck", 1, BINARY}, {
 	"TryPassiveAcks", 1, QUANTA}, {
 	"PassiveAckTimeout", 100, MILLISECONDS}, {
 	"GratReplyHoldOff", 1, SECONDS}, {
@@ -252,7 +252,7 @@ static inline usecs_t confval_to_usecs(enum confval cv)
 	case NANOSECONDS:
 		usecs = val / 1000;
 		break;
-	case BIN:
+	case BINARY:
 	case QUANTA:
 	case COMMAND:
 	case CONFVAL_TYPE_MAX:

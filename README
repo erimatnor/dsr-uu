@@ -1,6 +1,59 @@
 DSR-UU is a DSR implementation that runs in Linux (kernel 2.4/2.6) and
 in the ns-2 network simulator.
 
+DSR-UU implements most of the basic DSR features specified in the DSR
+draft (version 10). One big exception is flow extensions.
+
+Ns-2 version
+============
+
+In ns-2, DSR-UU has very similar (if not the same) performance as the
+ns-2 bundled DSR implementation. In addition, DSR-UU supports network
+layer acknowledgements.
+
+Trace support:
+
+DSR-UU uses the SRNodeNew class that the ns-2 DSR implementation
+uses. However, because DSR-UU has "real" DSR headers, DSR packet
+parsing is not supported in the trace file. May be added in the future.
+
+Linux version
+=============
+
+DSR-UU implements a virtual network interface (dsr0). This enables
+your DSR network to coexist with the regular non-multihop ad hoc
+network at the same time. You need to configure a seperate subnet for
+the DSR interface.
+
+To be able to add the extra DSR headers to data packets, DSR-UU
+reserves DSR_OPTS_MAX_SIZE bytes for the DSR headers by reducing the
+MTU of the virtual network device. This also puts a maximum size limit
+on the length of DSR headers. DSR_OPTS_MAX_SIZE can be changed in
+dsr.h at compile time.
+
+Routing Cache
+=============
+
+DSR-UU supports multiple routing cache implementations. The routing
+cache is loaded as a seperate module in Linux, so that different
+implementations of a routing cache can be tested without
+recompilation. DSR-UU implements a link cache that supports multiple
+routing metrics. Currently only minimal hop count is used.
+
+Link Layer Acknowledgement
+==========================
+
+Link layer acknowledgements are implemented in the ns-2 version of
+DSR-UU. It is enabled by default, but can be turned off by setting the
+configuration value UseNetworkLayerAck_ to 1 in your simulation
+script. Note that this also reduces the efficiency of packet
+salvaging, since packets are not fetched from the interface queue
+(this is to better mimic reality).
+
+
+Installation
+============
+
 * To compile for Linux (against currently running kernel), simply do:
 
 > make
@@ -13,7 +66,9 @@ in the ns-2 network simulator.
 
 > make mips KERNEL_DIR=/path/to/mips/kernel/sources
 
-You must have the Mips compiler in your PATH.
+NOTE: You must have the Mips cross compiler in your PATH.
+
+
 
 * Compile for ns-2 version 2.28:
 
@@ -21,14 +76,14 @@ You must have the Mips compiler in your PATH.
 
 > cd /path/to/ns-2/ns-2.28 && ln -s /path/to/dsr-uu dsr-uu;
 
-2. Replace the files in the ns-2 source tree with the corresponding
-files in in the dsr-uu/ns-2.28 directory.
+2. Apply the ns-2 DSR-UU patch
 
-> cp Makefile.in /path/to/ns-2/ns-2.28/ && cp ns-*.tcl /path/to/ns-2/ns-2.28/tcl/lib;
+> cd ns-allinone-X.XX/ns-X.XX/
+> patch -p1 < /path/to/dsr-uu/ns-2.patch 
 
 3. Compile ns-2
 
-4. Use "DSR-UU" to select the protocol in the ns-2 scenario file you
+4. Use "DSRUU" to select the protocol in the ns-2 scenario file you
 use for the simulation.
 
 
@@ -44,7 +99,18 @@ Bring the "dsr0" interface up:
 
 DSR is now running.
 
-Configuration of DSR parameters can be done during runtime in
+
+Runtime Configuration Values
+============================
+
+Configuration values are listed in dsr.h. Note that not all
+configuration values actually do anything at this point. They are
+simply taken from the DSR draft.
+
+Linux:
+------
+
+DSR configuration values can be set at runtime through
 /proc/net/dsr_config.
 
 Do:
@@ -71,6 +137,16 @@ Available /proc/net files:
 /proc/net/dsr_rreq_tbl   - Route request table
 /proc/net/maint_buf      - Packets in maintenance buffer
 /proc/net/send_buf       - Packets in send buffer
+
+
+Ns-2
+----
+
+Configuration values can be set at runtime from a ns-2 simulation
+script. To set a configuration value for a node, do:
+
+set r [$node_($i) set ragent_]  # Get routing agent
+$r set UseNetworkLayerAck_ 1
 
 
 # eof

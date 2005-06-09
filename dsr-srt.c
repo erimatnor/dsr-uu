@@ -216,7 +216,7 @@ struct dsr_srt *dsr_srt_shortcut(struct dsr_srt *srt, struct in_addr a1,
 struct dsr_srt *dsr_srt_concatenate(struct dsr_srt *srt1, struct dsr_srt *srt2)
 {
 	struct dsr_srt *srt_cat;
-	int n, n1, n2, i, j;
+	int n, n1, n2;
 	
 	if (!srt1 || !srt2)
 		return NULL;
@@ -238,14 +238,6 @@ struct dsr_srt *dsr_srt_concatenate(struct dsr_srt *srt1, struct dsr_srt *srt2)
 	srt_cat->src = srt1->src;
 	srt_cat->dst = srt2->dst;
 	srt_cat->laddrs = n * sizeof(struct in_addr);
-	
-/* 	for (i = 0; i < n1; i++) */
-/* 		srt_cat->addrs[i].s_addr = srt1->addrs[i].s_addr; */
-
-/* 	srt_cat->addrs[i++].s_addr = srt2->src.s_addr; */
-
-/* 	for (j = 0; j < n2; j++, i++) */
-/* 		srt_cat->addrs[i].s_addr = srt2->addrs[j].s_addr; */
 
 	memcpy(srt_cat->addrs, srt1->addrs, n1 * sizeof(struct in_addr));
 	memcpy(srt_cat->addrs + n1, &srt2->src, sizeof(struct in_addr));
