@@ -60,7 +60,7 @@ DSRUU::DSRUU() : Agent(PT_DSR),
 	}
 	
 	/* Default values specific to simulation */
-	set_confval(UseNetworkLayerAck, 1);
+	set_confval(UseNetworkLayerAck, 0);
 	set_confval(PrintDebug, 1);
 	
 	/* Initilize tables */
