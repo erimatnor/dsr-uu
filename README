@@ -6,7 +6,8 @@ DISCLAIMER
 ==========
 
 This is experimental software. It will probably crash your computer at
-some point. Use at your own risk. Bug reports are welcome.
+some point. Use at your own risk. Bug reports are welcome. Send to
+erikn@it.uu.se.
 
 
 General Notes
@@ -83,7 +84,13 @@ Installation
 
 NOTE: You must have the Mips cross compiler in your PATH.
 
+* Install the modules:
 
+> make install
+
+* Uninstall:
+
+> make uninstall
 
 * Compile for ns-2 version 2.28:
 
@@ -94,7 +101,7 @@ NOTE: You must have the Mips cross compiler in your PATH.
 2. Apply the ns-2 DSR-UU patch
 
 > cd ns-allinone-X.XX/ns-X.XX/
-> patch -p1 < /path/to/dsr-uu/ns-2.patch 
+> patch -p1 < /path/to/dsr-uu/patches/ns-2.patch 
 
 3. Compile ns-2
 
@@ -114,13 +121,23 @@ Bring the "dsr0" interface up:
 
 DSR is now running.
 
+Alternatilvely, use the dsr-uu.sh start script.
+
+Start:
+
+> dsr-uu.sh start ethX
+
+Stop:
+
+> dsr-uu.sh stop
 
 Runtime Configuration Values
 ============================
 
 Configuration values are listed in dsr.h. Note that not all
 configuration values actually do anything at this point. They are
-simply taken from the DSR draft.
+simply taken from the DSR draft. Strangly, the draft also list some
+values that are actually never used in the draft.
 
 Linux:
 ------
@@ -162,7 +179,7 @@ script. To set a configuration value for a node, do e.g.:
 
 set r [$node_($i) set ragent_]  # Get routing agent
 $r set UseNetworkLayerAck_ 1
-
+$r set PrintDebug_ 1
 
 # eof
 

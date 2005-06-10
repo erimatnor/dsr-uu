@@ -1,8 +1,8 @@
 #!/bin/bash
-# PROTOCOL=DSR-UU
 command=$1
-IFNAME=eth0
-DSRUUPATH=/root/
+IFNAME=eth1
+DSRUUPATH=/lib/modules/`uname -r`/dsr/
+MODPREFIX=ko
 
 killproc() {
     pidlist=$(/sbin/pidof $1)
@@ -12,6 +12,11 @@ killproc() {
     return 0
 }
 
+if [ -n $2 ]; then
+    IFNAME=$2
+    echo $IFNAME
+    exit
+fi
 
 if [ "$command" = "start" ]; then 
    
@@ -22,11 +27,11 @@ if [ "$command" = "start" ]; then
     echo $IP > .dsr.ip
     host_nr=`echo $IP | awk 'BEGIN{FS="."} { print $4 }'`
 
-    if [ -f $DSRUUPATH/linkcache.o ] && [ -f $DSRUUPATH/dsr.o ]; then
+    if [ -f $DSRUUPATH/linkcache.$MODPREFIX ] && [ -f $DSRUUPATH/dsr.$MODPREFIX ]; then
 	# Reconfigure the default interface
-	insmod $DSRUUPATH/linkcache.o
-	insmod $DSRUUPATH/dsr.o ifname=$IFNAME
-	/sbin/ifconfig $IFNAME 192.168.1.$host_nr up
+	insmod $DSRUUPATH/linkcache.$MODPREFIX
+	insmod $DSRUUPATH/dsr.$MODPREFIX ifname=$IFNAME
+	/sbin/ifconfig $IFNAME 192.168.45.$host_nr up
 	/sbin/ifconfig dsr0 $IP up
 	# Disable debug output
 	echo "PrintDebug=0" > /proc/net/dsr_config

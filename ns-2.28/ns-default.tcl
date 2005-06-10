@@ -1344,22 +1344,6 @@ Queue set util_records_ 0
 
 Delayer set debug_ false
 
-# AODV-UU routing agent
-Agent/AODVUU set unidir_hack_ 0
-Agent/AODVUU set rreq_gratuitous_ 0
-Agent/AODVUU set expanding_ring_search_ 1
-Agent/AODVUU set local_repair_ 0
-Agent/AODVUU set receive_n_hellos_ 0
-Agent/AODVUU set hello_jittering_ 0
-Agent/AODVUU set wait_on_reboot_ 0
-Agent/AODVUU set debug_ 0
-Agent/AODVUU set rt_log_interval_ 0
-Agent/AODVUU set log_to_file_ 0
-Agent/AODVUU set optimized_hellos_ 0
-Agent/AODVUU set ratelimit_ 1
-Agent/AODVUU set llfeedback_ 1
-Agent/AODVUU set internet_gw_mode_ 0
-
 
 # DSR-UU configuration values. NOTE, these values are overridden with
 # the values in dsr.h when nodes are created. Do not change these

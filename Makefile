@@ -54,7 +54,7 @@ NS_CFLAGS=$(OPTS) $(CPP_OPTS) $(DEBUG) $(NS_DEFS) $(EXTRA_NS_DEFS)
 
 NS_INC= # DON'T CHANGE (overridden by NS Makefile)
 
-NS_TARGET=libdsr-uu.a
+NS_TARGET=dsr-uu.o
 # Archiver and options
 AR=ar
 AR_FLAGS=rc
@@ -116,8 +116,9 @@ $(OBJS_NS_CPP): %-ns.o: %.cc Makefile
 $(OBJS_NS): %-ns.o: %.c Makefile
 	$(CXX) $(NS_CFLAGS) $(NS_INC) -c -o $@ $<
 
-$(NS_TARGET): endian.h $(OBJS_NS_CPP) $(OBJS_NS) 
-	$(AR) $(AR_FLAGS) $@ $(OBJS_NS_CPP) $(OBJS_NS) 
+$(NS_TARGET): endian.h $(OBJS_NS_CPP) $(OBJS_NS) *.h
+#$(AR) $(AR_FLAGS) $@ $(OBJS_NS_CPP) $(OBJS_NS) 
+	$(LD) -r -o $@ $(OBJS_NS_CPP) $(OBJS_NS) 
 
 endian.h: endian.c
 	$(CC) $(CFLAGS) -o endian endian.c

@@ -31,6 +31,8 @@ BINDEST	= @prefix@/bin
 MANDEST	= @prefix@/man
 
 DSRUU_DIR = dsr-uu
+DSRUU_OBJ = dsr-uu.o
+DSRUU = $(DSRUU_DIR)/$(DSRUU_OBJ)
 
 BLANK	= # make a blank space.  DO NOT add anything to this line
 
@@ -79,8 +81,6 @@ LIB	= \
 	@V_LIB_X11@ \
 	@V_LIB@ \
 	-lm @LIBS@ \
-	-L$(DSRUU_DIR) \
-	-ldsruu-ns2
 #	-L@libdir@ \
 
 CFLAGS	= $(CCOPT) $(DEFINE)
@@ -104,7 +104,6 @@ LIB_DIR	= lib/
 NS	= ns
 NSX	= nsx
 NSE	= nse
-DSRUU   = dsr-uu/libdsruu-ns2.a
 
 # To allow conf/makefile.win overwrite this macro
 # We will set these two macros to empty in conf/makefile.win since VC6.0
@@ -369,7 +368,7 @@ all-recursive:
 
 $(NS): $(OBJ) $(DSRUU) common/tclAppInit.o Makefile
 	$(LINK) $(LDFLAGS) $(LDOUT)$@ \
-		common/tclAppInit.o $(OBJ) dsr-uu/*-ns.o $(LIB)
+		common/tclAppInit.o $(OBJ) $(PWD)/$(DSRUU) $(LIB)
 
 Makefile: Makefile.in
 	@echo "Makefile.in is newer than Makefile."
@@ -377,7 +376,7 @@ Makefile: Makefile.in
 	false
 
 $(DSRUU): $(DSRUU_DIR)/*.c $(DSRUU_DIR)/*.h $(DSRUU_DIR)/*.cc $(DSRUU_DIR)/Makefile
-	$(MAKE) -C dsr-uu ns NS_DEFS='$(DEFINE) -DNS2' OPTS='$(CCOPT)' NS_INC='$(subst -I.,-I$(shell pwd),$(INCLUDES))'
+	$(MAKE) -C $(DSRUU_DIR) $(DSRUU_OBJ) NS_DEFS='$(DEFINE) -DNS2' OPTS='$(CCOPT)' NS_INC='$(subst -I.,-I$(shell pwd),$(INCLUDES))'
 
 $(NSE): $(OBJ) common/tclAppInit.o $(OBJ_EMULATE_CC) $(OBJ_EMULATE_C)
 	$(LINK) $(LDFLAGS) $(LDOUT)$@ \
