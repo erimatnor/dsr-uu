@@ -138,9 +138,8 @@ int dsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb)
 	return 0;
 }
 
-static int
-dsr_dev_inetaddr_event(struct notifier_block *this,
-		       unsigned long event, void *ptr)
+static int dsr_dev_inetaddr_event(struct notifier_block *this,
+				  unsigned long event, void *ptr)
 {
 	struct in_ifaddr *ifa = (struct in_ifaddr *)ptr;
 	struct in_device *indev;
@@ -193,9 +192,9 @@ dsr_dev_inetaddr_event(struct notifier_block *this,
 	};
 	return NOTIFY_DONE;
 }
-static int
-dsr_dev_netdev_event(struct notifier_block *this,
-		     unsigned long event, void *ptr)
+
+static int dsr_dev_netdev_event(struct notifier_block *this,
+				unsigned long event, void *ptr)
 {
 	struct net_device *dev = (struct net_device *)ptr;
 	struct dsr_node *dnode = dsr_dev->priv;
@@ -293,8 +292,8 @@ static void set_multicast_list(struct net_device *dev)
 }
 
 #ifdef CONFIG_NET_FASTROUTE
-static int
-dsr_dev_accept_fastpath(struct net_device *dev, struct dst_entry *dst)
+static int dsr_dev_accept_fastpath(struct net_device *dev, 
+				   struct dst_entry *dst)
 {
 	return -1;
 }
@@ -359,9 +358,8 @@ static void __init dsr_dev_setup(struct net_device *dev)
 	return 0;
 #endif
 }
-static int
-dsr_dev_llrecv(struct sk_buff *skb,
-	       struct net_device *indev, struct packet_type *pt)
+static int dsr_dev_llrecv(struct sk_buff *skb,
+			  struct net_device *indev, struct packet_type *pt)
 {
 	/* DEBUG("Packet recvd\n"); */
 

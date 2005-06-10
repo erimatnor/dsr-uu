@@ -319,14 +319,11 @@ int NSCLASS rreq_tbl_route_discovery_cancel(struct in_addr dst)
 {
 	struct rreq_tbl_entry *e;
 
-/* 	DSR_WRITE_LOCK(&rreq_tbl); */
-
 	e = (struct rreq_tbl_entry *)tbl_find_detach(&rreq_tbl, &dst,
 						     crit_addr);
 
 	if (!e) {
 		DEBUG("%s not in RREQ table\n", print_ip(dst));
-		/*      DSR_WRITE_UNLOCK(&rreq_tbl); */
 		return -1;
 	}
 
@@ -338,16 +335,14 @@ int NSCLASS rreq_tbl_route_discovery_cancel(struct in_addr dst)
 
 	tbl_add_tail(&rreq_tbl, &e->l);
 
-/* 	DSR_WRITE_UNLOCK(&rreq_tbl); */
-
 	return 1;
 }
+
 int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
 {
 	struct rreq_tbl_entry *e;
 	int ttl, res = 0;
 	struct timeval expires;
-/* 	char buf[2048]; */
 
 #define	TTL_START 1
 
@@ -368,9 +363,6 @@ int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
 		goto out;
 	}
 
-/* 	rreq_tbl_print(&rreq_tbl, buf); */
-/* 	DEBUG("\n%s\n", buf); */
-
 	if (e->state == STATE_IN_ROUTE_DISC) {
 		DEBUG("Route discovery for %s already in progress\n",
 		      print_ip(target));
@@ -382,6 +374,7 @@ int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
 	e->ttl = ttl = TTL_START;
 	/* The draft does not actually specify how these Request Timeout values
 	 * should be used... ??? I am just guessing here. */
+
 	if (e->ttl == 1)
 		e->timeout = ConfValToUsecs(NonpropRequestTimeout);
 	else
@@ -406,9 +399,8 @@ int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
 	return res;
 }
 
-int NSCLASS
-dsr_rreq_duplicate(struct in_addr initiator, struct in_addr target,
-		   unsigned int id)
+int NSCLASS dsr_rreq_duplicate(struct in_addr initiator, struct in_addr target,
+			       unsigned int id)
 {
 	struct {
 		struct in_addr *initiator;
@@ -460,7 +452,6 @@ int NSCLASS dsr_rreq_send(struct in_addr target, int ttl)
 
 	buf = dsr_pkt_alloc_opts(dp, len);
 
-/* 	DEBUG("Allocating %d for opts %d\n", dsr_pkt_opts_len(dp), sizeof(struct dsr_opt_hdr)); */
 
 	if (!buf)
 		goto out_err;
@@ -606,8 +597,6 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		/* Send cached route reply */
 		
 		DEBUG("Send cached RREP\n");
-/* 		DEBUG("cat1: %s\n", print_srt(dp->srt)); */
-/* 		DEBUG("cat2: %s\n", print_srt(srt_rc)); */
 
 		srt_cat = dsr_srt_concatenate(dp->srt, srt_rc);
 		
