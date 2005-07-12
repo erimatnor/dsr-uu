@@ -12,11 +12,16 @@ killproc() {
     return 0
 }
 
-if [ -n $2 ]; then
-    IFNAME=$2
-    echo $IFNAME
+if [ -z "$1" ]; then
+    echo "Must specify \"start\" or \"stop\""
     exit
 fi
+
+if [ -n "$2" ]; then
+    IFNAME=$2
+fi
+
+echo "Slave interface is $IFNAME"
 
 if [ "$command" = "start" ]; then 
    
@@ -24,15 +29,15 @@ if [ "$command" = "start" ]; then
     IP=`/sbin/ifconfig $IFNAME | grep inet`
     IP=${IP%%" Bcast:"*}
     IP=${IP##*"inet addr:"}
-    echo $IP > .dsr.ip
+    echo $IP > .$IFNAME.ip
     host_nr=`echo $IP | awk 'BEGIN{FS="."} { print $4 }'`
 
     if [ -f $DSRUUPATH/linkcache.$MODPREFIX ] && [ -f $DSRUUPATH/dsr.$MODPREFIX ]; then
 	# Reconfigure the default interface
 	insmod $DSRUUPATH/linkcache.$MODPREFIX
 	insmod $DSRUUPATH/dsr.$MODPREFIX ifname=$IFNAME
-	/sbin/ifconfig $IFNAME 192.168.45.$host_nr up
-	/sbin/ifconfig dsr0 $IP up
+	#/sbin/ifconfig $IFNAME 192.168.45.$host_nr up
+	/sbin/ifconfig dsr0 192.168.45.$host_nr up
 	# Disable debug output
 	echo "PrintDebug=0" > /proc/net/dsr_config
 	echo "DSR-UU started with virtual host IP $IP"
@@ -44,9 +49,9 @@ if [ "$command" = "start" ]; then
 	exit
     fi
 elif [ "$command" = "stop" ]; then 
-    IP=`cat .dsr.ip`
+    IP=`cat .$IFNAME.ip`
     /sbin/ifconfig dsr0 down
     rmmod dsr linkcache
-    /sbin/ifconfig $IFNAME $IP up
+#    /sbin/ifconfig $IFNAME $IP up
     rm -f .dsr.ip
 fi
