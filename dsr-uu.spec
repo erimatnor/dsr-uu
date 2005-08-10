@@ -1,5 +1,5 @@
 Name:           dsr-uu
-Version:        0.9.1
+Version:        0.1
 Release:        1
 Summary:        An source routed routing protocol for ad hoc networks.
 
@@ -34,7 +34,7 @@ rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT/usr/sbin
 mkdir -p $RPM_BUILD_ROOT/lib/modules/%{kernel}/dsr-uu
 
-install -s -m 755 aodvd $RPM_BUILD_ROOT/usr/sbin/aodvd        
+install -s -m 755 dsr-uu.sh $RPM_BUILD_ROOT/usr/sbin/dsr-uu.sh        
 install -m 644 dsr.ko $RPM_BUILD_ROOT/lib/modules/%{kernel}/dsr-uu/dsr.ko
 install -m 644 linkcache.ko $RPM_BUILD_ROOT/lib/modules/%{kernel}/dsr-uu/linkcache.ko
 
@@ -51,11 +51,13 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root)
-%doc README README.ns ChangeLog
+%doc README ChangeLog
 
-/usr/sbin/aodvd
-/lib/modules/%{kernel}/aodv
+/usr/sbin/dsr-uu.sh
+/lib/modules/%{kernel}/dsr-uu/dsr.ko
+/lib/modules/%{kernel}/dsr-uu/linkcache.ko
 
 %changelog
-* Wed Jul 27 2005 Erik Nordström <erikn@replicator.mine.nu> - 0.9.1-1
-- First spec file
+* Wed Aug 10 2005 Erik Nordstrom <erikn@wormhole.it.uu.se> - 0.1-1
+- Created spec file
+
