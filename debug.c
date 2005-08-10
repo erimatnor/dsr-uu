@@ -13,6 +13,7 @@
 #include <linux/kernel.h>
 #include <linux/proc_fs.h>
 #include <linux/module.h>
+#include <linux/version.h>
 
 #include <asm/uaccess.h>
 #include <asm/io.h>
@@ -63,7 +64,11 @@ int do_dbglog(int type, char *buf, int len)
 		error = 0;
 		if (!len)
 			goto out;
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,11)
 		error = verify_area(VERIFY_WRITE, buf, len);
+#else
+		error = access_ok(VERIFY_WRITE, buf, len) ? 0 : 1;
+#endif
 		if (error)
 			goto out;
 		error =
@@ -98,7 +103,11 @@ int do_dbglog(int type, char *buf, int len)
 		error = 0;
 		if (!len)
 			goto out;
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,11)
 		error = verify_area(VERIFY_WRITE, buf, len);
+#else
+		error = access_ok(VERIFY_WRITE, buf, len) ? 0 : 1;
+#endif
 		if (error)
 			goto out;
 		count = len;

@@ -151,7 +151,7 @@ struct dsr_node {
 
 extern struct dsr_node *dsr_node;
 
-static inline const unsigned int get_confval(enum confval cv)
+static inline unsigned int get_confval(enum confval cv)
 {
 	unsigned int val = 0;
 
@@ -163,7 +163,7 @@ static inline const unsigned int get_confval(enum confval cv)
 	return val;
 }
 
-static inline const int set_confval(enum confval cv, unsigned int val)
+static inline int set_confval(enum confval cv, unsigned int val)
 {
 	if (dsr_node) {
 		DSR_SPIN_LOCK(&dsr_node->lock);
@@ -208,7 +208,7 @@ static inline unsigned long time_add_msec(unsigned long msecs)
 	return timespec_to_jiffies(&t);
 }
 
-static inline const int get_slave_dev_ifindex(void)
+static inline int get_slave_dev_ifindex(void)
 {
 	int ifindex = -1;
 
