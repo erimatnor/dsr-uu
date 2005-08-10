@@ -34,7 +34,7 @@ rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT/usr/sbin
 mkdir -p $RPM_BUILD_ROOT/lib/modules/%{kernel}/dsr-uu
 
-install -s -m 755 dsr-uu.sh $RPM_BUILD_ROOT/usr/sbin/dsr-uu.sh        
+install -m 755 dsr-uu.sh $RPM_BUILD_ROOT/usr/sbin/dsr-uu.sh        
 install -m 644 dsr.ko $RPM_BUILD_ROOT/lib/modules/%{kernel}/dsr-uu/dsr.ko
 install -m 644 linkcache.ko $RPM_BUILD_ROOT/lib/modules/%{kernel}/dsr-uu/linkcache.ko
 
