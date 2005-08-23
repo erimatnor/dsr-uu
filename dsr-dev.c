@@ -33,7 +33,7 @@
 
 /* Our dsr device */
 static struct net_device *dsr_dev;
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
 /* dsr_node must be static on some older kernels, otherwise it segfaults on
  * module load */
 static struct dsr_node *dsr_node;
@@ -327,7 +327,7 @@ static void dsr_dev_uninit(struct net_device *dev)
 	dsr_node = NULL;
 }
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
 static int __init dsr_dev_setup(struct net_device *dev)
 #else
 static void __init dsr_dev_setup(struct net_device *dev)
@@ -354,7 +354,7 @@ static void __init dsr_dev_setup(struct net_device *dev)
 	//random_ether_addr(dev->dev_addr);
 	get_random_bytes(dev->dev_addr, 6);
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
 	return 0;
 #endif
 }
@@ -544,7 +544,7 @@ int dsr_dev_init(char *ifname)
 	int res = 0;
 	struct dsr_node *dnode;
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
 	dsr_dev = alloc_etherdev(sizeof(struct dsr_node));
 
 	if (!dsr_dev)
@@ -634,7 +634,7 @@ int dsr_dev_init(char *ifname)
       cleanup_netdev_register:
 	unregister_netdev(dsr_dev);
       cleanup_netdev:
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 	free_netdev(dsr_dev);
 #else
 	kfree(dsr_dev);
@@ -650,7 +650,7 @@ void __exit dsr_dev_cleanup(void)
 	unregister_netdevice_notifier(&netdev_notifier);
 	unregister_inetaddr_notifier(&inetaddr_notifier);
 	unregister_netdev(dsr_dev);
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 	free_netdev(dsr_dev);
 #else
 	kfree(dsr_dev);
