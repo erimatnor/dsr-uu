@@ -3,4 +3,5 @@
 0.2:	
 	* Added spec file.
 	* Compilation fixes for kernel 2.6.12 on FC4 
+	* Fixed segmentation fault on module load on newer 2.4 kernels.
 

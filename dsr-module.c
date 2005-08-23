@@ -353,13 +353,14 @@ static int __init dsr_module_init(void)
 	dbg_init();
 #endif
 	parse_mackill();
-
+	
 	res = dsr_dev_init(ifname);
 
 	if (res < 0) {
 		DEBUG("dsr-dev init failed\n");
 		return -EAGAIN;
 	}
+
 	res = send_buf_init();
 
 	if (res < 0)
