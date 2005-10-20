@@ -25,8 +25,8 @@ class DSRUU;
 #include <mac.h>
 #include <mac-802_11.h>
 #include <mobilenode.h>
-#include <linux/if_ether.h>
 
+#define ETH_ALEN 6
 #define NSCLASS DSRUU::
 #define ConfVal(name) DSRUU::get_confval(name)
 #define ConfValToUsecs(cv) DSRUU::confval_to_usecs(cv)
