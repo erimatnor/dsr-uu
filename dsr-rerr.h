@@ -24,7 +24,7 @@ struct dsr_rerr_opt {
 	u_int8_t res:4;
 	u_int8_t salv:4;
 #elif defined (__BIG_ENDIAN_BITFIELD)
-	u_int8_t l:4;
+	u_int8_t res:4;
 	u_int8_t salv:4;
 #else
 #error  "Please fix <asm/byteorder.h>"
