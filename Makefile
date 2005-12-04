@@ -138,7 +138,7 @@ indent:
 	indent -kr -i8 -ts8 -sob -l80 -ss -ncs *.c *.h
 
 clean-2.6:
-	@if [ -d $(KERNEL_DIR)]; then \
+	@if [ -d $(KERNEL_DIR) ]; then \
 		$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) clean; \
 	fi
 	rm -rf *~ *.o Makefile.bak TAGS TODO endian endian.h $(NS_TARGET)

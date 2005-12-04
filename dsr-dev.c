@@ -323,7 +323,7 @@ static void dsr_dev_uninit(struct net_device *dev)
 		dev_put(dnode->slave_dev);
 
 	dsr_node_unlock(dnode);
-	dev_put(dsr_dev);
+	dev_put(dev);
 	dsr_node = NULL;
 }
 
@@ -626,8 +626,10 @@ int dsr_dev_init(char *ifname)
 
 	if (res < 0)
 		goto cleanup_netdevice_notifier;
+
 	/* We must increment usage count since we hold a reference */
 	dev_hold(dsr_dev);
+
 	return 0;
       cleanup_netdevice_notifier:
 	unregister_netdevice_notifier(&netdev_notifier);
