@@ -50,15 +50,15 @@ struct in_addr dsr_srt_prev_hop(struct dsr_srt *srt, int sleft)
 }
 
 static int dsr_srt_find_addr(struct dsr_srt *srt, struct in_addr addr, 
-			      int index)
+			      int sleft)
 {
 	int n = srt->laddrs / sizeof(struct in_addr);
 
-	if (n == 0 || index >= n)
+	if (n == 0 || sleft > n || sleft < 1)
 		return 0;
 
-	for (; index > 0; index--)
-		if (srt->addrs[n - index].s_addr == addr.s_addr)
+	for (; sleft > 0; sleft--)
+		if (srt->addrs[n - sleft].s_addr == addr.s_addr)
 			return 1;
 
 	if (addr.s_addr == srt->dst.s_addr)
@@ -150,6 +150,7 @@ struct dsr_srt *dsr_srt_new_split(struct dsr_srt *srt, struct in_addr addr)
 
 	return srt_split;
 }
+
 struct dsr_srt *dsr_srt_new_split_rev(struct dsr_srt *srt, struct in_addr addr)
 {
 	struct dsr_srt *srt_split, *srt_split_rev;
@@ -425,9 +426,9 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 	dsr_rtc_add(dp->srt, ConfValToUsecs(RouteCacheTimeout), 0);
 
 	/* Automatic route shortening - Check if this node is the
-	 * intended next hop... */
+	 * intended next hop. If not, is it part of the remaining
+	 * source route? */
 	if (next_hop_intended.s_addr != myaddr.s_addr &&
-	    srt_opt->sleft > 0 &&
 	    dsr_srt_find_addr(dp->srt, myaddr, srt_opt->sleft) &&
 	    !grat_rrep_tbl_find(dp->src, dp->prv_hop)) {
 		struct dsr_srt *srt, *srt_cut;
@@ -443,7 +444,10 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 		DEBUG("shortcut: %s\n", print_srt(srt_cut));
 
 		/* srt = dsr_rtc_find(myaddr, dp->src); */
-		srt = dsr_srt_new_split_rev(srt_cut, myaddr);
+		if (srt_cut->laddrs / sizeof(struct in_addr) == 0)
+			srt = dsr_srt_new_rev(srt_cut);
+		else
+			srt = dsr_srt_new_split_rev(srt_cut, myaddr);
 
 		if (!srt) {
 			DEBUG("No route to %s\n", print_ip(dp->src));

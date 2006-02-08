@@ -374,6 +374,8 @@ int __init NSCLASS grat_rrep_tbl_init(void)
 {
 	INIT_TBL(&grat_rrep_tbl, GRAT_RREP_TBL_MAX_LEN);
 
+	init_timer(&grat_rrep_tbl_timer);
+
 #ifdef __KERNEL__
 	proc_net_create(GRAT_RREP_TBL_PROC_NAME, 0, grat_rrep_tbl_proc_info);
 #endif
@@ -383,6 +385,9 @@ int __init NSCLASS grat_rrep_tbl_init(void)
 void __exit NSCLASS grat_rrep_tbl_cleanup(void)
 {
 	tbl_flush(&grat_rrep_tbl, NULL);
+
+	del_timer_sync(&grat_rrep_tbl_timer);
+
 #ifdef __KERNEL__
 	proc_net_remove(GRAT_RREP_TBL_PROC_NAME);
 #endif

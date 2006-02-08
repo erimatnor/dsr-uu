@@ -576,6 +576,7 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		dsr_rrep_send(srt_rev, dp->srt);
 
 		action = DSR_PKT_NONE;
+		goto out;
 	} 
 	
 	n = DSR_RREQ_ADDRS_LEN(rreq_opt) / sizeof(struct in_addr);

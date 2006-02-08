@@ -35,6 +35,7 @@
 #include "debug.h"
 #include "neigh.h"
 #include "dsr-rreq.h"
+#include "dsr-rrep.h"
 #include "maint-buf.h"
 #include "send-buf.h"
 #include "link-cache.h"
@@ -371,6 +372,11 @@ static int __init dsr_module_init(void)
 	if (res < 0)
 		goto cleanup_send_buf;
 
+	res = grat_rrep_tbl_init();
+
+	if (res < 0)
+		goto cleanup_grat_rrep_tbl;
+
 	res = neigh_tbl_init();
 
 	if (res < 0)
@@ -415,23 +421,25 @@ static int __init dsr_module_init(void)
 	DEBUG("Setup finished res=%d\n", res);
 
 	return 0;
-      cleanup_proc:
+cleanup_proc:
 	proc_net_remove(CONFIG_PROC_NAME);
 #endif
 
-      cleanup_maint_buf:
+cleanup_maint_buf:
 	maint_buf_cleanup();
-      cleanup_nf_hook1:
+cleanup_nf_hook1:
 	nf_unregister_hook(&dsr_ip_forward_hook);
-      cleanup_nf_hook2:
+cleanup_nf_hook2:
 	nf_unregister_hook(&dsr_pre_routing_hook);
-      cleanup_neigh_tbl:
+cleanup_neigh_tbl:
 	neigh_tbl_cleanup();
-      cleanup_rreq_tbl:
+cleanup_grat_rrep_tbl:
+	grat_rrep_tbl_cleanup();
+cleanup_rreq_tbl:
 	rreq_tbl_cleanup();
-      cleanup_send_buf:
+cleanup_send_buf:
 	send_buf_cleanup();
-      cleanup_dsr_dev:
+cleanup_dsr_dev:
 	dsr_dev_cleanup();
 #ifdef DEBUG
 	dbg_cleanup();
@@ -451,6 +459,7 @@ static void __exit dsr_module_cleanup(void)
 	nf_unregister_hook(&dsr_ip_forward_hook);
 	send_buf_cleanup();
 	rreq_tbl_cleanup();
+	grat_rrep_tbl_cleanup();
 	neigh_tbl_cleanup();
 	maint_buf_cleanup();
 	dsr_dev_cleanup();
