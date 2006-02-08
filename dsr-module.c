@@ -454,15 +454,15 @@ static void __exit dsr_module_cleanup(void)
 #else
 	inet_del_protocol(&dsr_inet_prot);
 #endif
-	proc_net_remove(CONFIG_PROC_NAME);
 	nf_unregister_hook(&dsr_pre_routing_hook);
 	nf_unregister_hook(&dsr_ip_forward_hook);
-	send_buf_cleanup();
+	dsr_dev_cleanup();
+	proc_net_remove(CONFIG_PROC_NAME);
 	rreq_tbl_cleanup();
 	grat_rrep_tbl_cleanup();
 	neigh_tbl_cleanup();
 	maint_buf_cleanup();
-	dsr_dev_cleanup();
+	send_buf_cleanup();
 #ifdef DEBUG
 	dbg_cleanup();
 #endif
