@@ -7,3 +7,5 @@
 	* Fixed bug in dsr_srt_find_addr that made automatic route
 	shortening not always work.
 	* Properly initialize grat_rrep_tbl.
+	* Fixed locking bugs in dsr-rreq.c
+	* Compile fixes for kernel > 2.6.14

@@ -110,7 +110,7 @@ static int rreq_tbl_print(struct tbl *t, char *buf)
 
 	gettime(&now);
 
-	DSR_READ_LOCK(t->lock);
+	DSR_READ_LOCK(&t->lock);
 
 	len +=
 	    sprintf(buf, "# %-15s %-6s %-8s %15s:%s\n", "IPAddr", "TTL", "Used",
@@ -144,7 +144,7 @@ static int rreq_tbl_print(struct tbl *t, char *buf)
 		}
 	}
 
-	DSR_READ_UNLOCK(t->lock);
+	DSR_READ_UNLOCK(&t->lock);
 	return len;
 
 }
@@ -275,7 +275,7 @@ rreq_tbl_add_id(struct in_addr initiator, struct in_addr target,
 	struct id_entry *id_e;
 	int res = 0;
 
-	DSR_WRITE_LOCK(&rreq_tbl);
+	DSR_WRITE_LOCK(&rreq_tbl.lock);
 
 	e = (struct rreq_tbl_entry *)__tbl_find(&rreq_tbl, &initiator,
 						crit_addr);
@@ -310,7 +310,7 @@ rreq_tbl_add_id(struct in_addr initiator, struct in_addr target,
 
 	tbl_add_tail(&e->rreq_id_tbl, &id_e->l);
       out:
-	DSR_WRITE_UNLOCK(&rreq_tbl);
+	DSR_WRITE_UNLOCK(&rreq_tbl.lock);
 
 	return 1;
 }
@@ -346,7 +346,7 @@ int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
 
 #define	TTL_START 1
 
-	DSR_WRITE_LOCK(&rreq_tbl);
+	DSR_WRITE_LOCK(&rreq_tbl.lock);
 
 	e = (struct rreq_tbl_entry *)__tbl_find(&rreq_tbl, &target, crit_addr);
 
@@ -388,13 +388,13 @@ int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
 
 	set_timer(e->timer, &expires);
 
-	DSR_WRITE_UNLOCK(&rreq_tbl);
+	DSR_WRITE_UNLOCK(&rreq_tbl.lock);
 
 	dsr_rreq_send(target, ttl);
 
 	return 1;
       out:
-	DSR_WRITE_UNLOCK(&rreq_tbl);
+	DSR_WRITE_UNLOCK(&rreq_tbl.lock);
 
 	return res;
 }

@@ -14,6 +14,7 @@
 #include <linux/errno.h>
 #include <linux/spinlock.h>
 #include <linux/interrupt.h>
+#include <linux/version.h>
 #else
 #include <stdlib.h>
 #include <errno.h>
@@ -44,8 +45,10 @@ typedef struct list_head list_t;
 #define DSR_WRITE_UNLOCK(l) write_unlock_bh(l)
 #define DSR_READ_LOCK(l)    read_lock_bh(l)
 #define DSR_READ_UNLOCK(l)  read_unlock_bh(l)
+
 #define MALLOC(s, p)        kmalloc(s, p)
 #define FREE(p)             kfree(p)
+
 
 #else				/* __KERNEL__ */
 

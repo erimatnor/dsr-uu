@@ -42,8 +42,16 @@ struct dsr_node *dsr_node;
 #endif
 static int rp_filter = 0;
 static int forwarding = 0;
+
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,14)
 static int dsr_dev_llrecv(struct sk_buff *skb, struct net_device *indev,
 			  struct packet_type *pt);
+#else
+
+static int dsr_dev_llrecv(struct sk_buff *skb, struct net_device *indev,
+			  struct packet_type *pt, struct net_device *orig_dev);
+#endif
 
 static struct packet_type dsr_packet_type = {
 	.type = __constant_htons(ETH_P_IP),
@@ -358,8 +366,17 @@ static void __init dsr_dev_setup(struct net_device *dev)
 	return 0;
 #endif
 }
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,14)
 static int dsr_dev_llrecv(struct sk_buff *skb,
-			  struct net_device *indev, struct packet_type *pt)
+			  struct net_device *indev, 
+			  struct packet_type *pt)
+#else
+static int dsr_dev_llrecv(struct sk_buff *skb,
+			  struct net_device *indev, 
+			  struct packet_type *pt, 
+			  struct net_device *orig_dev)
+#endif
 {
 	/* DEBUG("Packet recvd\n"); */
 
