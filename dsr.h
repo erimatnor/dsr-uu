@@ -124,7 +124,7 @@ struct dsr_node {
 	struct in_addr bcaddr;
 	unsigned int confvals[CONFVAL_MAX];
 #ifdef __KERNEL__
-	struct net_device *dev;
+	char slave_ifname[IFNAMSIZ];
 	struct net_device *slave_dev;
 	struct in_device *slave_indev;
 	struct net_device_stats stats;
@@ -175,12 +175,14 @@ static inline int set_confval(enum confval cv, unsigned int val)
 	return val;
 }
 
-static inline void dsr_node_init(struct dsr_node *dn)
+static inline void dsr_node_init(struct dsr_node *dn, char *ifname)
 {
 	int i;
-	spin_lock_init(&dn->lock);
-	dn->dev = NULL;
+	dn->slave_indev = NULL;
 	dn->slave_dev = NULL;
+	memcpy(dn->slave_ifname, ifname, IFNAMSIZ);
+	
+	spin_lock_init(&dn->lock);
 
 	for (i = 0; i < CONFVAL_MAX; i++) {
 		dn->confvals[i] = confvals_def[i].val;

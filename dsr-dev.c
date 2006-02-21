@@ -163,38 +163,32 @@ static int dsr_dev_inetaddr_event(struct notifier_block *this,
 
 	switch (event) {
 	case NETDEV_UP:
-		DEBUG("Netdev UP\n");
+		DEBUG("inetdev UP\n");
+
 		if (indev->dev == dsr_dev) {
 			struct dsr_node *dnode;
 
-			dnode = indev->dev->priv;
+			dnode = (struct dsr_node *)indev->dev->priv;
 
 			dsr_node_lock(dnode);
 			dnode->ifaddr.s_addr = ifa->ifa_address;
 			dnode->bcaddr.s_addr = ifa->ifa_broadcast;
+			dsr_node_unlock(dnode);
 
 			addr.s_addr = ifa->ifa_address;
 			bc.s_addr = ifa->ifa_broadcast;
-
-			dnode->slave_indev = in_dev_get(dnode->slave_dev);
-
+		
+		
 			/* Disable rp_filter and enable forwarding */
-			if (dnode->slave_indev) {
-				rp_filter = dnode->slave_indev->cnf.rp_filter;
-				forwarding = dnode->slave_indev->cnf.forwarding;
-				dnode->slave_indev->cnf.rp_filter = 0;
-				dnode->slave_indev->cnf.forwarding = 1;
-			}
-			dsr_node_unlock(dnode);
+			rp_filter = indev->cnf.rp_filter;
+			forwarding = indev->cnf.forwarding;
+			indev->cnf.rp_filter = 0;
+			indev->cnf.forwarding = 1;
 
 			DEBUG("New ip=%s broadcast=%s\n",
 			      print_ip(addr), print_ip(bc));
 		}
 		break;
-	case NETDEV_DOWN:
-		DEBUG("notifier down\n");
-		break;
-	case NETDEV_REGISTER:
 	default:
 		break;
 	};
@@ -205,7 +199,7 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 				unsigned long event, void *ptr)
 {
 	struct net_device *dev = (struct net_device *)ptr;
-	struct dsr_node *dnode = dsr_dev->priv;
+	struct dsr_node *dnode = (struct dsr_node *)dsr_dev->priv;
 	int slave_change = 0;
 
 	if (!dev)
@@ -214,19 +208,31 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 	switch (event) {
 	case NETDEV_REGISTER:
 		DEBUG("Netdev register %s\n", dev->name);
-		dsr_node_lock(dnode);
-		if (dnode->slave_dev == NULL && dev->get_wireless_stats) {
+		if (dnode->slave_dev == NULL && 
+		    strcmp(dev->name, dnode->slave_ifname) == 0) {
+			
+			DEBUG("Slave dev %s up\n", dev->name);
+			
+			dsr_node_lock(dnode);
 			dnode->slave_dev = dev;
-			dev_hold(dnode->slave_dev);
+			dev_hold(dev);
+			dsr_node_unlock(dnode);
 
-			if (!dsr_packet_type.func) {
-				dsr_packet_type.func = dsr_dev_llrecv;
-				dsr_packet_type.dev = dnode->slave_dev;
-				dev_add_pack(&dsr_packet_type);
-			}
+			/* Reduce the MTU to allow DSR options of 100
+			 * bytes. If larger, drop or implement
+			 * fragmentation... ;-) Alternatively find a
+			 * way to dynamically reduce the data size of
+			 * packets depending on the size of the DSR
+			 * header. */
+			dsr_dev->mtu = dev->mtu - DSR_OPTS_MAX_SIZE;
+			
+			DEBUG("Registering packet type\n");
+			dsr_packet_type.func = dsr_dev_llrecv;
+			dsr_packet_type.dev = dev;
+			dev_add_pack(&dsr_packet_type);
+			
 			slave_change = 1;
 		}
-		dsr_node_unlock(dnode);
 
 		if (slave_change)
 			DEBUG("New DSR slave interface %s\n", dev->name);
@@ -242,13 +248,14 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 		break;
 	case NETDEV_UNREGISTER:
 		DEBUG("Netdev unregister %s\n", dev->name);
+		
 		dsr_node_lock(dnode);
 		if (dev == dnode->slave_dev) {
-			dev_put(dnode->slave_dev);
-			dnode->slave_dev = NULL;
 			dev_remove_pack(&dsr_packet_type);
 			dsr_packet_type.func = NULL;
 			slave_change = 1;
+			dev_put(dev);
+			dnode->slave_dev = NULL;
 		}
 		dsr_node_unlock(dnode);
 
@@ -259,18 +266,8 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 	case NETDEV_DOWN:
 		DEBUG("Netdev down %s\n", dev->name);
 		if (dev == dsr_dev && dnode->slave_dev) {
-
 			if (ConfVal(PromiscOperation))
 				dev_set_promiscuity(dnode->slave_dev, -1);
-
-			dsr_node_lock(dnode);
-			if (dnode->slave_indev) {
-				dnode->slave_indev->cnf.rp_filter = rp_filter;
-				dnode->slave_indev->cnf.forwarding = forwarding;
-				in_dev_put(dnode->slave_indev);
-				dnode->slave_indev = NULL;
-			}
-			dsr_node_unlock(dnode);
 		}
 		break;
 	default:
@@ -320,17 +317,25 @@ static int dsr_dev_stop(struct net_device *dev)
 
 static void dsr_dev_uninit(struct net_device *dev)
 {
-	struct dsr_node *dnode = dev->priv;
-
-	DEBUG("Calling dev_put on interfaces dnode->slave_dev=%u dsr_dev=%u\n",
-	      (unsigned int)dnode->slave_dev, (unsigned int)dsr_dev);
+	struct dsr_node *dnode = (struct dsr_node *)dev->priv;
 
 	dsr_node_lock(dnode);
-
-	if (dnode->slave_dev)
+	
+	if (dnode->slave_dev) {
+		DEBUG("Doing dev_put on slave_dev\n");
 		dev_put(dnode->slave_dev);
+	}
+/* 	if (dnode->slave_indev) */
+/* 		in_dev_put(dnode->slave_indev); */
 
 	dsr_node_unlock(dnode);
+
+	if (dsr_packet_type.func) {
+		DEBUG("Removing pack\n");
+		dev_remove_pack(&dsr_packet_type);
+		dsr_packet_type.func = NULL;
+	}
+
 	dev_put(dev);
 	dsr_node = NULL;
 }
@@ -472,9 +477,13 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 	if (dp->flags & PKT_REQUEST_ACK)
 		maint_buf_add(dp);
 
-
 	dsr_node_lock(dsr_node);
-	slave_dev = dsr_node->slave_dev;
+	if (dsr_node->slave_dev)
+		slave_dev = dsr_node->slave_dev;
+	else {
+		dsr_node_unlock(dsr_node);
+		goto out_err;
+	}
 	dsr_node_unlock(dsr_node);
 
 	skb = dsr_skb_create(dp, slave_dev);
@@ -517,12 +526,18 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 /* Main receive function for packets originated in user space */
 static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
-	/* struct dsr_node *dnode = (struct dsr_node *)dev->priv; */
+	struct dsr_node *dnode = (struct dsr_node *)dev->priv;
 	struct ethhdr *ethh;
 	struct dsr_pkt *dp;
 #ifdef DEBUG
 	atomic_inc(&num_pkts);
 #endif
+	if (dnode->slave_dev == NULL) {
+		dev_kfree_skb(skb);
+		DEBUG("Packet dropped\n");
+		return 0;
+	}
+
 	ethh = (struct ethhdr *)skb->data;
 
 	switch (ntohs(ethh->h_proto)) {
@@ -533,11 +548,17 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		      skb->len);
 
 		dp = dsr_pkt_alloc(skb);
+		
+		if (!dp) {
+			dev_kfree_skb(skb);
+			return 0;
+		}			
 
 		dsr_start_xmit(dp);
 		break;
 	default:
-		DEBUG("Unkown packet type\n");
+		DEBUG("Unknown packet type, dropping...\n");
+		dev_kfree_skb(skb);
 	}
 	return 0;
 }
@@ -578,58 +599,36 @@ int dsr_dev_init(char *ifname)
 #endif
 	dnode = dsr_node = (struct dsr_node *)dsr_dev->priv;
 
-	dsr_node_init(dnode);
+	dsr_node_init(dnode, ifname);
 
 	if (ifname) {
-		dnode->slave_dev = dev_get_by_name(ifname);
-
-		if (!dnode->slave_dev) {
-			DEBUG("device %s not found\n", ifname);
-			res = -1;
-			goto cleanup_netdev;
-		}
-
-		if (dnode->slave_dev == dsr_dev) {
-			DEBUG("invalid slave device %s\n", ifname);
-			res = -1;
-			dev_put(dnode->slave_dev);
-			goto cleanup_netdev;
-		}
+		memcpy(dnode->slave_ifname, ifname, IFNAMSIZ);
 	} else {
+		struct net_device *tmp_dev;
+		
 		read_lock(&dev_base_lock);
-		for (dnode->slave_dev = dev_base;
-		     dnode->slave_dev != NULL;
-		     dnode->slave_dev = dnode->slave_dev->next) {
+		for (tmp_dev = dev_base; tmp_dev != NULL; 
+		     tmp_dev = tmp_dev->next) {
 
-			if (dnode->slave_dev->get_wireless_stats)
-				break;
+			if (tmp_dev->get_wireless_stats) {
+				memcpy(dnode->slave_ifname, tmp_dev->name, IFNAMSIZ);
+			
+				read_unlock(&dev_base_lock);
+				goto dev_ok;
+			}
 		}
 		read_unlock(&dev_base_lock);
-
-		if (dnode->slave_dev) {
-			dev_hold(dnode->slave_dev);
-			DEBUG("wireless interface is %s\n",
-			      dnode->slave_dev->name);
-
-		} else {
-			DEBUG("No proper slave device found\n");
-			res = -1;
-			goto cleanup_netdev;
-		}
+	
+		DEBUG("No proper slave device found\n");
+		res = -1;
+		goto cleanup_netdev;
 	}
-
-	DEBUG("Setting %s as slave interface\n", dnode->slave_dev->name);
-
-	/* Reduce the MTU to allow DSR options of 100 bytes. If larger, drop or
-	 * implement fragmentation... ;-) Alternatively find a way to
-	 * dynamically reduce the data size of packets depending on the size of
-	 * the DSR header. */
-	dsr_dev->mtu = dnode->slave_dev->mtu - DSR_OPTS_MAX_SIZE;
-
-	dsr_packet_type.dev = dnode->slave_dev;
-	dev_add_pack(&dsr_packet_type);
-
+dev_ok:	
+	DEBUG("Slave device is %s\n", dnode->slave_ifname);	
+		
 	res = register_netdev(dsr_dev);
+
+	dsr_packet_type.func = NULL;
 
 	if (res < 0)
 		goto cleanup_netdev;
@@ -644,7 +643,7 @@ int dsr_dev_init(char *ifname)
 	if (res < 0)
 		goto cleanup_netdevice_notifier;
 
-	/* We must increment usage count since we hold a reference */
+	/* We increment usage count since we hold a reference */
 	dev_hold(dsr_dev);
 
 	return 0;
@@ -663,8 +662,6 @@ int dsr_dev_init(char *ifname)
 
 void __exit dsr_dev_cleanup(void)
 {
-	if (dsr_packet_type.func)
-		dev_remove_pack(&dsr_packet_type);
 
 	unregister_netdevice_notifier(&netdev_notifier);
 	unregister_inetaddr_notifier(&inetaddr_notifier);

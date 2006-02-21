@@ -203,26 +203,18 @@ void dsr_pkt_free(struct dsr_pkt *dp)
 
 	if (!dp)
 		return;
-#ifdef NS2
-/* 	if (dp->p) */
-#else
+#ifndef NS2
+	/* Must use dev_kfree_skb here to decrement usage count of the
+	   DSR device (dsr_dev). */
 	if (dp->skb)
-		kfree_skb(dp->skb);
+		dev_kfree_skb(dp->skb);
 #endif
-	/* fprintf(stderr, "Freeing options\n"); */
-
 	dsr_pkt_free_opts(dp);
-
-	/* fprintf(stderr, "Freeing source route\n"); */
 
 	if (dp->srt)
 		FREE(dp->srt);
 
-	/* fprintf(stderr, "Freeing DSR packet\n"); */
-
 	FREE(dp);
-
-/* 	fprintf(stderr, "Free done\n"); */
 
 	return;
 }
