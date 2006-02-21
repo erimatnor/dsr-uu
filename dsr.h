@@ -82,7 +82,7 @@ enum confval_type {
 	CONFVAL_TYPE_MAX,
 };
 
-#define MAINT_BUF_MAX_LEN 50
+#define MAINT_BUF_MAX_LEN 100
 #define RREQ_TBL_MAX_LEN 64	/* Should be enough */
 #define SEND_BUF_MAX_LEN 100
 #define RREQ_TLB_MAX_ID 16

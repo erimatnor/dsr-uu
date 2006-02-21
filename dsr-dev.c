@@ -151,7 +151,6 @@ static int dsr_dev_inetaddr_event(struct notifier_block *this,
 {
 	struct in_ifaddr *ifa = (struct in_ifaddr *)ptr;
 	struct in_device *indev;
-	struct in_addr addr, bc;
 
 	if (!ifa)
 		return NOTIFY_DONE;
@@ -167,24 +166,27 @@ static int dsr_dev_inetaddr_event(struct notifier_block *this,
 
 		if (indev->dev == dsr_dev) {
 			struct dsr_node *dnode;
+			struct in_addr addr, bc;
 
 			dnode = (struct dsr_node *)indev->dev->priv;
 
 			dsr_node_lock(dnode);
 			dnode->ifaddr.s_addr = ifa->ifa_address;
 			dnode->bcaddr.s_addr = ifa->ifa_broadcast;
-			dsr_node_unlock(dnode);
 
+			dnode->slave_indev = in_dev_get(dnode->slave_dev);
+
+                        /* Disable rp_filter and enable forwarding */
+                        if (dnode->slave_indev) {
+                                rp_filter = dnode->slave_indev->cnf.rp_filter;
+                                forwarding = dnode->slave_indev->cnf.forwarding;                                dnode->slave_indev->cnf.rp_filter = 0;
+                                dnode->slave_indev->cnf.forwarding = 1;
+                        }			
+			dsr_node_unlock(dnode);
+			
 			addr.s_addr = ifa->ifa_address;
 			bc.s_addr = ifa->ifa_broadcast;
-		
-		
-			/* Disable rp_filter and enable forwarding */
-			rp_filter = indev->cnf.rp_filter;
-			forwarding = indev->cnf.forwarding;
-			indev->cnf.rp_filter = 0;
-			indev->cnf.forwarding = 1;
-
+			
 			DEBUG("New ip=%s broadcast=%s\n",
 			      print_ip(addr), print_ip(bc));
 		}
@@ -265,10 +267,24 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 		break;
 	case NETDEV_DOWN:
 		DEBUG("Netdev down %s\n", dev->name);
-		if (dev == dsr_dev && dnode->slave_dev) {
-			if (ConfVal(PromiscOperation))
+		if (dev == dsr_dev) {
+			if (dnode->slave_dev && ConfVal(PromiscOperation))
 				dev_set_promiscuity(dnode->slave_dev, -1);
-		}
+
+			dsr_node_lock(dnode);
+                        if (dnode->slave_indev) {
+                                dnode->slave_indev->cnf.rp_filter = rp_filter;
+                                dnode->slave_indev->cnf.forwarding = forwarding;                                in_dev_put(dnode->slave_indev);
+                                dnode->slave_indev = NULL;
+                        }
+                        dsr_node_unlock(dnode);
+		} else if (dev == dnode->slave_dev && dnode->slave_indev) {
+			dsr_node_lock(dnode);
+			dnode->slave_indev->cnf.rp_filter = rp_filter;
+			dnode->slave_indev->cnf.forwarding = forwarding;                                in_dev_put(dnode->slave_indev);
+			dnode->slave_indev = NULL;
+                        dsr_node_unlock(dnode);
+		} 
 		break;
 	default:
 		break;
@@ -321,12 +337,11 @@ static void dsr_dev_uninit(struct net_device *dev)
 
 	dsr_node_lock(dnode);
 	
-	if (dnode->slave_dev) {
-		DEBUG("Doing dev_put on slave_dev\n");
+	if (dnode->slave_dev)
 		dev_put(dnode->slave_dev);
-	}
-/* 	if (dnode->slave_indev) */
-/* 		in_dev_put(dnode->slave_indev); */
+
+	if (dnode->slave_indev)
+		in_dev_put(dnode->slave_indev);
 
 	dsr_node_unlock(dnode);
 
