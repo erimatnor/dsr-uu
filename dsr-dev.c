@@ -527,12 +527,16 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 	      print_ip(dst));
 		
 	/* TODO: Should consider using ip_finish_output instead */
-	dev_queue_xmit(skb);
+	res = dev_queue_xmit(skb);
+
+	if (res < 0)
+		goto out_err;
 
 	dsr_node_lock(dsr_node);
 	dsr_node->stats.tx_packets++;
 	dsr_node->stats.tx_bytes += len;
 	dsr_node_unlock(dsr_node);
+
 out_err:
 	dsr_pkt_free(dp);
 
