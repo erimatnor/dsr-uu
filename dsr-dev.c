@@ -484,7 +484,9 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 {
 	struct sk_buff *skb;
 	struct net_device *slave_dev;
+	struct in_addr dst;
 	int res = -1;
+	int len = 0;	
 
 	if (!dp)
 		return -1;
@@ -493,6 +495,7 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 		maint_buf_add(dp);
 
 	dsr_node_lock(dsr_node);
+
 	if (dsr_node->slave_dev)
 		slave_dev = dsr_node->slave_dev;
 	else {
@@ -515,24 +518,22 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 		goto out_err;
 	}
 	
-	/* TODO: Should consider using ip_finish_output instead */
-	res = dev_queue_xmit(skb);
-
-	if (res >= 0) {
-		struct in_addr dst;
-		dst.s_addr = skb->nh.iph->daddr;
+	len = skb->len;
+	dst.s_addr = skb->nh.iph->daddr;
+	
+	DEBUG("Sending %d bytes data_len=%d %s : %s\n",
+	      len, skb->data_len,
+	      print_eth(skb->mac.raw),
+	      print_ip(dst));
 		
-		DEBUG("Sent %d bytes data_len=%d %s : %s\n",
-		      skb->len, skb->data_len, 
-		      print_eth(skb->mac.raw), 
-		      print_ip(dst));
+	/* TODO: Should consider using ip_finish_output instead */
+	dev_queue_xmit(skb);
 
-		dsr_node_lock(dsr_node);
-		dsr_node->stats.tx_packets++;
-		dsr_node->stats.tx_bytes += skb->len;
-		dsr_node_unlock(dsr_node);
-	}
-      out_err:
+	dsr_node_lock(dsr_node);
+	dsr_node->stats.tx_packets++;
+	dsr_node->stats.tx_bytes += len;
+	dsr_node_unlock(dsr_node);
+out_err:
 	dsr_pkt_free(dp);
 
 	return res;

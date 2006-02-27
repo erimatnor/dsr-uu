@@ -410,7 +410,7 @@ void DSRUU::recv(Packet* p, Handler*)
 	default:
 		if (dp->src.s_addr == myaddr_.s_addr) {
 			dp->payload_len += IP_HDR_LEN;
-			
+			DEBUG("Local packet without DSR header\n");
 			dsr_start_xmit(dp);
 		} else {
 			// This shouldn't really happen ?
