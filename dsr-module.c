@@ -133,7 +133,7 @@ int dsr_ip_recv(struct sk_buff *skb)
 
 	if (!dp) {
 		DEBUG("Could not allocate DSR packet\n");
-		kfree_skb(skb);
+		dev_kfree_skb_any(skb);
 		return 0;
 	}
 
@@ -162,7 +162,7 @@ static void dsr_ip_recv_err(struct sk_buff *skb, u32 info)
 {
 	DEBUG("received error, info=%u\n", info);
 
-	kfree_skb(skb);
+	dev_kfree_skb_any(skb);
 }
 
 static int dsr_config_proc_read(char *buffer, char **start, 

@@ -174,7 +174,10 @@ static struct maint_entry *maint_entry_create(struct dsr_pkt *dp,
 #else
 	m->dp = dsr_pkt_alloc(skb_copy(dp->skb, GFP_ATOMIC));
 #endif
-
+	if (!m->dp) {
+		FREE(m);
+		return NULL;
+	}
 	m->dp->nxt_hop = dp->nxt_hop;
 
 	return m;
@@ -377,13 +380,11 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 			while ((qp = ifq_->prq_get_nexthop((nsaddr_t)m->nxt_hop.s_addr))) {
 				Packet::free(qp);
 			}
-
 #endif			
 			dsr_rerr_send(m->dp, m->nxt_hop);
 
 			/* Salvage timed out packet */
 			if (maint_buf_salvage(m->dp) < 0) {
-				
 #ifdef NS2
 				if (m->dp->p) 
 					drop(m->dp->p, DROP_RTR_SALVAGE);
@@ -523,6 +524,7 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 		
 		if (tbl_add_tail(&maint_buf, &m->l) < 0) {
 			DEBUG("Buffer full - not buffering!\n");
+			dsr_pkt_free(m->dp);
 			FREE(m);
 			return -1;
 		}

@@ -204,10 +204,8 @@ void dsr_pkt_free(struct dsr_pkt *dp)
 	if (!dp)
 		return;
 #ifndef NS2
-	/* Must use dev_kfree_skb here to decrement usage count of the
-	   DSR device (dsr_dev). */
 	if (dp->skb)
-		dev_kfree_skb(dp->skb);
+		dev_kfree_skb_any(dp->skb);
 #endif
 	dsr_pkt_free_opts(dp);
 

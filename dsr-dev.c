@@ -407,7 +407,7 @@ static int dsr_dev_llrecv(struct sk_buff *skb,
 	if (skb->pkt_type == PACKET_OTHERHOST)
 		dsr_ip_recv(skb);
 	else
-		kfree_skb(skb);
+		dev_kfree_skb_any(skb);
 
 	return 0;
 }
@@ -514,7 +514,7 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 	/* Create hardware header */
 	if (dsr_hw_header_create(dp, skb) < 0) {
 		DEBUG("Could not create hardware header\n");
-		kfree_skb(skb);
+		dev_kfree_skb_any(skb);
 		goto out_err;
 	}
 	
@@ -553,7 +553,7 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	atomic_inc(&num_pkts);
 #endif
 	if (dnode->slave_dev == NULL) {
-		dev_kfree_skb(skb);
+		dev_kfree_skb_any(skb);
 		DEBUG("Packet dropped\n");
 		return 0;
 	}
@@ -570,7 +570,7 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		dp = dsr_pkt_alloc(skb);
 		
 		if (!dp) {
-			dev_kfree_skb(skb);
+			dev_kfree_skb_any(skb);
 			return 0;
 		}			
 
@@ -578,7 +578,7 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		break;
 	default:
 		DEBUG("Unknown packet type, dropping...\n");
-		dev_kfree_skb(skb);
+		dev_kfree_skb_any(skb);
 	}
 	return 0;
 }
