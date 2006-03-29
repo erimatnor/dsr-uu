@@ -350,10 +350,10 @@ void DSRUU::ns_xmit(struct dsr_pkt *dp)
     
 	/* Set packet fields depending on packet type */
 	if (dp->flags & PKT_XMIT_JITTER) {
-		jitter = ConfVal(BroadCastJitter);
 		/* Broadcast packet */
-		jitter = Random::uniform(jitter / 1000);
-		//DEBUG("xmit jitter=%f\n", jitter);
+		jitter = Random::uniform() * ConfVal(BroadCastJitter) / 1000;
+	
+		DEBUG("xmit jitter=%f s\n", jitter);
 	}		
 
 	if (!ConfVal(UseNetworkLayerAck)) {

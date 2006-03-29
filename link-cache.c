@@ -15,7 +15,7 @@
 #include "ns-agent.h"
 #endif
 
-//#include "debug.h"
+/* #include "debug.h" */
 #include "dsr-rtc.h"
 #include "dsr-srt.h"
 #include "tbl.h"
@@ -37,6 +37,11 @@ static struct lc_graph LC;
 #define LC_NODES_MAX 500
 #define LC_LINKS_MAX 100	/* TODO: Max links should be calculated from Max
 				 * nodes */
+
+#ifndef UINT_MAX
+#define UINT_MAX 4294967295U   /* Max for 32-bit integer */
+#endif
+
 #define LC_COST_INF UINT_MAX
 #define LC_HOPS_INF UINT_MAX
 

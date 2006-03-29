@@ -41,6 +41,8 @@
         else if ((tv) > (tvmax)) \
             (tv) = (tvmax); \
 }
+#define MAX(a,b) ( a > b ? a : b)
+#define K 4
 
 #define DSR_REXMTVAL(val) \
         (((val) >> RTT_SHIFT) + (val))
@@ -53,13 +55,14 @@ static TBL(neigh_tbl, NEIGH_TBL_MAX_LEN);
 static DSRUUTimer neigh_tbl_timer;
 #endif
 
+
 struct neighbor {
 	list_t l;
 	struct in_addr addr;
 	struct sockaddr hw_addr;
 	unsigned short id;
 	struct timeval last_ack_req;
-	usecs_t t_srtt, t_rxtcur, t_rttmin, t_rttvar, jitter;	/* RTT in usec */
+	usecs_t t_srtt, rto, t_rxtcur, t_rttmin, t_rttvar, jitter;	/* RTT in usec */
 };
 
 struct neighbor_query {
@@ -82,6 +85,9 @@ static inline int crit_addr(void *pos, void *query)
 			
 			/* Return current RTO */
 			q->info->rto = n->t_rxtcur * 1000 / PR_SLOWHZ;
+
+		/* 	if (q->info->rto < 1000000)  */
+/* 				q->info->rto = 1000000; */
 		}
 		return 1;
 	}
@@ -119,11 +125,11 @@ static inline int rto_calc(void *pos, void *query)
 	
 	if (n->addr.s_addr == q->addr->s_addr) {
 		struct timeval now;
-		usecs_t rtt = q->info->rtt / 1000 * PR_SLOWHZ;
+		usecs_t rtt = q->info->rtt;
 		int delta;
 		
 		gettime(&now);
-		
+	
 		if (n->t_srtt != 0) {
 			delta = rtt - 1 - (n->t_srtt >> RTT_SHIFT);
 			
@@ -281,7 +287,7 @@ static int neigh_tbl_print(char *buf)
 
 	len +=
 	    sprintf(buf, "# %-15s %-17s %-10s %-6s\n", "Addr", "HwAddr",
-		    "RTO (msec)", "Id" /*, "AckRxTime","AckTxTime" */ );
+		    "RTO (usec)", "Id" /*, "AckRxTime","AckTxTime" */ );
 
 	list_for_each(pos, &neigh_tbl.head) {
 		struct neighbor *neigh = (struct neighbor *)pos;
