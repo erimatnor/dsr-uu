@@ -22,7 +22,8 @@
 #include "dsr-srt.h"
 #include "dsr-ack.h"
 
-struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, int len, unsigned int protocol)
+struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, unsigned int len, 
+				    unsigned int protocol)
 {
 	struct dsr_opt_hdr *opt_hdr;
 

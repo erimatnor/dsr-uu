@@ -89,7 +89,7 @@ struct dsr_pad1_opt {
 #define DSR_GET_NEXT_OPT(dopt) ((struct dsr_opt *)((char *)dopt + dopt->length + 2))
 #define DSR_LAST_OPT(dp, opt) ((dp->dh.raw + ntohs(dp->dh.opth->p_len) + 4) == ((char *)opt + opt->length + 2))
 
-struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, int len, unsigned int protocol);
+struct dsr_opt_hdr *dsr_opt_hdr_add(char *buf, unsigned int len, unsigned int protocol);
 struct dsr_opt *dsr_opt_find_opt(struct dsr_pkt *dp, int type);
 int dsr_opt_parse(struct dsr_pkt *dp);
 

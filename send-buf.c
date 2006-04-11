@@ -33,6 +33,7 @@
 
 TBL(send_buf, SEND_BUF_MAX_LEN);
 static DSRUUTimer send_buf_timer;
+static int send_buf_print(struct tbl *t, char *buffer);
 #endif
 
 struct send_buf_entry {
@@ -42,7 +43,6 @@ struct send_buf_entry {
 	xmit_fct_t okfn;
 };
 
-static int send_buf_print(struct tbl *t, char *buffer);
 
 static inline int crit_addr(void *pos, void *addr)
 {
@@ -250,6 +250,7 @@ static inline int send_buf_flush(struct tbl *t)
 	return pkts;
 }
 
+#ifdef __KERNEL__
 static int send_buf_print(struct tbl *t, char *buffer)
 {
 	list_t *p;
@@ -280,7 +281,6 @@ static int send_buf_print(struct tbl *t, char *buffer)
 	return len;
 }
 
-#ifdef __KERNEL__
 static int
 send_buf_get_info(char *buffer, char **start, off_t offset, int length)
 {

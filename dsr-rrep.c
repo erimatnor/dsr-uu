@@ -135,6 +135,8 @@ int NSCLASS grat_rrep_tbl_find(struct in_addr src, struct in_addr prev_hop)
 	return 0;
 }
 
+#ifdef __KERNEL__
+
 static int grat_rrep_tbl_print(struct tbl *t, char *buf)
 {
 	list_t *pos;
@@ -160,8 +162,6 @@ static int grat_rrep_tbl_print(struct tbl *t, char *buf)
 
 	return len;
 }
-
-#ifdef __KERNEL__
 
 static int
 grat_rrep_tbl_proc_info(char *buffer, char **start, off_t offset, int length)

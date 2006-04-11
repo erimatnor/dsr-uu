@@ -52,7 +52,9 @@ struct maint_buf_query {
 	usecs_t rtt;
 };
 
+#ifdef __KERNEL__
 static int maint_buf_print(struct tbl *t, char *buffer);
+#endif
 
 /* Criteria function for deleting packets from buffer based on next hop and
  * id */
@@ -617,6 +619,7 @@ int NSCLASS maint_buf_del_addr(struct in_addr nxt_hop)
 	return n;
 }
 
+#ifdef __KERNEL__
 static int maint_buf_print(struct tbl *t, char *buffer)
 {
 	list_t *p;
@@ -652,7 +655,6 @@ static int maint_buf_print(struct tbl *t, char *buffer)
 	return len;
 }
 
-#ifdef __KERNEL__
 static int
 maint_buf_get_info(char *buffer, char **start, off_t offset, int length)
 {

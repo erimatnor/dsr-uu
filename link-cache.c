@@ -76,7 +76,9 @@ struct cheapest_node {
 	struct lc_node *n;
 };
 
+#ifdef __KERNEL__
 static int lc_print(struct lc_graph *LC, char *buf);
+#endif
 
 static inline void __lc_link_del(struct lc_graph *lc, struct lc_link *link)
 {
@@ -592,6 +594,8 @@ void NSCLASS lc_flush(void)
 
 	DSR_WRITE_UNLOCK(&LC.lock);
 }
+
+#ifdef __KERNEL__
 static char *print_hops(unsigned int hops)
 {
 	static char c[18];
@@ -659,7 +663,6 @@ static int lc_print(struct lc_graph *LC, char *buf)
 
 }
 
-#ifdef __KERNEL__
 
 static int lc_proc_info(char *buffer, char **start, off_t offset, int length)
 {

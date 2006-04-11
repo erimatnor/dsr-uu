@@ -52,7 +52,7 @@ struct rreq_tbl_entry {
 	struct timeval tx_time;
 	struct timeval last_used;
 	usecs_t timeout;
-	int num_rexmts;
+	unsigned int num_rexmts;
 	struct tbl rreq_id_tbl;
 };
 
@@ -100,7 +100,7 @@ void NSCLASS rreq_tbl_set_max_len(unsigned int max_len)
 {
 	rreq_tbl.max_len = max_len;
 }
-
+#ifdef __KERNEL__
 static int rreq_tbl_print(struct tbl *t, char *buf)
 {
 	list_t *pos1, *pos2;
@@ -148,6 +148,7 @@ static int rreq_tbl_print(struct tbl *t, char *buf)
 	return len;
 
 }
+#endif /* __KERNEL__ */
 
 void NSCLASS rreq_tbl_timeout(unsigned long data)
 {
@@ -415,7 +416,7 @@ int NSCLASS dsr_rreq_duplicate(struct in_addr initiator, struct in_addr target,
 	return in_tbl(&rreq_tbl, &d, crit_duplicate);
 }
 
-static struct dsr_rreq_opt *dsr_rreq_opt_add(char *buf, int len,
+static struct dsr_rreq_opt *dsr_rreq_opt_add(char *buf, unsigned int len,
 					     struct in_addr target,
 					     unsigned int seqno)
 {
