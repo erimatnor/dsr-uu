@@ -419,8 +419,8 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 	      print_ip(dp->prv_hop), print_ip(next_hop_intended));
 
 	neigh_tbl_add(dp->prv_hop, dp->mac.ethh);
-
-	lc_link_add(my_addr(), dp->prv_hop,
+	
+	lc_link_add(myaddr, dp->prv_hop,
 		    ConfValToUsecs(RouteCacheTimeout), 0, 1);
 
 	dsr_rtc_add(dp->srt, ConfValToUsecs(RouteCacheTimeout), 0);
@@ -428,7 +428,8 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 	/* Automatic route shortening - Check if this node is the
 	 * intended next hop. If not, is it part of the remaining
 	 * source route? */
-	if (next_hop_intended.s_addr != myaddr.s_addr &&
+	if (get_confval(AutomaticRouteShortening) && 
+	    next_hop_intended.s_addr != myaddr.s_addr &&
 	    dsr_srt_find_addr(dp->srt, myaddr, srt_opt->sleft) &&
 	    !grat_rrep_tbl_find(dp->src, dp->prv_hop)) {
 		struct dsr_srt *srt, *srt_cut;

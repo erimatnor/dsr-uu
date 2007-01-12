@@ -430,7 +430,7 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 	m->expires = m->tx_time;
 	timeval_add_usecs(&m->expires, m->rto);
 
-	/* Send new ACK REQ */
+	/* Send new ACK REQ for this buffered packet */
 	if (m->ack_req_sent)
 		dsr_ack_req_send(m->nxt_hop, m->id);
 

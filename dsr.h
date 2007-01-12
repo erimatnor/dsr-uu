@@ -48,6 +48,10 @@ enum confval {
 #ifdef DEBUG
 	PrintDebug,
 #endif
+	AutomaticRouteShortening,
+	RoundTripTimeout, /* Determines the Round trip timeout (RTO)
+			   * used for DSR acks. If set to 0, dynamic
+			   * measurement is used. */
 	FlushLinkCache,
 	PromiscOperation,
 	BroadCastJitter,
@@ -94,29 +98,31 @@ static struct {
 } confvals_def[CONFVAL_MAX] = {
 #ifdef DEBUG
 	{
-	"PrintDebug", 0, BINARY},
+		"PrintDebug", 0, BINARY},
 #endif
 	{
-	"FlushLinkCache", 1, COMMAND}, {
-	"PromiscOperation", 1, BINARY}, {
-	"BroadCastJitter", 20, MILLISECONDS}, {
-	"RouteCacheTimeout", 300, SECONDS}, {
-	"SendBufferTimeout", 30, SECONDS}, {
-	"SendBufferSize", SEND_BUF_MAX_LEN, QUANTA}, {
-	"RequestTableSize", RREQ_TBL_MAX_LEN, QUANTA}, {
-	"RequestTableIds", RREQ_TLB_MAX_ID, QUANTA}, {
-	"MaxRequestRexmt", 16, QUANTA}, {
-	"MaxRequestPeriod", 10, SECONDS}, {
-	"RequestPeriod", 500, MILLISECONDS}, {
-	"NonpropRequestTimeout", 30, MILLISECONDS}, {
-	"RexmtBufferSize", MAINT_BUF_MAX_LEN}, {
-	"MaintHoldoffTime", 250, MILLISECONDS}, {
-	"MaxMaintRexmt", 2, QUANTA}, {
-	"UseNetworkLayerAck", 1, BINARY}, {
-	"TryPassiveAcks", 1, QUANTA}, {
-	"PassiveAckTimeout", 100, MILLISECONDS}, {
-	"GratReplyHoldOff", 1, SECONDS}, {
-	"MAX_SALVAGE_COUNT", 15, QUANTA}
+		"AutomaticRouteShortening", 1, BINARY}, {
+		"RoundTripTimeout", 2000, MILLISECONDS}, {
+		"FlushLinkCache", 1, COMMAND}, {
+		"PromiscOperation", 1, BINARY}, {
+		"BroadCastJitter", 20, MILLISECONDS}, {
+		"RouteCacheTimeout", 300, SECONDS}, {
+		"SendBufferTimeout", 30, SECONDS}, {
+		"SendBufferSize", SEND_BUF_MAX_LEN, QUANTA}, {
+		"RequestTableSize", RREQ_TBL_MAX_LEN, QUANTA}, {
+		"RequestTableIds", RREQ_TLB_MAX_ID, QUANTA}, {
+		"MaxRequestRexmt", 16, QUANTA}, {
+		"MaxRequestPeriod", 10, SECONDS}, {
+		"RequestPeriod", 500, MILLISECONDS}, {
+		"NonpropRequestTimeout", 30, MILLISECONDS}, {
+		"RexmtBufferSize", MAINT_BUF_MAX_LEN}, {
+		"MaintHoldoffTime", 250, MILLISECONDS}, {
+		"MaxMaintRexmt", 2, QUANTA}, {
+		"UseNetworkLayerAck", 1, BINARY}, {
+		"TryPassiveAcks", 1, QUANTA}, {
+		"PassiveAckTimeout", 100, MILLISECONDS}, {
+		"GratReplyHoldOff", 1, SECONDS}, {
+		"MAX_SALVAGE_COUNT", 15, QUANTA}
 };
 
 struct dsr_node {

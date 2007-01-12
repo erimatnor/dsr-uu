@@ -74,6 +74,7 @@ static inline int crit_addr(void *pos, void *query)
 {
 	struct neighbor_query *q = (struct neighbor_query *)query;
 	struct neighbor *n = (struct neighbor *)pos;
+	usecs_t rto;
 
 	if (n->addr.s_addr == q->addr->s_addr) {
 		if (q->info) {
@@ -83,11 +84,15 @@ static inline int crit_addr(void *pos, void *query)
 			memcpy(&q->info->hw_addr, &n->hw_addr,
 			       sizeof(struct sockaddr));
 			
+			rto = ConfValToUsecs(ConfVal(RoundTripTimeout));
+			
 			/* Return current RTO */
-			q->info->rto = n->t_rxtcur * 1000 / PR_SLOWHZ;
-
-		/* 	if (q->info->rto < 1000000)  */
-/* 				q->info->rto = 1000000; */
+			if (rto == 0) {
+				q->info->rto = n->t_rxtcur * 1000 / PR_SLOWHZ;
+			} else {
+				/* Fixed RTO of 2 secs */
+				q->info->rto = rto;
+			}
 		}
 		return 1;
 	}
@@ -129,7 +134,9 @@ static inline int rto_calc(void *pos, void *query)
 		int delta;
 		
 		gettime(&now);
-	
+		
+		/* Should verify for sure that this does the right
+		 * thing... */
 		if (n->t_srtt != 0) {
 			delta = rtt - 1 - (n->t_srtt >> RTT_SHIFT);
 			

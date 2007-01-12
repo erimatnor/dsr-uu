@@ -597,6 +597,7 @@ static struct notifier_block inetaddr_notifier = {
 	.notifier_call = dsr_dev_inetaddr_event,
 };
 
+
 int dsr_dev_init(char *ifname)
 {
 	int res = 0;

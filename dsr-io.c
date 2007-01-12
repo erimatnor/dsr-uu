@@ -30,7 +30,17 @@ int NSCLASS dsr_recv(struct dsr_pkt *dp)
 {
 	int i = 0, action;
 	int mask = DSR_PKT_NONE;
-
+	struct in_addr myaddr = my_addr();
+	
+	/* Ignore packets that are originated by this node to avoid
+	 * poluting the link cache with old information that we keep
+	 * on genereating. */
+	if (dp->flags & PKT_PROMISC_RECV &&
+	    memcmp(&myaddr, &dp->src, sizeof(struct in_addr)) == 0) {
+		dsr_pkt_free(dp);
+		return 0;
+	}
+	
 	/* Process DSR Options */
 	action = dsr_opt_recv(dp);
 

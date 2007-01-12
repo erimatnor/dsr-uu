@@ -1,6 +1,5 @@
-DSR-UU is a DSR implementation that runs in Linux (kernel 2.4/2.6) and
-in the ns-2 network simulator.
-
+DSR-UU is a DSR implementation that runs in Linux 2.6 (2.4 support
+obsolete) and in the ns-2 network simulator.
 
 DISCLAIMER
 ==========
@@ -9,6 +8,9 @@ This is experimental software. It will probably crash your computer at
 some point. Use at your own risk. Bug reports are welcome. Send to
 erikn@it.uu.se.
 
+Kernel 2.4.x support has been obsoleted as very few systems run a 2.4
+kernel any more. The code may still compile and work on these kernels,
+but there will be no conformance testing for new releases.
 
 General Notes
 =============

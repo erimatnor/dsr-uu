@@ -13,3 +13,6 @@
 	NETDEV_REGISTER event for that device.
 	* Non IP packets are now freed in dsr_dev_start_xmit() and the
 	dsr_dev usage count should be correct when unregistering the device.
+0.3:
+	* Added AutomaticRouteShortening as a runtim configurable option.
+	* Added fixed RTO of 2s and ability to switch to dynamic RTO.
