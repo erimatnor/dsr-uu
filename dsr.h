@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
-#include <endian.h>
+//#include <endian.h>
 #include <netinet/in.h>
 #endif				/* __KERNEL__ */
 
@@ -152,8 +152,8 @@ struct dsr_node {
 
 #ifdef __KERNEL__
 
-#define ConfVal(cv) (get_confval(cv))
-#define ConfValToUsecs(cv) (confval_to_usecs(cv))
+#define ConfVal(cv) get_confval(cv)
+#define ConfValToUsecs(cv) confval_to_usecs(cv)
 
 extern struct dsr_node *dsr_node;
 

@@ -48,7 +48,7 @@ struct dsr_opt_hdr {
 	}
 
 	int size() {
-		return ntohs(p_len) + sizeof(struct dsr_opt_hdr);
+		return p_len + sizeof(struct dsr_opt_hdr);
 	}
 #endif				/* NS2 */
 	struct dsr_opt option[0];

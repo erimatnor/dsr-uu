@@ -115,6 +115,7 @@ struct dsr_srt *dsr_srt_new_rev(struct dsr_srt *srt)
 	return srt_rev;
 }
 
+/* Split source route add specified address. */
 struct dsr_srt *dsr_srt_new_split(struct dsr_srt *srt, struct in_addr addr)
 {
 	struct dsr_srt *srt_split;
@@ -132,8 +133,9 @@ struct dsr_srt *dsr_srt_new_split(struct dsr_srt *srt, struct in_addr addr)
 		if (addr.s_addr == srt->addrs[i].s_addr)
 			goto split;
 	}
-	/* Nothing to split */
+	/* Split address not found - Nothing to split */
 	return NULL;
+
       split:
 	srt_split = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) +
 					     (i * sizeof(struct in_addr)),
@@ -420,11 +422,36 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 
 	neigh_tbl_add(dp->prv_hop, dp->mac.ethh);
 	
-	lc_link_add(myaddr, dp->prv_hop,
-		    ConfValToUsecs(RouteCacheTimeout), 0, 1);
+	/* Do not add a link based on a packet that was overheard */
+	if (!(dp->flags & PKT_PROMISC_RECV))
+		lc_link_add(myaddr, dp->prv_hop,
+			    ConfValToUsecs(RouteCacheTimeout), 0, 1);
 
-	dsr_rtc_add(dp->srt, ConfValToUsecs(RouteCacheTimeout), 0);
+	/* Only add the links that this message has already traversed
+	 * (i.e., those that are certain to be bidirectional). This is
+	 * not in the RFC. */
+	if (dp->dst.s_addr == myaddr.s_addr)
+		dsr_rtc_add(dp->srt, ConfValToUsecs(RouteCacheTimeout), 0);
+	else {
+		/* Split the source route at us or at the previous hop
+		 * if the message was overheard. */
+		struct dsr_srt *srt_split = NULL;
 
+		/* If the RREP was promiscuously overheard, we can
+		 * only assume that the hops prior to the one that we
+		 * overheard it from are functional. Otherwise, we
+		 * count all hops prior to ourselves as functional. */
+		if (dp->flags & PKT_PROMISC_RECV)
+			srt_split = dsr_srt_new_split(dp->srt, dp->prv_hop);
+		else 
+			srt_split = dsr_srt_new_split(dp->srt, myaddr);
+		
+		if (srt_split) {			
+			DEBUG("Adding split SRT to cache: %s\n", print_srt(srt_split));
+			dsr_rtc_add(srt_split, ConfValToUsecs(RouteCacheTimeout), 0);			
+			FREE(srt_split);
+		}
+	}
 	/* Automatic route shortening - Check if this node is the
 	 * intended next hop. If not, is it part of the remaining
 	 * source route? */

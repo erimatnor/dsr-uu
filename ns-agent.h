@@ -50,8 +50,8 @@ class DSRUU;
 #include "link-cache.h"
 #undef NO_DECLS
 
-typedef dsr_opt_hdr hdr_dsr;
-#define HDR_DSRUU(p) ((hdr_dsr *)hdr_dsr::access(p))
+typedef dsr_opt_hdr hdr_dsruu;
+#define HDR_DSRUU(p) ((hdr_dsruu *)hdr_dsruu::access(p))
 
 #define init_timer(timer)
 #define timer_pending(timer) ((timer)->status() == TIMER_PENDING)
@@ -62,6 +62,10 @@ typedef dsr_opt_hdr hdr_dsr;
 #define DELIVER(pkt) ns_deliver(pkt)
 #define __init
 #define __exit
+#undef ntohl
+#undef htonl
+#undef htons
+#undef ntohs
 #define ntohl(x) x
 #define htonl(x) x
 #define htons(x) x

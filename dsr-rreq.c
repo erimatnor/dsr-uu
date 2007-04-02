@@ -453,7 +453,6 @@ int NSCLASS dsr_rreq_send(struct in_addr target, int ttl)
 
 	buf = dsr_pkt_alloc_opts(dp, len);
 
-
 	if (!buf)
 		goto out_err;
 
@@ -465,12 +464,12 @@ int NSCLASS dsr_rreq_send(struct in_addr target, int ttl)
 		goto out_err;
 
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, DSR_NO_NEXT_HDR_TYPE);
-
+	
 	if (!dp->dh.opth) {
 		DEBUG("Could not create DSR opt header\n");
 		goto out_err;
 	}
-
+	
 	buf += DSR_OPT_HDR_LEN;
 	len -= DSR_OPT_HDR_LEN;
 
@@ -506,6 +505,7 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 	int action = DSR_PKT_NONE;
 	int i, n;
 
+	DEBUG("DSR RREQ\n");
 	if (!dp || !rreq_opt || dp->flags & PKT_PROMISC_RECV)
 		return DSR_PKT_DROP;
 	

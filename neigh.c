@@ -41,7 +41,7 @@
         else if ((tv) > (tvmax)) \
             (tv) = (tvmax); \
 }
-#define MAX(a,b) ( a > b ? a : b)
+#define VALMAX(a,b) ( a > b ? a : b)
 #define K 4
 
 #define DSR_REXMTVAL(val) \
@@ -84,13 +84,13 @@ static inline int crit_addr(void *pos, void *query)
 			memcpy(&q->info->hw_addr, &n->hw_addr,
 			       sizeof(struct sockaddr));
 			
-			rto = ConfValToUsecs(ConfVal(RoundTripTimeout));
-			
+			rto = ConfValToUsecs(RoundTripTimeout);
+		
 			/* Return current RTO */
 			if (rto == 0) {
 				q->info->rto = n->t_rxtcur * 1000 / PR_SLOWHZ;
 			} else {
-				/* Fixed RTO of 2 secs */
+				/* Fixed RTO (defaults to 2 secs) */
 				q->info->rto = rto;
 			}
 		}
@@ -307,7 +307,6 @@ static int neigh_tbl_print(char *buf)
 
 	DSR_READ_UNLOCK(&neigh_tbl.lock);
 	return len;
-
 }
 
 static int

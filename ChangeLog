@@ -14,5 +14,10 @@
 	* Non IP packets are now freed in dsr_dev_start_xmit() and the
 	dsr_dev usage count should be correct when unregistering the device.
 0.3:
-	* Added AutomaticRouteShortening as a runtim configurable option.
-	* Added fixed RTO of 2s and ability to switch to dynamic RTO.
+	* Added AutomaticRouteShortening as a runtime configurable option.
+	* Added fixed RTO of 2s and ability to switch to dynamic RTO.  
+	* Only cache links that are from hops in the source route over
+	which the packet containing the source route has actually been
+	sent. (RREPs and source route options).
+	* Compile against kernel 2.6.20
+	* Compile against ns-2.31

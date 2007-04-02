@@ -10,14 +10,14 @@
 #include <tools/random.h>
 #include "ns-agent.h"
 
-int hdr_dsr::offset_;
+int hdr_dsruu::offset_;
 
 static class DSRUUHeaderClass:public PacketHeaderClass {
 	
 public:
 	DSRUUHeaderClass():PacketHeaderClass("PacketHeader/DSRUU",
 					     DSR_OPTS_MAX_SIZE) {
-		bind_offset(&hdr_dsr::offset_);
+		bind_offset(&hdr_dsruu::offset_);
 	}
 } class_rtProtoDSRUU_hdr;
 
@@ -335,6 +335,7 @@ void DSRUU::ns_xmit(struct dsr_pkt *dp)
 		goto out;
 	}	
 
+	printf("p=%u\n", (unsigned int)p);
 	iph = HDR_IP(p);
 	cmh = HDR_CMN(p);
     
