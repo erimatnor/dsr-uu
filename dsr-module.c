@@ -5,8 +5,10 @@
  *
  * Author: Erik Nordström, <erikn@it.uu.se>
  */
-#include <linux/config.h>
 #include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+#include <linux/config.h>
+#endif
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/kernel.h>

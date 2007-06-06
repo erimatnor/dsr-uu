@@ -430,6 +430,7 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 	/* Only add the links that this message has already traversed
 	 * (i.e., those that are certain to be bidirectional). This is
 	 * not in the RFC. */
+/* 	dsr_rtc_add(dp->srt, ConfValToUsecs(RouteCacheTimeout), 0); */
 	if (dp->dst.s_addr == myaddr.s_addr)
 		dsr_rtc_add(dp->srt, ConfValToUsecs(RouteCacheTimeout), 0);
 	else {
@@ -443,12 +444,12 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 		 * count all hops prior to ourselves as functional. */
 		if (dp->flags & PKT_PROMISC_RECV)
 			srt_split = dsr_srt_new_split(dp->srt, dp->prv_hop);
-		else 
+		else
 			srt_split = dsr_srt_new_split(dp->srt, myaddr);
 		
-		if (srt_split) {			
+		if (srt_split) {
 			DEBUG("Adding split SRT to cache: %s\n", print_srt(srt_split));
-			dsr_rtc_add(srt_split, ConfValToUsecs(RouteCacheTimeout), 0);			
+			dsr_rtc_add(srt_split, ConfValToUsecs(RouteCacheTimeout), 0);
 			FREE(srt_split);
 		}
 	}

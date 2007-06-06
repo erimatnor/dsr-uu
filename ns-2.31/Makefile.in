@@ -150,6 +150,10 @@ NS_TCL_LIB_STL = tcl/lib/ns-diffusion.tcl \
 	tcl/packmime/packmime.tcl
 
 
+DSRUU_DIR = dsr-uu
+DSRUU_OBJ = dsr-uu.o
+DSRUU = $(DSRUU_DIR)/$(DSRUU_OBJ)
+
 # WIN32: uncomment the following line to include specific make for VC++
 # !include <conf/makefile.win>
 
@@ -307,11 +311,8 @@ OBJ_CC = \
 	wpan/p802_15_4nam.o wpan/p802_15_4phy.o \
 	wpan/p802_15_4sscs.o wpan/p802_15_4timer.o \
 	wpan/p802_15_4trace.o wpan/p802_15_4transac.o \
+	$(DSRUU_DIR)/$(DSRUU_OBJ) \
 	@V_STLOBJ@
-
-DSRUU_DIR = dsr-uu
-DSRUU_OBJ = dsr-uu.o
-DSRUU = $(DSRUU_DIR)/$(DSRUU_OBJ)
 
 # don't allow comments to follow continuation lines
 
@@ -371,9 +372,9 @@ all: $(NS) $(BUILD_NSE) all-recursive
 all-recursive:
 	for i in $(SUBDIRS); do ( cd $$i; $(MAKE) all; ) done
 
-$(NS): $(OBJ) $(DSRUU) common/tclAppInit.o Makefile
+$(NS): $(OBJ) common/tclAppInit.o Makefile
 	$(LINK) $(LDFLAGS) $(LDOUT)$@ \
-		common/tclAppInit.o $(OBJ) $(PWD)/$(DSRUU) $(LIB)
+		common/tclAppInit.o $(OBJ) $(LIB)
 
 $(DSRUU): $(DSRUU_DIR)/*.c $(DSRUU_DIR)/*.h $(DSRUU_DIR)/*.cc $(DSRUU_DIR)/Makefile
 	$(MAKE) -C $(DSRUU_DIR) $(DSRUU_OBJ) NS_DEFS='$(DEFINE) -DNS2' OPTS='$(CCOPT)' NS_INC='$(subst -I.,-I$(shell pwd),$(INCLUDES))'

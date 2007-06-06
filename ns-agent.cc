@@ -335,7 +335,6 @@ void DSRUU::ns_xmit(struct dsr_pkt *dp)
 		goto out;
 	}	
 
-	printf("p=%u\n", (unsigned int)p);
 	iph = HDR_IP(p);
 	cmh = HDR_CMN(p);
     
@@ -361,7 +360,8 @@ void DSRUU::ns_xmit(struct dsr_pkt *dp)
 		cmh->xmit_failure_ = xmit_failure;
 		cmh->xmit_failure_data_ = (void *) this;		
 	}
-
+	if ( Random::uniform() > 0.6)
+		jitter = 1;
 	Scheduler::instance().schedule(ll_, p, jitter);
  out:
 	dp->p = NULL;

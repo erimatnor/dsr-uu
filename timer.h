@@ -117,7 +117,7 @@ static inline char *print_timeval(struct timeval *tv)
 
 	n = (n + 1) % 2;
 
-	snprintf(buf[n], sizeof(buf), "%ld:%02ld:%03d", tv->tv_sec / 60,
+	snprintf(buf[n], sizeof(buf), "%ld:%02ld:%03ld", tv->tv_sec / 60,
 		 tv->tv_sec % 60, tv->tv_usec / 1000);
 
 	return buf[n];

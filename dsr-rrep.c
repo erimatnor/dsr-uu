@@ -352,43 +352,45 @@ int NSCLASS dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 	if (!rrep_opt_srt)
 		return DSR_PKT_ERROR;
 
+	dsr_rtc_add(rrep_opt_srt, ConfValToUsecs(RouteCacheTimeout), 0);
 	/* Only add the hops in the RREP source route that has already
 	 * been traversed. This assumes that the source route the RREP
 	 * is sent back on is a reversal of the source route carried
 	 * as a reply. */
-	if (myaddr.s_addr == dp->dst.s_addr) 
-		dsr_rtc_add(rrep_opt_srt, ConfValToUsecs(RouteCacheTimeout), 0);
-	else {
-		struct dsr_srt *srt_split = NULL;
-		struct dsr_srt *srt_rev = NULL;
+/* 	if (myaddr.s_addr == dp->dst.s_addr) */
+/* 		dsr_rtc_add(rrep_opt_srt, ConfValToUsecs(RouteCacheTimeout), 0); */
+/* 	else { */
+/* 		struct dsr_srt *srt_split = NULL; */
+/* 		struct dsr_srt *srt_rev = NULL; */
 
-		srt_rev = dsr_srt_new_rev(rrep_opt_srt);
+/* 		srt_rev = dsr_srt_new_rev(rrep_opt_srt); */
 
-		if (!srt_rev) {
-			FREE(rrep_opt_srt);
-			return DSR_PKT_ERROR;
-		}
+/* 		if (!srt_rev) { */
+/* 			FREE(rrep_opt_srt); */
+/* 			goto end_add_srt; */
+/* 		} */
 
-		/* If the RREP was promiscuously overheard, we can
-		 * only assume that the hops prior to the one that we
-		 * overheard it from are functional. Otherwise, we
-		 * count all hops prior to ourselves as functional. */
-		if (dp->flags & PKT_PROMISC_RECV)
-			srt_split = dsr_srt_new_split(srt_rev, dp->prv_hop);
-		else 
-			srt_split = dsr_srt_new_split(srt_rev, myaddr);
+/* 		/\* If the RREP was promiscuously overheard, we can */
+/* 		 * only assume that the hops prior to the one that we */
+/* 		 * overheard it from are functional. Otherwise, we */
+/* 		 * count all hops prior to ourselves as functional. *\/ */
+/* 		if (dp->flags & PKT_PROMISC_RECV) */
+/* 			srt_split = dsr_srt_new_split(srt_rev, dp->prv_hop); */
+/* 		else */
+/* 			srt_split = dsr_srt_new_split(srt_rev, myaddr); */
 		
-		FREE(srt_rev);
+/* 		FREE(srt_rev); */
 
-		if (!srt_split) {
-			FREE(rrep_opt_srt);
-			return DSR_PKT_ERROR;
-		}
-		DEBUG("Adding split RREP SRT to cache: %s\n", print_srt(srt_split));
-		dsr_rtc_add(srt_split, ConfValToUsecs(RouteCacheTimeout), 0);
+/* 		if (!srt_split) { */
+/* 			FREE(rrep_opt_srt); */
+/* 			goto end_add_srt; */
+/* 		} */
+/* 		DEBUG("Adding split RREP SRT to cache: %s\n", print_srt(srt_split)); */
+/* 		dsr_rtc_add(srt_split, ConfValToUsecs(RouteCacheTimeout), 0); */
 		
-		FREE(srt_split);
-	}
+/* 		FREE(srt_split); */
+/* 	} */
+/*  end_add_srt: */
 	/* Remove pending RREQs */
 	rreq_tbl_route_discovery_cancel(rrep_opt_srt->dst);
 

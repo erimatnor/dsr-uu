@@ -236,22 +236,22 @@ int NSCLASS dsr_opt_recv(struct dsr_pkt *dp)
 	l = DSR_OPT_HDR_LEN;
 	dopt = DSR_GET_OPT(dp->dh.opth);
 
-	DEBUG("Parsing DSR packet l=%d dsr_len=%d\n", l, dsr_len);
-
+	//DEBUG("Parsing DSR packet l=%d dsr_len=%d\n", l, dsr_len);
+	
 	while (l < dsr_len && (dsr_len - l) > 2) {
-		DEBUG("dsr_len=%d l=%d\n", dsr_len, l);
+		//DEBUG("dsr_len=%d l=%d\n", dsr_len, l);
 		switch (dopt->type) {
 		case DSR_OPT_PADN:
 			break;
 		case DSR_OPT_RREQ:
-			DEBUG("DSR RREQ\n");
-
-		if (dp->flags & PKT_PROMISC_RECV)
+			if (dp->flags & PKT_PROMISC_RECV)
 				break;
 			
 			action |= dsr_rreq_opt_recv(dp, (struct dsr_rreq_opt *)dopt);
 			break;
 		case DSR_OPT_RREP:
+			/* We should probably allow promisuously
+			 * receiving RREPs */
 			if (dp->flags & PKT_PROMISC_RECV)
 				break;
 			

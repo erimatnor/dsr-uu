@@ -6,7 +6,10 @@
  * Author: Erik Nordström, <erikn@it.uu.se>
  */
 #ifdef __KERNEL__
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 #include <linux/config.h>
+#endif
 #include <linux/skbuff.h>
 #include <linux/init.h>
 #include <linux/version.h>

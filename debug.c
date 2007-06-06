@@ -5,15 +5,18 @@
  *
  * Author: Erik Nordström, <erikn@it.uu.se>
  */
+
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+#include <linux/config.h>
+#endif
 #include <linux/poll.h>
 #include <linux/fs.h>
 #include <linux/init.h>
 #include <linux/spinlock.h>
-#include <linux/config.h>
 #include <linux/kernel.h>
 #include <linux/proc_fs.h>
 #include <linux/module.h>
-#include <linux/version.h>
 
 #include <asm/uaccess.h>
 #include <asm/io.h>

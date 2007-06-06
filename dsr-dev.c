@@ -5,10 +5,12 @@
  *
  * Author: Erik Nordström, <erikn@it.uu.se>
  */
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 #include <linux/config.h>
+#endif
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/version.h>
 #include <linux/netdevice.h>
 #include <linux/inetdevice.h>
 #include <linux/etherdevice.h>
@@ -631,7 +633,12 @@ int dsr_dev_init(char *ifname)
 		for (tmp_dev = dev_base; tmp_dev != NULL; 
 		     tmp_dev = tmp_dev->next) {
 
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
+			if (tmp_dev->wireless_handlers) {
+#else
 			if (tmp_dev->get_wireless_stats) {
+#endif
 				memcpy(dnode->slave_ifname, tmp_dev->name, IFNAMSIZ);
 			
 				read_unlock(&dev_base_lock);

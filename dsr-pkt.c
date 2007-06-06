@@ -114,7 +114,6 @@ struct dsr_pkt *dsr_pkt_alloc(Packet * p)
 			
 			opth = HDR_DSRUU(p);
 
-			printf("p_len=%d ntohs(p_len)=%d\n", opth->p_len, ntohs(opth->p_len));
 			dsr_opts_len = opth->p_len + DSR_OPT_HDR_LEN;
 
 			if (!dsr_pkt_alloc_opts(dp, dsr_opts_len)) {
@@ -138,7 +137,6 @@ struct dsr_pkt *dsr_pkt_alloc(Packet * p)
 		/* A trick to calculate payload length... */
 		dp->payload_len = cmh->size() - dsr_opts_len - IP_HDR_LEN;
 	}
-	printf("p=%u\n", (unsigned int)p);
 	return dp;
 }
 
