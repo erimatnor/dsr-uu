@@ -9,6 +9,10 @@
 #define _DSR_H
 
 #ifdef __KERNEL__
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+#include <linux/config.h>
+#endif
 #include <asm/byteorder.h>
 #include <linux/types.h>
 //#include <linux/in.h>
@@ -145,6 +149,26 @@ struct dsr_node {
 #define FREE(p)             kfree(p)
 #define NSCLASS
 #define XMIT(pkt)           dsr_dev_xmit(pkt)
+
+/* Some macros to access different layer headers in the skb. The APIs
+ * changed around kernel 2.6.22, so these macros make us backwards
+ * compatible with older kernels. */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,21)
+#define SKB_NETWORK_HDR_RAW(skb) skb->nh.raw
+#define SKB_NETWORK_HDR_RIPH(skb) skb->nh.iph
+#define SKB_MAC_HDR_RAW(skb) skb->mac.raw
+#define SKB_TAIL(skb) skb->tail
+#define SKB_SET_MAC_HDR(skb, offset) (skb->mac.raw = (skb->data + (offset)))
+#define SKB_SET_NETWORK_HDR(skb, offset) (skb->nh.raw = (skb->data + (offset)))
+#else
+#define SKB_NETWORK_HDR_RAW(skb) skb_network_header(skb)
+#define SKB_NETWORK_HDR_IPH(skb) ((struct iphdr *)skb_network_header(skb))
+#define SKB_MAC_HDR_RAW(skb) skb_mac_header(skb)
+#define SKB_TAIL(skb) skb_tail_pointer(skb)
+#define SKB_SET_MAC_HDR(skb, offset) skb_set_mac_header(skb, offset)
+#define SKB_SET_NETWORK_HDR(skb, offset) skb_set_network_header(skb, offset)
+#endif
+
 #else
 #define DSR_SPIN_LOCK(l)
 #define DSR_SPIN_UNLOCK(l)

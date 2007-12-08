@@ -159,11 +159,11 @@ struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb)
 
 		dp->skb = skb;
 
-		dp->mac.raw = skb->mac.raw;
-		dp->nh.iph = skb->nh.iph;
+		dp->mac.raw = SKB_MAC_HDR_RAW(skb);
+		dp->nh.iph = SKB_NETWORK_HDR_IPH(skb);
 
-		dp->src.s_addr = skb->nh.iph->saddr;
-		dp->dst.s_addr = skb->nh.iph->daddr;
+		dp->src.s_addr = dp->nh.iph->saddr;
+		dp->dst.s_addr = dp->nh.iph->daddr;
 
 		if (dp->nh.iph->protocol == IPPROTO_DSR) {
 			struct dsr_opt_hdr *opth;

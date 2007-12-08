@@ -45,6 +45,13 @@ struct dsr_node *dsr_node;
 static int rp_filter = 0;
 static int forwarding = 0;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
+#define DSRUU_IN_DEV_SET_RPFILTER(in_dev, val) (in_dev->cnf.rp_filter = val)
+#define DSRUU_IN_DEV_SET_FORWARD(in_dev, val) (in_dev->cnf.forwarding = val)
+#else
+#define DSRUU_IN_DEV_SET_RPFILTER(in_dev, val) (ipv4_devconf_set(in_dev, NET_IPV4_CONF_RP_FILTER, val))
+#define DSRUU_IN_DEV_SET_FORWARD(in_dev, val) (ipv4_devconf_set(in_dev, NET_IPV4_CONF_FORWARDING, val))
+#endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,14)
 static int dsr_dev_llrecv(struct sk_buff *skb, struct net_device *indev,
@@ -84,14 +91,17 @@ struct sk_buff *dsr_skb_create(struct dsr_pkt *dp, struct net_device *dev)
 		return NULL;
 	}
 
-	/* We align to 16 bytes, for ethernet: 2 bytes + 14 bytes header */
+	SKB_SET_MAC_HDR(skb, 0);
+
+	/* We align to 16 bytes, for ethernet: 2 bytes + 14 bytes
+	 * header. This will move the skb->data pointer forward. */
 #ifdef KERNEL26
 	skb_reserve(skb, LL_RESERVED_SPACE(dev));
 #else
 	skb_reserve(skb, (dev->hard_header_len + 15) & ~15);
 #endif
-	skb->mac.raw = skb->data - 14;
-	skb->nh.raw = skb->data;
+	SKB_SET_NETWORK_HDR(skb, 0);
+	       
 	skb->dev = dev;
 	skb->protocol = htons(ETH_P_IP);
 
@@ -180,9 +190,11 @@ static int dsr_dev_inetaddr_event(struct notifier_block *this,
 
                         /* Disable rp_filter and enable forwarding */
                         if (dnode->slave_indev) {
-                                rp_filter = dnode->slave_indev->cnf.rp_filter;
-                                forwarding = dnode->slave_indev->cnf.forwarding;                                dnode->slave_indev->cnf.rp_filter = 0;
-                                dnode->slave_indev->cnf.forwarding = 1;
+                                rp_filter = IN_DEV_RPFILTER(dnode->slave_indev);
+                                forwarding = IN_DEV_FORWARD(dnode->slave_indev);
+
+				DSRUU_IN_DEV_SET_RPFILTER(dnode->slave_indev, 0);
+                                DSRUU_IN_DEV_SET_FORWARD(dnode->slave_indev, 1);
                         }			
 			dsr_node_unlock(dnode);
 			
@@ -275,15 +287,17 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 
 			dsr_node_lock(dnode);
                         if (dnode->slave_indev) {
-                                dnode->slave_indev->cnf.rp_filter = rp_filter;
-                                dnode->slave_indev->cnf.forwarding = forwarding;                                in_dev_put(dnode->slave_indev);
+				DSRUU_IN_DEV_SET_RPFILTER(dnode->slave_indev, rp_filter);
+                                DSRUU_IN_DEV_SET_FORWARD(dnode->slave_indev, forwarding);
+                                in_dev_put(dnode->slave_indev);
                                 dnode->slave_indev = NULL;
                         }
                         dsr_node_unlock(dnode);
 		} else if (dev == dnode->slave_dev && dnode->slave_indev) {
 			dsr_node_lock(dnode);
-			dnode->slave_indev->cnf.rp_filter = rp_filter;
-			dnode->slave_indev->cnf.forwarding = forwarding;                                in_dev_put(dnode->slave_indev);
+			DSRUU_IN_DEV_SET_RPFILTER(dnode->slave_indev, rp_filter);
+			DSRUU_IN_DEV_SET_FORWARD(dnode->slave_indev, forwarding);
+			in_dev_put(dnode->slave_indev);
 			dnode->slave_indev = NULL;
                         dsr_node_unlock(dnode);
 		} 
@@ -358,9 +372,9 @@ static void dsr_dev_uninit(struct net_device *dev)
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
-static int __init dsr_dev_setup(struct net_device *dev)
+static int dsr_dev_setup(struct net_device *dev)
 #else
-static void __init dsr_dev_setup(struct net_device *dev)
+static void dsr_dev_setup(struct net_device *dev)
 #endif
 {
 	/* Fill in device structure with ethernet-generic values. */
@@ -424,9 +438,9 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 		return -1;
 
 	/* Super ugly hack to fix record route options */
-	if (dp->skb->nh.iph->ihl > 5) {
+	if (SKB_NETWORK_HDR_IPH(dp->skb)->ihl > 5) {
 		struct ip_options *opt = &(IPCB(dp->skb)->opt);
-		unsigned char *ptr = dp->skb->nh.raw;
+		unsigned char *ptr = SKB_NETWORK_HDR_RAW(dp->skb);
 	
 		if (opt->rr) {	
 			struct ipopt {
@@ -458,13 +472,15 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 		dsr_pkt_free(dp);
 		return -1;
 	}
+	
+	/* Need to make hardware header visible again since we are
+	 * going down a layer... But this should already be set in
+	 * dsr_skb_create() */
+	/* skb->mac.raw = skb->data - dsr_dev->hard_header_len; */
 
-	/* Need to make hardware header visible again since we are going down a
-	 * layer */
-	skb->mac.raw = skb->data - dsr_dev->hard_header_len;
 	skb->ip_summed = CHECKSUM_UNNECESSARY;
 	
-	ethh = (struct ethhdr *)skb->mac.raw;
+	ethh = (struct ethhdr *)SKB_MAC_HDR_RAW(skb);
 
 	memcpy(ethh->h_dest, dsr_dev->dev_addr, ETH_ALEN);
 	memset(ethh->h_source, 0, ETH_ALEN);
@@ -521,11 +537,11 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 	}
 	
 	len = skb->len;
-	dst.s_addr = skb->nh.iph->daddr;
+	dst.s_addr = SKB_NETWORK_HDR_IPH(skb)->daddr;
 	
 	DEBUG("Sending %d bytes data_len=%d %s : %s\n",
 	      len, skb->data_len,
-	      print_eth(skb->mac.raw),
+	      print_eth(SKB_MAC_HDR_RAW(skb)),
 	      print_ip(dst));
 		
 	/* TODO: Should consider using ip_finish_output instead */
@@ -566,7 +582,7 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	case ETH_P_IP:
 
 		DEBUG("dst=%s len=%d\n",
-		      print_ip(*((struct in_addr *)&skb->nh.iph->daddr)),
+		      print_ip(*((struct in_addr *)&SKB_NETWORK_HDR_IPH(skb)->daddr)),
 		      skb->len);
 
 		dp = dsr_pkt_alloc(skb);
@@ -614,7 +630,6 @@ int dsr_dev_init(char *ifname)
 	dsr_dev->init = dsr_dev_setup;
 
 	dev_alloc_name(dsr_dev, "dsr%d");
-	dsr_dev->init = &dsr_dev_setup;
 #else
 	dsr_dev = alloc_netdev(sizeof(struct dsr_node), "dsr%d", dsr_dev_setup);
 	if (!dsr_dev)
@@ -630,9 +645,13 @@ int dsr_dev_init(char *ifname)
 		struct net_device *tmp_dev;
 		
 		read_lock(&dev_base_lock);
-		for (tmp_dev = dev_base; tmp_dev != NULL; 
-		     tmp_dev = tmp_dev->next) {
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
+		tmp_dev = dev_base;
+#else
+		tmp_dev = first_net_device();
+#endif
+		while (tmp_dev) {
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
 			if (tmp_dev->wireless_handlers) {
@@ -644,10 +663,16 @@ int dsr_dev_init(char *ifname)
 				read_unlock(&dev_base_lock);
 				goto dev_ok;
 			}
+			
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
+			tmp_dev = tmp_dev->next;
+#else
+			tmp_dev = next_net_device(tmp_dev);
+#endif
 		}
 		read_unlock(&dev_base_lock);
 	
-		DEBUG("No proper slave device found\n");
+		DEBUG("No preferred slave device found\n");
 		res = -1;
 		goto cleanup_netdev;
 	}

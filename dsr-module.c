@@ -274,7 +274,7 @@ static unsigned int dsr_pre_routing_recv(unsigned int hooknum,
 	if (in && in->ifindex == get_slave_dev_ifindex() &&
 	    (*skb)->protocol == htons(ETH_P_IP)) {
 
-		if (do_mackill((*skb)->mac.raw + ETH_ALEN))
+		if (do_mackill(SKB_MAC_HDR_RAW((*skb)) + ETH_ALEN))
 			return NF_DROP;
 	}
 	return NF_ACCEPT;
@@ -289,7 +289,7 @@ static unsigned int dsr_ip_forward_recv(unsigned int hooknum,
 					const struct net_device *out,
 					int (*okfn) (struct sk_buff *))
 {
-	struct iphdr *iph = (*skb)->nh.iph;
+	struct iphdr *iph = SKB_NETWORK_HDR_IPH(*skb);
 	struct in_addr myaddr = my_addr();
 
 	if (in && in->ifindex == get_slave_dev_ifindex() &&
@@ -298,9 +298,9 @@ static unsigned int dsr_ip_forward_recv(unsigned int hooknum,
 		if (iph && iph->protocol == IPPROTO_DSR &&
 		    iph->daddr != myaddr.s_addr &&
 		    iph->daddr != DSR_BROADCAST) {
-
-			(*skb)->data = (*skb)->nh.raw + (iph->ihl << 2);
-			(*skb)->len = (*skb)->tail - (*skb)->data;
+			
+			(*skb)->data = SKB_NETWORK_HDR_RAW(*skb) + (iph->ihl << 2);
+			(*skb)->len = SKB_TAIL(*skb) - (*skb)->data;
 			dsr_ip_recv(*skb);
 
 			return NF_STOLEN;

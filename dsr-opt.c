@@ -49,8 +49,8 @@ struct iphdr *dsr_build_ip(struct dsr_pkt *dp, struct in_addr src,
 
 	dp->nh.iph = iph = (struct iphdr *)dp->ip_data;
 	
-	if (dp->skb && dp->skb->nh.raw) {
-		memcpy(dp->ip_data, dp->skb->nh.raw, ip_len);
+	if (dp->skb && SKB_NETWORK_HDR_RAW(dp->skb)) {
+		memcpy(dp->ip_data, SKB_NETWORK_HDR_RAW(dp->skb), ip_len);
 	} else {
 		iph->version = IPVERSION;
 		iph->ihl = 5;
