@@ -1,8 +1,8 @@
 0.1:
 	* Initial release.
-0.2:	
+0.2:
 	* Added spec file.
-	* Compilation fixes for kernel 2.6.12 on FC4 
+	* Compilation fixes for kernel 2.6.12 on FC4
 	* Fixed segmentation fault on module load on newer 2.4 kernels.
 	* Fixed bug in dsr_srt_find_addr that made automatic route
 	shortening not always work.
@@ -15,9 +15,10 @@
 	dsr_dev usage count should be correct when unregistering the device.
 0.3:
 	* Added AutomaticRouteShortening as a runtime configurable option.
-	* Added fixed RTO of 2s and ability to switch to dynamic RTO.  
+	* Added fixed RTO of 2s and ability to switch to dynamic RTO.
 	* Only cache links that are from hops in the source route over
 	which the packet containing the source route has actually been
 	sent. (RREPs and source route options).
 	* Compile against kernel 2.6.20
 	* Compile against ns-2.31
+	* Compile against kernel 2.6.22
