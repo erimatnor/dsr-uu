@@ -398,8 +398,12 @@ static void dsr_dev_setup(struct net_device *dev)
 	dev->uninit = dsr_dev_uninit;
 	dev->open = dsr_dev_open;
 	dev->stop = dsr_dev_stop;
+        dev->set_multicast_list = dsr_dev_set_multicast_list;
 	dev->hard_start_xmit = dsr_dev_start_xmit;
 	dev->set_mac_address = dsr_dev_set_address;
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
 	SET_MODULE_OWNER(dev);
 #endif
 	//dev->destructor = dsr_dev_free;
