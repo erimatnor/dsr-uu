@@ -664,7 +664,7 @@ static int lc_print(struct lc_graph *LC, char *buf)
 }
 
 
-static int lc_proc_info(char *buffer, char **start, off_t offset, int length)
+static int lc_proc_info(char *buffer, char **start, off_t offset, int length, int *eof, void *data)
 {
 	int len;
 
@@ -692,19 +692,34 @@ module_exit(lc_cleanup);
 
 int __init NSCLASS lc_init(void)
 {
+#ifdef __KERNEL__
+	struct proc_dir_entry *proc;
+
+	LC.lock = RW_LOCK_UNLOCKED;
+#ifdef LC_TIMER
+	init_timer(&LC.timer);
+#endif
+
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,23))
+#define proc_net init_net.proc_net
+#endif
+	proc = create_proc_read_entry(LC_PROC_NAME, 0, proc_net, lc_proc_info, NULL);
+
+	if (!proc) {
+		printk(KERN_ERR "lc_init: failed to create proc entry\n");
+		return -1;
+	}
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30))
+	proc->owner = THIS_MODULE;
+#endif
+#endif
 	/* Initialize Graph */
 	INIT_TBL(&LC.links, LC_LINKS_MAX);
 	INIT_TBL(&LC.nodes, LC_NODES_MAX);
 
 	LC.src = NULL;
 
-#ifdef __KERNEL__
-	LC.lock = RW_LOCK_UNLOCKED;
-#ifdef LC_TIMER
-	init_timer(&LC.timer);
-#endif
-	proc_net_create(LC_PROC_NAME, 0, lc_proc_info);
-#endif
 	return 0;
 }
 
@@ -712,6 +727,10 @@ void __exit NSCLASS lc_cleanup(void)
 {
 	lc_flush();
 #ifdef __KERNEL__
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24))
 	proc_net_remove(LC_PROC_NAME);
+#else
+	proc_net_remove(&init_net, LC_PROC_NAME);
+#endif
 #endif
 }

@@ -310,7 +310,7 @@ static int neigh_tbl_print(char *buf)
 }
 
 static int
-neigh_tbl_proc_info(char *buffer, char **start, off_t offset, int length)
+neigh_tbl_proc_info(char *buffer, char **start, off_t offset, int length, int *eof, void *data)
 {
 	int len;
 
@@ -329,15 +329,22 @@ neigh_tbl_proc_info(char *buffer, char **start, off_t offset, int length)
 
 int __init NSCLASS neigh_tbl_init(void)
 {
+#ifdef __KERNEL__
+	struct proc_dir_entry *proc;
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,23))
+#define proc_net init_net.proc_net
+#endif
+	proc = create_proc_read_entry(NEIGH_TBL_PROC_NAME, 0, proc_net, neigh_tbl_proc_info, NULL);
+
+	if (!proc)
+		return -1;
+#endif
 	INIT_TBL(&neigh_tbl, NEIGH_TBL_MAX_LEN);
 
 	init_timer(&neigh_tbl_timer);
 
 	neigh_tbl_timer.function = &NSCLASS neigh_tbl_garbage_timeout;
 
-#ifdef __KERNEL__
-	proc_net_create(NEIGH_TBL_PROC_NAME, 0, neigh_tbl_proc_info);
-#endif
 	return 0;
 }
 
@@ -346,6 +353,10 @@ void __exit NSCLASS neigh_tbl_cleanup(void)
 	tbl_flush(&neigh_tbl, crit_none);
 
 #ifdef __KERNEL__
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24))
 	proc_net_remove(NEIGH_TBL_PROC_NAME);
+#else
+	proc_net_remove(&init_net, NEIGH_TBL_PROC_NAME);
+#endif
 #endif
 }

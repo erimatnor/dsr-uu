@@ -656,7 +656,7 @@ static int maint_buf_print(struct tbl *t, char *buffer)
 }
 
 static int
-maint_buf_get_info(char *buffer, char **start, off_t offset, int length)
+maint_buf_get_info(char *buffer, char **start, off_t offset, int length, int *eof, void *data)
 {
 	int len;
 
@@ -678,14 +678,19 @@ int NSCLASS maint_buf_init(void)
 {
 #ifdef __KERNEL__
 	struct proc_dir_entry *proc;
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,23))
+#define proc_net init_net.proc_net
+#endif
+	proc = create_proc_read_entry(MAINT_BUF_PROC_FS_NAME, 0, proc_net, maint_buf_get_info, NULL);
 
-	proc = proc_net_create(MAINT_BUF_PROC_FS_NAME, 0, maint_buf_get_info);
-	if (proc)
-		proc->owner = THIS_MODULE;
-	else {
+	if (!proc) {
 		printk(KERN_ERR "maint_buf: failed to create proc entry\n");
 		return -1;
 	}
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30))
+	proc->owner = THIS_MODULE;
+#endif
 #endif
 	INIT_TBL(&maint_buf, MAINT_BUF_MAX_LEN);
 
@@ -713,6 +718,10 @@ void NSCLASS maint_buf_cleanup(void)
 		FREE(m);
 	}
 #ifdef __KERNEL__
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24))
 	proc_net_remove(MAINT_BUF_PROC_FS_NAME);
+#else
+	proc_net_remove(&init_net, MAINT_BUF_PROC_FS_NAME);
+#endif
 #endif
 }

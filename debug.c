@@ -17,6 +17,8 @@
 #include <linux/kernel.h>
 #include <linux/proc_fs.h>
 #include <linux/module.h>
+#include <linux/sched.h>
+#include <linux/wait.h>
 
 #include <asm/uaccess.h>
 #include <asm/io.h>
@@ -260,8 +262,13 @@ int __init dbg_init(void)
 {
 	struct proc_dir_entry *entry;
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,23))
+#define proc_net init_net.proc_net
+#endif
+
 	entry =
 	    create_proc_entry("dsr_dbg", S_IRUSR | S_IRGRP | S_IROTH, proc_net);
+
 	if (entry)
 		entry->proc_fops = &proc_dbg_operations;
 
@@ -270,7 +277,11 @@ int __init dbg_init(void)
 
 void __exit dbg_cleanup(void)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24))
 	proc_net_remove("dsr_dbg");
+#else
+	proc_net_remove(&init_net, "dsr_dbg");
+#endif
 }
 
 /* EXPORT_SYMBOL(trace); */

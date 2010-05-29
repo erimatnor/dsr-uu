@@ -57,6 +57,15 @@ MODULE_PARM(ifname, "s");
 MODULE_PARM(mackill, "s");
 #endif
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25))
+#define NF_INET_PRE_ROUTING NF_IP_PRE_ROUTING
+#define NF_INET_LOCAL_IN NF_IP_LOCAL_IN
+#define NF_INET_FORWARD NF_IP_FORWARD
+#define NF_INET_LOCAL_OUT NF_IP_LOCAL_OUT
+#define NF_INET_POST_ROUTING NF_IP_POST_ROUTING
+#define NF_INET_NUMHOOKS NF_IP_NUMHOOKS
+#endif
+
 #define CONFIG_PROC_NAME "dsr_config"
 
 #define MAX_MACKILL 10
@@ -266,15 +275,15 @@ static int dsr_config_proc_write(struct file *file, const char *buffer,
 /* This hook is used to do mac filtering or to receive promiscuously snooped
  * packets */
 static unsigned int dsr_pre_routing_recv(unsigned int hooknum,
-					 struct sk_buff **skb,
+					 struct sk_buff *skb,
 					 const struct net_device *in,
 					 const struct net_device *out,
 					 int (*okfn) (struct sk_buff *))
 {
 	if (in && in->ifindex == get_slave_dev_ifindex() &&
-	    (*skb)->protocol == htons(ETH_P_IP)) {
+	    (skb)->protocol == htons(ETH_P_IP)) {
 
-		if (do_mackill(SKB_MAC_HDR_RAW((*skb)) + ETH_ALEN))
+		if (do_mackill(SKB_MAC_HDR_RAW(skb) + ETH_ALEN))
 			return NF_DROP;
 	}
 	return NF_ACCEPT;
@@ -284,24 +293,24 @@ static unsigned int dsr_pre_routing_recv(unsigned int hooknum,
  * are to be forwarded. This enables you to, for example, disable forwarding by
  * setting "/proc/sys/net/ipv4/conf/<eth*>/forwarding" to 0. */
 static unsigned int dsr_ip_forward_recv(unsigned int hooknum,
-					struct sk_buff **skb,
+					struct sk_buff *skb,
 					const struct net_device *in,
 					const struct net_device *out,
 					int (*okfn) (struct sk_buff *))
 {
-	struct iphdr *iph = SKB_NETWORK_HDR_IPH(*skb);
+	struct iphdr *iph = SKB_NETWORK_HDR_IPH(skb);
 	struct in_addr myaddr = my_addr();
 
 	if (in && in->ifindex == get_slave_dev_ifindex() &&
-	    (*skb)->protocol == htons(ETH_P_IP)) {
-
+	    skb->protocol == htons(ETH_P_IP)) {
+		
 		if (iph && iph->protocol == IPPROTO_DSR &&
 		    iph->daddr != myaddr.s_addr &&
 		    iph->daddr != DSR_BROADCAST) {
 			
-			(*skb)->data = SKB_NETWORK_HDR_RAW(*skb) + (iph->ihl << 2);
-			(*skb)->len = SKB_TAIL(*skb) - (*skb)->data;
-			dsr_ip_recv(*skb);
+			skb->data = SKB_NETWORK_HDR_RAW(skb) + (iph->ihl << 2);
+			skb->len = SKB_TAIL(skb) - skb->data;
+			dsr_ip_recv(skb);
 
 			return NF_STOLEN;
 		}
@@ -316,7 +325,7 @@ static struct nf_hook_ops dsr_pre_routing_hook = {
 	.owner = THIS_MODULE,
 #endif
 	.pf = PF_INET,
-	.hooknum = NF_IP_PRE_ROUTING,
+	.hooknum = NF_INET_PRE_ROUTING,
 	.priority = NF_IP_PRI_FIRST,
 };
 
@@ -327,7 +336,7 @@ static struct nf_hook_ops dsr_ip_forward_hook = {
 	.owner = THIS_MODULE,
 #endif
 	.pf = PF_INET,
-	.hooknum = NF_IP_FORWARD,
+	.hooknum = NF_INET_FORWARD,
 	.priority = NF_IP_PRI_FIRST,
 };
 
@@ -399,12 +408,17 @@ static int __init dsr_module_init(void)
 	if (res < 0)
 		goto cleanup_nf_hook1;
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,23))
+#define proc_net init_net.proc_net
+#endif
 	proc = create_proc_entry(CONFIG_PROC_NAME, S_IRUGO | S_IWUSR, proc_net);
 
 	if (!proc)
 		goto cleanup_maint_buf;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30))
 	proc->owner = THIS_MODULE;
+#endif
 	proc->read_proc = dsr_config_proc_read;
 	proc->write_proc = dsr_config_proc_write;
 
@@ -424,8 +438,13 @@ static int __init dsr_module_init(void)
 
 	return 0;
 cleanup_proc:
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24))
 	proc_net_remove(CONFIG_PROC_NAME);
+#else
+	proc_net_remove(&init_net, CONFIG_PROC_NAME);
 #endif
+
+#endif /* KERNEL26 */
 
 cleanup_maint_buf:
 	maint_buf_cleanup();
@@ -459,7 +478,11 @@ static void __exit dsr_module_cleanup(void)
 	nf_unregister_hook(&dsr_pre_routing_hook);
 	nf_unregister_hook(&dsr_ip_forward_hook);
 	dsr_dev_cleanup();
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24))
 	proc_net_remove(CONFIG_PROC_NAME);
+#else
+	proc_net_remove(&init_net, CONFIG_PROC_NAME);
+#endif
 	rreq_tbl_cleanup();
 	grat_rrep_tbl_cleanup();
 	neigh_tbl_cleanup();

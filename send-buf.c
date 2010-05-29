@@ -285,7 +285,7 @@ static int send_buf_print(struct tbl *t, char *buffer)
 }
 
 static int
-send_buf_get_info(char *buffer, char **start, off_t offset, int length)
+send_buf_get_info(char *buffer, char **start, off_t offset, int length, int *eof, void *data)
 {
 	int len;
 
@@ -308,13 +308,20 @@ int __init NSCLASS send_buf_init(void)
 #ifdef __KERNEL__
 	struct proc_dir_entry *proc;
 
-	proc = proc_net_create(SEND_BUF_PROC_FS_NAME, 0, send_buf_get_info);
-	if (proc)
-		proc->owner = THIS_MODULE;
-	else {
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,23))
+#define proc_net init_net.proc_net
+#endif
+	proc = create_proc_read_entry(SEND_BUF_PROC_FS_NAME, 0, proc_net, send_buf_get_info, NULL);
+
+	if (!proc) {
 		printk(KERN_ERR "send_buf: failed to create proc entry\n");
 		return -1;
 	}
+	
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30))
+	proc->owner = THIS_MODULE;
+#endif
+
 #endif
 
 	INIT_TBL(&send_buf, SEND_BUF_MAX_LEN);
@@ -340,6 +347,11 @@ void __exit NSCLASS send_buf_cleanup(void)
 	DEBUG("Flushed %d packets\n", pkts);
 
 #ifdef __KERNEL__
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24))
 	proc_net_remove(SEND_BUF_PROC_FS_NAME);
+#else
+	proc_net_remove(&init_net, SEND_BUF_PROC_FS_NAME);
+#endif
+
 #endif
 }

@@ -148,6 +148,7 @@ int dsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb)
 		}
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
 	if (skb->dev->hard_header) {
 		skb->dev->hard_header(skb, skb->dev, ETH_P_IP,
 				      neigh_info.hw_addr.sa_data, 0, skb->len);
@@ -155,6 +156,10 @@ int dsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb)
 		DEBUG("Missing hard_header\n");
 		return -1;
 	}
+#else
+	dev_hard_header(skb, skb->dev, ETH_P_IP,
+			neigh_info.hw_addr.sa_data, 0, skb->len);	
+#endif
 	return 0;
 }
 
@@ -180,7 +185,7 @@ static int dsr_dev_inetaddr_event(struct notifier_block *this,
 			struct dsr_node *dnode;
 			struct in_addr addr, bc;
 
-			dnode = (struct dsr_node *)indev->dev->priv;
+			dnode = netdev_priv(indev->dev);
 
 			dsr_node_lock(dnode);
 			dnode->ifaddr.s_addr = ifa->ifa_address;
@@ -215,7 +220,7 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 				unsigned long event, void *ptr)
 {
 	struct net_device *dev = (struct net_device *)ptr;
-	struct dsr_node *dnode = (struct dsr_node *)dsr_dev->priv;
+	struct dsr_node *dnode = netdev_priv(dsr_dev);
 	int slave_change = 0;
 
 	if (!dev)
@@ -323,18 +328,6 @@ static int dsr_dev_set_address(struct net_device *dev, void *p)
 	return 0;
 }
 
-/* fake multicast ability */
-static void set_multicast_list(struct net_device *dev)
-{
-}
-
-#ifdef CONFIG_NET_FASTROUTE
-static int dsr_dev_accept_fastpath(struct net_device *dev, 
-				   struct dst_entry *dst)
-{
-	return -1;
-}
-#endif
 static int dsr_dev_open(struct net_device *dev)
 {
 	netif_start_queue(dev);
@@ -349,7 +342,7 @@ static int dsr_dev_stop(struct net_device *dev)
 
 static void dsr_dev_uninit(struct net_device *dev)
 {
-	struct dsr_node *dnode = (struct dsr_node *)dev->priv;
+	struct dsr_node *dnode = netdev_priv(dev);
 
 	dsr_node_lock(dnode);
 	
@@ -371,6 +364,23 @@ static void dsr_dev_uninit(struct net_device *dev)
 	dsr_node = NULL;
 }
 
+/* fake multicast ability */
+static void dsr_dev_set_multicast_list(struct net_device *dev)
+{
+}
+
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,28)
+static const struct net_device_ops dsr_netdev_ops = {
+	.ndo_get_stats = dsr_dev_get_stats,
+	.ndo_uninit = dsr_dev_uninit,
+	.ndo_open = dsr_dev_open,
+	.ndo_stop = dsr_dev_stop,
+	.ndo_start_xmit = dsr_dev_start_xmit,
+	.ndo_set_mac_address = dsr_dev_set_address,
+	.ndo_set_multicast_list = dsr_dev_set_multicast_list,
+};
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
 static int dsr_dev_setup(struct net_device *dev)
 #else
@@ -379,24 +389,26 @@ static void dsr_dev_setup(struct net_device *dev)
 {
 	/* Fill in device structure with ethernet-generic values. */
 	ether_setup(dev);
-	/* Initialize the device structure. */
+
+	/* Set device operations */
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,28)
+	dev->netdev_ops = &dsr_netdev_ops;
+#else
 	dev->get_stats = dsr_dev_get_stats;
 	dev->uninit = dsr_dev_uninit;
 	dev->open = dsr_dev_open;
 	dev->stop = dsr_dev_stop;
-
 	dev->hard_start_xmit = dsr_dev_start_xmit;
-	dev->set_multicast_list = set_multicast_list;
 	dev->set_mac_address = dsr_dev_set_address;
-#ifdef CONFIG_NET_FASTROUTE
-	dev->accept_fastpath = dsr_dev_accept_fastpath;
+	SET_MODULE_OWNER(dev);
 #endif
+	//dev->destructor = dsr_dev_free;
+
 	dev->tx_queue_len = 0;
 	dev->flags |= IFF_NOARP;
 	dev->flags &= ~IFF_MULTICAST;
-	SET_MODULE_OWNER(dev);
-	//random_ether_addr(dev->dev_addr);
 	get_random_bytes(dev->dev_addr, 6);
+	//random_ether_addr(dev->dev_addr);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
 	return 0;
@@ -564,7 +576,7 @@ out_err:
 /* Main receive function for packets originated in user space */
 static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
-	struct dsr_node *dnode = (struct dsr_node *)dev->priv;
+	struct dsr_node *dnode = netdev_priv(dev);
 	struct ethhdr *ethh;
 	struct dsr_pkt *dp;
 #ifdef DEBUG
@@ -603,7 +615,8 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
 static struct net_device_stats *dsr_dev_get_stats(struct net_device *dev)
 {
-	return &(((struct dsr_node *)dev->priv)->stats);
+	struct dsr_node *dnode = netdev_priv(dev);
+	return &dnode->stats;
 }
 
 static struct notifier_block netdev_notifier = {
@@ -632,51 +645,44 @@ int dsr_dev_init(char *ifname)
 	dev_alloc_name(dsr_dev, "dsr%d");
 #else
 	dsr_dev = alloc_netdev(sizeof(struct dsr_node), "dsr%d", dsr_dev_setup);
+
 	if (!dsr_dev)
 		return -ENOMEM;
 #endif
-	dnode = dsr_node = (struct dsr_node *)dsr_dev->priv;
+	dnode = dsr_node = netdev_priv(dsr_dev);
 
 	dsr_node_init(dnode, ifname);
 
 	if (ifname) {
 		memcpy(dnode->slave_ifname, ifname, IFNAMSIZ);
 	} else {
-		struct net_device *tmp_dev;
+		struct net_device *dev;
+		int is_wireless = 0;
 		
 		read_lock(&dev_base_lock);
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
-		tmp_dev = dev_base;
-#else
-		tmp_dev = first_net_device();
-#endif
-		while (tmp_dev) {
-
+		
+		for_each_netdev(&init_net, dev) {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
-			if (tmp_dev->wireless_handlers) {
+			if (dev->wireless_handlers)
+				is_wireless = 1;
 #else
-			if (tmp_dev->get_wireless_stats) {
+			if (dev->get_wireless_stats)
+				is_wireless = 1;
 #endif
-				memcpy(dnode->slave_ifname, tmp_dev->name, IFNAMSIZ);
-			
+			if (is_wireless) {
+				memcpy(dnode->slave_ifname, dev->name, IFNAMSIZ);
+				
 				read_unlock(&dev_base_lock);
-				goto dev_ok;
+				goto dev_found;
 			}
-			
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
-			tmp_dev = tmp_dev->next;
-#else
-			tmp_dev = next_net_device(tmp_dev);
-#endif
 		}
 		read_unlock(&dev_base_lock);
-	
+		
 		DEBUG("No preferred slave device found\n");
 		res = -1;
 		goto cleanup_netdev;
 	}
-dev_ok:	
+dev_found:
 	DEBUG("Slave device is %s\n", dnode->slave_ifname);	
 		
 	res = register_netdev(dsr_dev);

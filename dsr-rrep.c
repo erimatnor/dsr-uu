@@ -164,7 +164,7 @@ static int grat_rrep_tbl_print(struct tbl *t, char *buf)
 }
 
 static int
-grat_rrep_tbl_proc_info(char *buffer, char **start, off_t offset, int length)
+grat_rrep_tbl_proc_info(char *buffer, char **start, off_t offset, int length, int *eof, void *data)
 {
 	int len;
 
@@ -412,13 +412,20 @@ int NSCLASS dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 
 int __init NSCLASS grat_rrep_tbl_init(void)
 {
+#ifdef __KERNEL__
+	struct proc_dir_entry *proc;
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,23))
+#define proc_net init_net.proc_net
+#endif
+	proc = create_proc_read_entry(GRAT_RREP_TBL_PROC_NAME, 0, proc_net, grat_rrep_tbl_proc_info, NULL);
+	
+	if (!proc)
+		return -1;
+#endif
 	INIT_TBL(&grat_rrep_tbl, GRAT_RREP_TBL_MAX_LEN);
 
 	init_timer(&grat_rrep_tbl_timer);
 
-#ifdef __KERNEL__
-	proc_net_create(GRAT_RREP_TBL_PROC_NAME, 0, grat_rrep_tbl_proc_info);
-#endif
 	return 0;
 }
 
@@ -429,6 +436,10 @@ void __exit NSCLASS grat_rrep_tbl_cleanup(void)
 	del_timer_sync(&grat_rrep_tbl_timer);
 
 #ifdef __KERNEL__
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24))
 	proc_net_remove(GRAT_RREP_TBL_PROC_NAME);
+#else
+	proc_net_remove(&init_net, GRAT_RREP_TBL_PROC_NAME);
+#endif
 #endif
 }

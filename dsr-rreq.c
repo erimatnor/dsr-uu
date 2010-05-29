@@ -662,7 +662,7 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 #ifdef __KERNEL__
 
 static int
-rreq_tbl_proc_info(char *buffer, char **start, off_t offset, int length)
+rreq_tbl_proc_info(char *buffer, char **start, off_t offset, int length, int *eof, void *data)
 {
 	int len;
 
@@ -681,14 +681,23 @@ rreq_tbl_proc_info(char *buffer, char **start, off_t offset, int length)
 
 int __init NSCLASS rreq_tbl_init(void)
 {
-	INIT_TBL(&rreq_tbl, RREQ_TBL_MAX_LEN);
-
 #ifdef __KERNEL__
-	proc_net_create(RREQ_TBL_PROC_NAME, 0, rreq_tbl_proc_info);
+	struct proc_dir_entry *proc;
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,23))
+#define proc_net init_net.proc_net
+#endif
+	proc = create_proc_read_entry(RREQ_TBL_PROC_NAME, 0, proc_net, rreq_tbl_proc_info, NULL);
+	
+	if (!proc)
+		return -1;
+	
 	get_random_bytes(&rreq_seqno, sizeof(unsigned int));
 #else
 	rreq_seqno = 0;
 #endif
+
+	INIT_TBL(&rreq_tbl, RREQ_TBL_MAX_LEN);
+
 	return 0;
 }
 
@@ -706,6 +715,10 @@ void __exit NSCLASS rreq_tbl_cleanup(void)
 		tbl_flush(&e->rreq_id_tbl, crit_none);
 	}
 #ifdef __KERNEL__
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24))
 	proc_net_remove(RREQ_TBL_PROC_NAME);
+#else
+	proc_net_remove(&init_net, RREQ_TBL_PROC_NAME);
+#endif
 #endif
 }
