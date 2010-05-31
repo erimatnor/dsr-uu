@@ -419,6 +419,17 @@ static void dsr_dev_setup(struct net_device *dev)
 #endif
 }
 
+static char *pkt_type_str[] = {
+	"PACKET_HOST",
+	"PACKET_BROADCAST",
+	"PACKET_MULTICAST",
+	"PACKET_OTHERHOST",
+	"PACKET_OUTGOING",
+	"PACKET_LOOPBACK",
+	"PACKET_FASTROUTE",
+        NULL
+};
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,14)
 static int dsr_dev_llrecv(struct sk_buff *skb,
 			  struct net_device *indev, 
@@ -430,17 +441,29 @@ static int dsr_dev_llrecv(struct sk_buff *skb,
 			  struct net_device *orig_dev)
 #endif
 {
-	/* DEBUG("Packet recvd\n"); */
+	DEBUG("Packet recvd from ll skb->pkt_type is %s\n", 
+	      (skb->pkt_type < 7 && skb->pkt_type >= 0) ? 
+	      pkt_type_str[skb->pkt_type] : "unknown");
 
 /* 	if (do_mackill(skb->mac.raw + ETH_ALEN)) { */
 /* 		kfree_skb(skb); */
 /* 		return 0; */
 /* 	} */
-	if (skb->pkt_type == PACKET_OTHERHOST)
+
+	switch (skb->pkt_type) {
+	case PACKET_HOST:
+	case PACKET_BROADCAST:
+	case PACKET_MULTICAST:
 		dsr_ip_recv(skb);
-	else
+		break;
+	case PACKET_OTHERHOST:
+	case PACKET_OUTGOING:
+	case PACKET_LOOPBACK:
+	case PACKET_FASTROUTE:
+	default:
 		dev_kfree_skb_any(skb);
 
+	}
 	return 0;
 }
 

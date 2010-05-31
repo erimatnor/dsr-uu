@@ -39,7 +39,7 @@ if [ "$command" = "start" ]; then
 	#/sbin/ifconfig $IFNAME 192.168.45.$host_nr up
 	/sbin/ifconfig dsr0 192.168.45.$host_nr up
 	# Disable debug output
-	echo "PrintDebug=0" > /proc/net/dsr_config
+	echo "PrintDebug=1" > /proc/net/dsr_config
 	echo "DSR-UU started with virtual host IP $IP"
 	# Enable IP-forwarding...
 	#echo 1 > /proc/sys/net/ipv4/ip_forward
