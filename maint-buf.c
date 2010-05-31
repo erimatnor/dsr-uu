@@ -346,8 +346,16 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 	return 0;
 }
 
-
 void NSCLASS maint_buf_timeout(unsigned long data)
+{
+	DSR_WRITE_LOCK(&maint_buf.lock);
+	
+	_maint_buf_timeout(data);
+	
+	DSR_WRITE_UNLOCK(&maint_buf.lock);
+}
+
+void NSCLASS _maint_buf_timeout(unsigned long data)
 {
 	struct maint_entry *m, *m2;
 
@@ -355,12 +363,13 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 		return;
 
 	/* Get the first packet */
-	m = (struct maint_entry *)tbl_detach_first(&maint_buf);
+	m = (struct maint_entry *)__tbl_detach_first(&maint_buf);
 		
 	if (!m) {
 		DEBUG("Nothing in maint buf\n");
 		return;
 	}
+
 	m->rexmt++;
 
 	DEBUG("nxt_hop=%s id=%u rexmt=%d\n",
@@ -396,7 +405,7 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 				n++;
 			/* Salvage other packets in maintenance buffer with the
 			 * same next hop */
-			while ((m2 = (struct maint_entry *)tbl_find_detach(&maint_buf, &m->nxt_hop, crit_addr))) {
+			while ((m2 = (struct maint_entry *)__tbl_find_detach(&maint_buf, &m->nxt_hop, crit_addr))) {
 				
 				if (maint_buf_salvage(m2->dp) < 0) {
 #ifdef NS2
@@ -435,32 +444,40 @@ void NSCLASS maint_buf_timeout(unsigned long data)
 		dsr_ack_req_send(m->nxt_hop, m->id);
 
 	/* Add to maintenence buffer again */
-	tbl_add(&maint_buf, &m->l, crit_expires);
+	__tbl_add(&maint_buf, &m->l, crit_expires);
       out:
-	maint_buf_set_timeout();
+	_maint_buf_set_timeout();
 
 	return;
 }
 
 void NSCLASS maint_buf_set_timeout(void)
 {
+	DSR_WRITE_LOCK(&maint_buf.lock);
+	
+	_maint_buf_set_timeout();
+	
+	DSR_WRITE_UNLOCK(&maint_buf.lock);
+}
+
+void NSCLASS _maint_buf_set_timeout(void)
+{
 	struct maint_entry *m;
 	usecs_t rto;
 	struct timeval tx_time, now, expires;
 
-	if (tbl_empty(&maint_buf))
+	if (__tbl_empty(&maint_buf)) {
 		return;
+	}
 
 	gettime(&now);
 
-	DSR_WRITE_LOCK(&maint_buf.lock);
 	/* Get first packet in maintenance buffer */
 	m = (struct maint_entry *)__tbl_find(&maint_buf, NULL,
 					     crit_ack_req_sent);
 
 	if (!m) {
 		DEBUG("No packet to set timeout for\n");
-		DSR_WRITE_UNLOCK(&maint_buf.lock);
 		return;
 	}
 
@@ -471,11 +488,9 @@ void NSCLASS maint_buf_set_timeout(void)
 
 	expires = m->expires;
 
-	DSR_WRITE_UNLOCK(&maint_buf.lock);
-
 	/* Check if this packet has already expired */
 	if (timeval_diff(&now, &tx_time) > (int)rto)
-		maint_buf_timeout(0);
+		_maint_buf_timeout(0);
 	else {
 		DEBUG("ACK Timer: exp=%ld.%06ld now=%ld.%06ld\n",
 		      expires.tv_sec, expires.tv_usec, now.tv_sec, now.tv_usec);
@@ -483,6 +498,7 @@ void NSCLASS maint_buf_set_timeout(void)
 		set_timer(&ack_timer, &expires);
 	}
 }
+
 
 int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 {
@@ -524,14 +540,18 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 			dsr_ack_req_opt_add(dp, m->id);
 		}
 		
-		if (tbl_add_tail(&maint_buf, &m->l) < 0) {
+		DSR_WRITE_LOCK(&maint_buf.lock);
+
+		if (__tbl_add_tail(&maint_buf, &m->l) < 0) {
 			DEBUG("Buffer full - not buffering!\n");
 			dsr_pkt_free(m->dp);
 			FREE(m);
 			return -1;
 		}
 		
-		maint_buf_set_timeout();
+		_maint_buf_set_timeout();
+
+		DSR_WRITE_UNLOCK(&maint_buf.lock);
 	       
 	} else {
 		DEBUG("Delaying ACK REQ for %s since_last=%ld limit=%ld\n",
@@ -553,13 +573,17 @@ int NSCLASS maint_buf_del_all(struct in_addr nxt_hop)
 	q.nxt_hop = &nxt_hop;
 	q.rtt = 0;
 
+	DSR_WRITE_LOCK(&maint_buf.lock);
+	
 	if (timer_pending(&ack_timer))
 		del_timer_sync(&ack_timer);
 
-	n = tbl_for_each_del(&maint_buf, &q, crit_addr_del);
+	n = __tbl_for_each_del(&maint_buf, &q, crit_addr_del);
 
-	maint_buf_set_timeout();
+	_maint_buf_set_timeout();
 
+	DSR_WRITE_UNLOCK(&maint_buf.lock);
+	
 	return n;
 }
 
@@ -573,11 +597,13 @@ int NSCLASS maint_buf_del_all_id(struct in_addr nxt_hop, unsigned short id)
 	q.nxt_hop = &nxt_hop;
 	q.rtt = 0;
 
+	DSR_WRITE_LOCK(&maint_buf.lock);
+
 	if (timer_pending(&ack_timer))
 		del_timer_sync(&ack_timer);
 
 	/* Find the buffered packet to mark as acked */
-	n = tbl_for_each_del(&maint_buf, &q, crit_addr_id_del);
+	n = __tbl_for_each_del(&maint_buf, &q, crit_addr_id_del);
 	
 	if (q.rtt > 0) {
 		struct neighbor_info neigh_info;
@@ -587,7 +613,9 @@ int NSCLASS maint_buf_del_all_id(struct in_addr nxt_hop, unsigned short id)
 		neigh_tbl_set_rto(nxt_hop, &neigh_info);
 	}
 
-	maint_buf_set_timeout();
+	_maint_buf_set_timeout();
+
+	DSR_WRITE_UNLOCK(&maint_buf.lock);
 
 	return n;
 }
@@ -600,11 +628,13 @@ int NSCLASS maint_buf_del_addr(struct in_addr nxt_hop)
 	q.nxt_hop = &nxt_hop;
 	q.rtt = 0;
 
+	DSR_WRITE_LOCK(&maint_buf.lock);
+
 	if (timer_pending(&ack_timer))
 		del_timer_sync(&ack_timer);
 
 	/* Find the buffered packet to mark as acked */
-	n = tbl_for_each_del(&maint_buf, &q, crit_addr_del);
+	n = __tbl_for_each_del(&maint_buf, &q, crit_addr_del);
 	
 	if (q.rtt > 0) {
 		struct neighbor_info neigh_info;
@@ -614,7 +644,9 @@ int NSCLASS maint_buf_del_addr(struct in_addr nxt_hop)
 		neigh_tbl_set_rto(nxt_hop, &neigh_info);
 	}
 
-	maint_buf_set_timeout();
+	_maint_buf_set_timeout();
+
+	DSR_WRITE_UNLOCK(&maint_buf.lock);
 
 	return n;
 }
@@ -706,9 +738,11 @@ void NSCLASS maint_buf_cleanup(void)
 {
 	struct maint_entry *m;
 
+	DSR_WRITE_LOCK(&maint_buf.lock);
+
 	del_timer_sync(&ack_timer);
 
-	while ((m = (struct maint_entry *)tbl_detach_first(&maint_buf))) {
+	while ((m = (struct maint_entry *)__tbl_detach_first(&maint_buf))) {
 #ifdef NS2
 		if (m->dp->p)
 			Packet::free(m->dp->p);
@@ -717,6 +751,9 @@ void NSCLASS maint_buf_cleanup(void)
 
 		FREE(m);
 	}
+
+	DSR_WRITE_UNLOCK(&maint_buf.lock);
+
 #ifdef __KERNEL__
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24))
 	proc_net_remove(MAINT_BUF_PROC_FS_NAME);

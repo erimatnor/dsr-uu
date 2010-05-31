@@ -93,14 +93,16 @@ static inline int crit_none(void *foo, void *bar)
 
 /* Functions prefixed with "__" are unlocked, the others are safe. */
 
+static inline int __tbl_empty(struct tbl *t)
+{
+	return (TBL_FIRST(t) == &(t)->head);
+}
+
 static inline int tbl_empty(struct tbl *t)
 {
-	int res = 0;
+	int res;
 	DSR_READ_LOCK(&t->lock);
-
-	if (TBL_FIRST(t) == &(t)->head)
-		res = 1;
-
+	res = __tbl_empty(t);
 	DSR_READ_UNLOCK(&t->lock);
 	return res;
 }
@@ -237,21 +239,27 @@ static inline int tbl_do_for_each(struct tbl *t, void *data, do_t func)
 	return res;
 }
 
-static inline void *tbl_find_detach(struct tbl *t, void *id, criteria_t crit)
+static inline void *__tbl_find_detach(struct tbl *t, void *id, criteria_t crit)
 {
 	list_t *e;
-
-	DSR_WRITE_LOCK(&t->lock);
 
 	e = (list_t *) __tbl_find(t, id, crit);
 
 	if (!e) {
-		DSR_WRITE_UNLOCK(&t->lock);
 		return NULL;
 	}
 	list_del(e);
 	t->len--;
 
+	return e;
+}
+
+static inline void *tbl_find_detach(struct tbl *t, void *id, criteria_t crit)
+{
+	list_t *e;
+
+	DSR_WRITE_LOCK(&t->lock);
+	e = __tbl_find_detach(t, id, crit);
 	DSR_WRITE_UNLOCK(&t->lock);
 
 	return e;
@@ -267,14 +275,11 @@ static inline void *tbl_detach(struct tbl *t, list_t * l)
 	return e;
 }
 
-static inline void *tbl_detach_first(struct tbl *t)
+static inline void *__tbl_detach_first(struct tbl *t)
 {
 	list_t *e;
 
-	DSR_WRITE_LOCK(&t->lock);
-
 	if (TBL_EMPTY(t)) {
-		DSR_WRITE_UNLOCK(&t->lock);
 		return NULL;
 	}
 
@@ -283,6 +288,15 @@ static inline void *tbl_detach_first(struct tbl *t)
 	list_del(e);
 	t->len--;
 
+	return e;
+}
+
+static inline void *tbl_detach_first(struct tbl *t)
+{
+	list_t *e;
+
+	DSR_WRITE_LOCK(&t->lock);
+	e = __tbl_detach_first(t);
 	DSR_WRITE_UNLOCK(&t->lock);
 
 	return e;
@@ -342,12 +356,11 @@ static inline int tbl_del_first(struct tbl *t)
 
 	return n;
 }
-static inline int tbl_for_each_del(struct tbl *t, void *id, criteria_t crit)
+
+static inline int __tbl_for_each_del(struct tbl *t, void *id, criteria_t crit)
 {
 	list_t *pos, *tmp;
 	int n = 0;
-
-	DSR_WRITE_LOCK(&t->lock);
 
 	list_for_each_safe(pos, tmp, &t->head) {
 		if (crit(pos, id)) {
@@ -357,6 +370,18 @@ static inline int tbl_for_each_del(struct tbl *t, void *id, criteria_t crit)
 			FREE(pos);
 		}
 	}
+
+	return n;
+}
+
+static inline int tbl_for_each_del(struct tbl *t, void *id, criteria_t crit)
+{
+	int n;
+
+	DSR_WRITE_LOCK(&t->lock);
+
+	n = __tbl_for_each_del(t, id, crit);
+
 	DSR_WRITE_UNLOCK(&t->lock);
 
 	return n;
@@ -373,11 +398,9 @@ static inline int in_tbl(struct tbl *t, void *id, criteria_t crit)
 	return 0;
 }
 
-static inline void tbl_flush(struct tbl *t, do_t at_flush)
+static inline void __tbl_flush(struct tbl *t, do_t at_flush)
 {
 	list_t *pos, *tmp;
-
-	DSR_WRITE_LOCK(&t->lock);
 
 	list_for_each_safe(pos, tmp, &t->head) {
 		list_del(pos);
@@ -388,6 +411,12 @@ static inline void tbl_flush(struct tbl *t, do_t at_flush)
 		t->len--;
 		FREE(pos);
 	}
+}
+
+static inline void tbl_flush(struct tbl *t, do_t at_flush)
+{
+	DSR_WRITE_LOCK(&t->lock);
+	__tbl_flush(t, at_flush);
 	DSR_WRITE_UNLOCK(&t->lock);
 }
 

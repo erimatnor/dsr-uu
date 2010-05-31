@@ -33,6 +33,8 @@ struct lc_graph {
 #ifndef NO_DECLS
 
 int lc_link_del(struct in_addr src, struct in_addr dst);
+int __lc_link_add(struct in_addr src, struct in_addr dst,
+		unsigned long timeout, int status, int cost);
 int lc_link_add(struct in_addr src, struct in_addr dst,
 		unsigned long timeout, int status, int cost);
 void lc_garbage_collect_set(void);

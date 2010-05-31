@@ -194,10 +194,14 @@ void NSCLASS lc_garbage_collect(unsigned long data)
 /* 	printf("#end\n"); */
 /* 	fflush(stdout); */
 
-	tbl_do_for_each(&LC.links, &LC, crit_expire);
+	DSR_WRITE_LOCK(&LC.lock);
 
-	if (!tbl_empty(&LC.links))
+	__tbl_do_for_each(&LC.links, &LC, crit_expire);
+
+	if (!__tbl_empty(&LC.links))
 		lc_garbage_collect_set();
+
+	DSR_WRITE_UNLOCK(&LC.lock);
 }
 
 void NSCLASS lc_garbage_collect_set(void)
@@ -287,13 +291,12 @@ static int __lc_link_tbl_add(struct tbl *t, struct lc_node *src,
 	return res;
 }
 
-int NSCLASS lc_link_add(struct in_addr src, struct in_addr dst,
+
+int NSCLASS __lc_link_add(struct in_addr src, struct in_addr dst,
 			usecs_t timeout, int status, int cost)
 {
 	struct lc_node *sn, *dn;
 	int res;
-
-	DSR_WRITE_LOCK(&LC.lock);
 
 	sn = (struct lc_node *)__tbl_find(&LC.nodes, &src, crit_addr);
 
@@ -302,11 +305,9 @@ int NSCLASS lc_link_add(struct in_addr src, struct in_addr dst,
 
 		if (!sn) {
 			DEBUG("Could not allocate nodes\n");
-			DSR_WRITE_UNLOCK(&LC.lock);
 			return -1;
 		}
 		__tbl_add_tail(&LC.nodes, &sn->l);
-
 	}
 
 	dn = (struct lc_node *)__tbl_find(&LC.nodes, &dst, crit_addr);
@@ -315,7 +316,6 @@ int NSCLASS lc_link_add(struct in_addr src, struct in_addr dst,
 		dn = lc_node_create(dst);
 		if (!dn) {
 			DEBUG("Could not allocate nodes\n");
-			DSR_WRITE_UNLOCK(&LC.lock);
 			return -1;
 		}
 		__tbl_add_tail(&LC.nodes, &dn->l);
@@ -336,10 +336,21 @@ int NSCLASS lc_link_add(struct in_addr src, struct in_addr dst,
 	} else if (res < 0)
 		DEBUG("Could not add new link\n");
 
-	DSR_WRITE_UNLOCK(&LC.lock);
-
 	return 0;
 }
+
+int NSCLASS lc_link_add(struct in_addr src, struct in_addr dst,
+			usecs_t timeout, int status, int cost)
+{
+	int res;
+
+	DSR_WRITE_LOCK(&LC.lock);
+	res = __lc_link_add(src, dst, timeout, status, cost);
+	DSR_WRITE_UNLOCK(&LC.lock);
+
+	return res;
+}
+
 
 int NSCLASS lc_link_del(struct in_addr src, struct in_addr dst)
 {
@@ -400,9 +411,9 @@ static void __lc_move(struct tbl *to, struct tbl *from)
 	while (!TBL_EMPTY(from)) {
 		struct lc_node *n;
 
-		n = (struct lc_node *)tbl_detach_first(from);
+		n = (struct lc_node *)__tbl_detach_first(from);
 
-		tbl_add_tail(to, &n->l);
+		__tbl_add_tail(to, &n->l);
 	}
 }
 
@@ -426,12 +437,12 @@ void NSCLASS __dijkstra(struct in_addr src)
 
 	while ((u = __dijkstra_find_lowest_cost_node(&LC.nodes))) {
 
-		tbl_detach(&LC.nodes, &u->l);
+		__tbl_detach(&LC.nodes, &u->l);
 
 		/* Add to S */
-		tbl_add_tail(&S, &u->l);
+		__tbl_add_tail(&S, &u->l);
 
-		tbl_do_for_each(&LC.links, u, do_relax);
+		__tbl_do_for_each(&LC.links, u, do_relax);
 		i++;
 	}
 
@@ -546,27 +557,32 @@ lc_srt_add(struct dsr_srt *srt, usecs_t timeout, unsigned short flags)
 
 	addr1 = srt->src;
 
+	DSR_WRITE_LOCK(&LC.lock);
+
 	for (i = 0; i < n; i++) {
 		addr2 = srt->addrs[i];
 
-		lc_link_add(addr1, addr2, timeout, 0, 1);
+		__lc_link_add(addr1, addr2, timeout, 0, 1);
 		links++;
 
 		if (srt->flags & SRT_BIDIR) {
-			lc_link_add(addr2, addr1, timeout, 0, 1);
+			__lc_link_add(addr2, addr1, timeout, 0, 1);
 			links++;
 		}
 		addr1 = addr2;
 	}
 	addr2 = srt->dst;
 
-	lc_link_add(addr1, addr2, timeout, 0, 1);
+	__lc_link_add(addr1, addr2, timeout, 0, 1);
 	links++;
 
 	if (srt->flags & SRT_BIDIR) {
-		lc_link_add(addr2, addr1, timeout, 0, 1);
+		__lc_link_add(addr2, addr1, timeout, 0, 1);
 		links++;
 	}
+
+	DSR_WRITE_UNLOCK(&LC.lock);
+
 	return links;
 }
 
@@ -587,8 +603,8 @@ void NSCLASS lc_flush(void)
 		del_timer(&LC.timer);
 #endif
 #endif
-	tbl_flush(&LC.links, NULL);
-	tbl_flush(&LC.nodes, NULL);
+	__tbl_flush(&LC.links, NULL);
+	__tbl_flush(&LC.nodes, NULL);
 
 	LC.src = NULL;
 
