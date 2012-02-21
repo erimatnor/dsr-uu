@@ -1,22 +1,67 @@
+BASE_SRC = \
+	dsr-pkt.c \
+	dsr-io.c \
+	dsr-opt.c \
+	dsr-rreq.c \
+	dsr-rrep.c \
+	dsr-rerr.c \
+	dsr-ack.c \
+	dsr-srt.c \
+	send-buf.c \
+	neigh.c \
+	maint-buf.c
 
-SRC=dsr-module.c dsr-pkt.c dsr-dev.c dsr-io.c dsr-opt.c dsr-rreq.c dsr-rrep.c dsr-rerr.c dsr-ack.c dsr-srt.c send-buf.c debug.c neigh.c maint-buf.c
+BASE_HDR = \
+	atomic.h \
+	debug.h \
+	dsr-ack.h \
+	dsr-dev.h \
+	dsr.h \
+	dsr-io.h \
+	dsr-opt.h \
+	dsr-pkt.h \
+	dsr-rerr.h \
+	dsr-rrep.h \
+	dsr-rreq.h \
+	dsr-rtc.h \
+	dsr-srt.h \
+	link-cache.h \
+	list.h \
+	maint-buf.h \
+	neigh.h \
+	ns-agent.h \
+	send-buf.h \
+	tbl.h \
+	timer.h
 
-NS_SRC=dsr-pkt.c dsr-io.c dsr-opt.c dsr-rreq.c dsr-rrep.c dsr-rerr.c dsr-ack.c dsr-srt.c send-buf.c neigh.c maint-buf.c link-cache.c
+LINUX_SRC = \
+	$(BASE_SRC) \
+	dsr-module.c \
+	dsr-dev.c \
+	debug.c
 
-NS_SRC_CPP=ns-agent.cc
+NS_SRC = \
+	$(BASE_SRC) \
+	link-cache.c
+
+NS_SRC_CPP = \
+	ns-agent.cc
+
+RTC_SRC = \
+	link-cache.c
 
 DEFS=-DDEBUG 
 
 MODNAME=dsr
 RTC_TRG=linkcache
-RTC_SRC=link-cache.c
+
 
 ifneq (,$(findstring 2.6,$(KERNELRELEASE)))
 
 EXTRA_CFLAGS += -DKERNEL26 $(DEFS)
 
 obj-m += $(MODNAME).o 
-$(MODNAME)-objs := $(SRC:%.c=%.o)
+$(MODNAME)-objs := $(LINUX_SRC:%.c=%.o)
 
 obj-m += $(RTC_TRG).o
 $(RTC_TRG)-objs := $(RTC_SRC:%.c=%.o)
@@ -28,7 +73,7 @@ else
 
 export-objs := link-cache.o
 
-KOBJS := $(SRC:%.c=%.o)
+KOBJS := $(LINUX_SRC:%.c=%.o)
 
 KERNEL=$(shell uname -r)
 KERNEL_DIR=/lib/modules/$(KERNEL)/build
@@ -81,11 +126,11 @@ endif
 
 # Check for kernel version
 ifeq ($(PATCHLEVEL),6)
-default: $(MODNAME).ko $(RTC_TRG).ko TODO
+default: $(MODNAME).ko $(RTC_TRG).ko TODO $(BASE_HDR)
 clean: clean-2.6
 else 
 # Assume kernel 2.4
-default: $(MODNAME).o $(RTC_TRG).o TODO
+default: $(MODNAME).o $(RTC_TRG).o TODO $(BASE_HDR)
 clean: clean-2.4
 endif
 
@@ -93,11 +138,11 @@ mips:
 	@echo "Compiling for MIPS"
 	$(MAKE) default CC=$(MIPS_CC) LD=$(MIPS_LD) KDEFS="$(MIPSDEFS)"
 
-$(MODNAME).ko: $(SRC) Makefile
+$(MODNAME).ko: $(LINUX_SRC) $(BASE_HDR) Makefile
 	@echo "Compiling for $(PWD)"
 	$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) modules
 
-$(RTC_TRG).ko: $(RTC_SRC) Makefile
+$(RTC_TRG).ko: $(RTC_SRC) $(BASE_HDR) Makefile 
 	$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) modules
 
 $(KOBJS): %.o: %.c Makefile
@@ -116,7 +161,7 @@ $(OBJS_NS_CPP): %-ns.o: %.cc Makefile
 $(OBJS_NS): %-ns.o: %.c Makefile
 	$(CXX) $(NS_CFLAGS) $(NS_INC) -c -o $@ $<
 
-$(NS_TARGET): endian.h $(OBJS_NS_CPP) $(OBJS_NS) *.h
+$(NS_TARGET): endian.h $(OBJS_NS_CPP) $(OBJS_NS) $(BASE_HDR)
 #$(AR) $(AR_FLAGS) $@ $(OBJS_NS_CPP) $(OBJS_NS) 
 	$(LD) -r -o $@ $(OBJS_NS_CPP) $(OBJS_NS) 
 
@@ -126,7 +171,7 @@ endian.h: endian.c
 
 depend:
 	@echo "Updating Makefile dependencies..."
-	@makedepend -Y./ -- $(DEFS) -- $(SRC) &>/dev/null
+	@makedepend -Y./ -- $(DEFS) -- $(LINUX_SRC) &>/dev/null
 
 TODO:
 	grep -n "TODO:" *.c *.h > TODO

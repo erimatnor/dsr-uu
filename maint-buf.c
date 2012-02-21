@@ -110,7 +110,6 @@ static inline int crit_addr_del(void *pos, void *data)
 	return 0;
 }
 
-
 /* Criteria function for buffered packets based on next hop */
 static inline int crit_addr(void *pos, void *data)
 {
@@ -184,7 +183,6 @@ static struct maint_entry *maint_entry_create(struct dsr_pkt *dp,
 
 	return m;
 }
-
 
 int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 {
@@ -466,9 +464,8 @@ void NSCLASS _maint_buf_set_timeout(void)
 	usecs_t rto;
 	struct timeval tx_time, now, expires;
 
-	if (__tbl_empty(&maint_buf)) {
+	if (tbl_empty(&maint_buf))
 		return;
-	}
 
 	gettime(&now);
 

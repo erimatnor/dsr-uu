@@ -93,18 +93,9 @@ static inline int crit_none(void *foo, void *bar)
 
 /* Functions prefixed with "__" are unlocked, the others are safe. */
 
-static inline int __tbl_empty(struct tbl *t)
-{
-	return (TBL_FIRST(t) == &(t)->head);
-}
-
 static inline int tbl_empty(struct tbl *t)
 {
-	int res;
-	DSR_READ_LOCK(&t->lock);
-	res = __tbl_empty(t);
-	DSR_READ_UNLOCK(&t->lock);
-	return res;
+	return (TBL_FIRST(t) == &(t)->head);
 }
 
 static inline int __tbl_add(struct tbl *t, list_t * l, criteria_t crit)
@@ -248,6 +239,7 @@ static inline void *__tbl_find_detach(struct tbl *t, void *id, criteria_t crit)
 	if (!e) {
 		return NULL;
 	}
+
 	list_del(e);
 	t->len--;
 

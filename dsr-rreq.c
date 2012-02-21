@@ -48,6 +48,7 @@ struct rreq_tbl_entry {
 	int state;
 	struct in_addr node_addr;
 	int ttl;
+	atomic_t refcnt;
 	DSRUUTimer *timer;
 	struct timeval tx_time;
 	struct timeval last_used;
@@ -58,6 +59,7 @@ struct rreq_tbl_entry {
 
 struct id_entry {
 	list_t l;
+	atomic_t refcnt;
 	struct in_addr trg_addr;
 	unsigned short id;
 };
@@ -214,6 +216,7 @@ struct rreq_tbl_entry *NSCLASS __rreq_tbl_entry_create(struct in_addr node_addr)
 	e->state = STATE_IDLE;
 	e->node_addr = node_addr;
 	e->ttl = 0;
+	atomic_set(&e->refcnt, 1);
 	memset(&e->tx_time, 0, sizeof(struct timeval));;
 	e->num_rexmts = 0;
 #ifdef NS2
