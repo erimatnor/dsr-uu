@@ -183,7 +183,7 @@ struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb)
 			
 			n = dsr_opt_parse(dp);
 			
-			DEBUG("Packet has %d DSR option(s)\n", n);
+			LOG_DBG("Packet has %d DSR option(s)\n", n);
 		}
 
 		dp->payload = dp->nh.raw +

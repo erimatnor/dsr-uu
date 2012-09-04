@@ -335,12 +335,12 @@ int NSCLASS dsr_srt_add(struct dsr_pkt *dp)
 
 	len = DSR_OPT_HDR_LEN + DSR_SRT_OPT_LEN(dp->srt);
 
-	DEBUG("SR: %s\n", print_srt(dp->srt));
+	LOG_DBG("SR: %s\n", print_srt(dp->srt));
 
 	buf = dsr_pkt_alloc_opts(dp, len);
 
 	if (!buf) {
-/* 		DEBUG("Could allocate memory\n"); */
+/* 		LOG_DBG("Could allocate memory\n"); */
 		return -1;
 	}
 #ifdef NS2
@@ -368,7 +368,7 @@ int NSCLASS dsr_srt_add(struct dsr_pkt *dp)
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, prot);
 
 	if (!dp->dh.opth) {
-/* 		DEBUG("Could not create DSR opts header!\n"); */
+/* 		LOG_DBG("Could not create DSR opts header!\n"); */
 		return -1;
 	}
 
@@ -378,7 +378,7 @@ int NSCLASS dsr_srt_add(struct dsr_pkt *dp)
 	dp->srt_opt = dsr_srt_opt_add(buf, len, 0, dp->salvage, dp->srt);
 
 	if (!dp->srt_opt) {
-/* 		DEBUG("Could not create Source Route option header!\n"); */
+/* 		LOG_DBG("Could not create Source Route option header!\n"); */
 		return -1;
 	}
 
@@ -404,12 +404,12 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 			      (char *)srt_opt->addrs);
 
 	if (!dp->srt) {
-		DEBUG("Create source route failed\n");
+		LOG_DBG("Create source route failed\n");
 		return DSR_PKT_ERROR;
 	}
 	n = dp->srt->laddrs / sizeof(struct in_addr);
 
-	DEBUG("SR: %s sleft=%d\n", print_srt(dp->srt), srt_opt->sleft);
+	LOG_DBG("SR: %s sleft=%d\n", print_srt(dp->srt), srt_opt->sleft);
 
 	/* Copy salvage field */
 	dp->salvage = dp->srt_opt->salv;
@@ -418,9 +418,9 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 	dp->prv_hop = dsr_srt_prev_hop(dp->srt, srt_opt->sleft - 1);
 	dp->nxt_hop = dsr_srt_next_hop(dp->srt, srt_opt->sleft - 1);
 
-	DEBUG("next_hop=%s prev_hop=%s next_hop_intended=%s\n",
-	      print_ip(dp->nxt_hop),
-	      print_ip(dp->prv_hop), print_ip(next_hop_intended));
+	LOG_DBG("next_hop=%s prev_hop=%s next_hop_intended=%s\n",
+                print_ip(dp->nxt_hop),
+                print_ip(dp->prv_hop), print_ip(next_hop_intended));
 
 	neigh_tbl_add(dp->prv_hop, dp->mac.ethh);
 	
@@ -450,7 +450,7 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 			srt_split = dsr_srt_new_split(dp->srt, myaddr);
 		
 		if (srt_split) {
-			DEBUG("Adding split SRT to cache: %s\n", print_srt(srt_split));
+			LOG_DBG("Adding split SRT to cache: %s\n", print_srt(srt_split));
 			dsr_rtc_add(srt_split, ConfValToUsecs(RouteCacheTimeout), 0);
 			kfree(srt_split);
 		}
@@ -465,14 +465,14 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 		struct dsr_srt *srt, *srt_cut;
 
 		/* Send Grat RREP */
-		DEBUG("Send Gratuitous RREP to %s\n", print_ip(dp->src));
+		LOG_DBG("Send Gratuitous RREP to %s\n", print_ip(dp->src));
 
 		srt_cut = dsr_srt_shortcut(dp->srt, dp->prv_hop, myaddr);
 
 		if (!srt_cut)
 			return DSR_PKT_DROP;
 
-		DEBUG("shortcut: %s\n", print_srt(srt_cut));
+		LOG_DBG("shortcut: %s\n", print_srt(srt_cut));
 
 		/* srt = dsr_rtc_find(myaddr, dp->src); */
 		if (srt_cut->laddrs / sizeof(struct in_addr) == 0)
@@ -481,11 +481,11 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 			srt = dsr_srt_new_split_rev(srt_cut, myaddr);
 
 		if (!srt) {
-			DEBUG("No route to %s\n", print_ip(dp->src));
+			LOG_DBG("No route to %s\n", print_ip(dp->src));
 			kfree(srt_cut);
 			return DSR_PKT_DROP;
 		}
-		DEBUG("my srt: %s\n", print_srt(srt));
+		LOG_DBG("my srt: %s\n", print_srt(srt));
 
 		grat_rrep_tbl_add(dp->src, dp->prv_hop);
 

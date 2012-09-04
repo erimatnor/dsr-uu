@@ -87,11 +87,11 @@ void NSCLASS send_buf_timeout(unsigned long data)
 	gettime(&now);
 
 /* 	send_buf_print(&send_buf, buf); */
-/* 	DEBUG("\n%s\n", buf); */
+/* 	LOG_DBG("\n%s\n", buf); */
 
 	pkts = tbl_for_each_del(&send_buf, &now, crit_garbage);
 
-	DEBUG("%d packets garbage collected\n", pkts);
+	LOG_DBG("%d packets garbage collected\n", pkts);
 
 	read_lock_bh(&send_buf.lock);
 	
@@ -99,7 +99,7 @@ void NSCLASS send_buf_timeout(unsigned long data)
 	e = (struct send_buf_entry *)__tbl_find(&send_buf, NULL, crit_none);
 
 	if (!e) {
-		DEBUG("No packet to set timeout for\n");
+		LOG_DBG("No packet to set timeout for\n");
 		read_unlock_bh(&send_buf.lock);
 		return;
 	}
@@ -107,11 +107,11 @@ void NSCLASS send_buf_timeout(unsigned long data)
 
 	timeval_add_usecs(&expires, ConfValToUsecs(SendBufferTimeout));
 
-	DEBUG("now=%s qtime=%s exp=%s\n", 
-	      print_timeval(&now), 
-	      print_timeval(&e->qtime), 
-	      print_timeval(&expires));
-
+	LOG_DBG("now=%s qtime=%s exp=%s\n", 
+                print_timeval(&now), 
+                print_timeval(&e->qtime), 
+                print_timeval(&expires));
+        
 	read_unlock_bh(&send_buf.lock);
 
 	set_timer(&send_buf_timer, &expires);
@@ -145,7 +145,7 @@ int NSCLASS send_buf_enqueue_packet(struct dsr_pkt *dp, xmit_fct_t okfn)
 	if (!e)
 		return -ENOMEM;
 
-	DEBUG("enqueing packet to %s\n", print_ip(dp->dst));
+	LOG_DBG("enqueing packet to %s\n", print_ip(dp->dst));
 
 	write_lock_bh(&send_buf.lock);
 	
@@ -157,7 +157,7 @@ int NSCLASS send_buf_enqueue_packet(struct dsr_pkt *dp, xmit_fct_t okfn)
 	if (res < 0) {
 		struct send_buf_entry *f;
 
-		DEBUG("buffer full, removing first\n");
+		LOG_DBG("buffer full, removing first\n");
 		f = (struct send_buf_entry *)__tbl_detach_first(&send_buf);
 
 		if (f) {
@@ -168,7 +168,7 @@ int NSCLASS send_buf_enqueue_packet(struct dsr_pkt *dp, xmit_fct_t okfn)
 		res = tbl_add_tail(&send_buf, &e->l);
 
 		if (res < 0) {
-			DEBUG("Could not buffer packet\n");
+			LOG_DBG("Could not buffer packet\n");
 			kfree(e);
 			write_unlock_bh(&send_buf.lock);
 			return -ENOSPC;
@@ -210,7 +210,7 @@ int NSCLASS send_buf_set_verdict(int verdict, struct in_addr dst)
 			kfree(e);
 			pkts++;
 		}
-		DEBUG("Dropped %d queued pkts for %s\n", pkts, print_ip(dst));
+		LOG_DBG("Dropped %d queued pkts for %s\n", pkts, print_ip(dst));
 		break;
 	case SEND_BUF_SEND:
 
@@ -218,14 +218,14 @@ int NSCLASS send_buf_set_verdict(int verdict, struct in_addr dst)
 		  (struct send_buf_entry *)__tbl_find_detach(&send_buf,
 							     &dst,
 							     crit_addr))) {
-	    DEBUG("Send packet\n");
+	    LOG_DBG("Send packet\n");
 	    /* Get source route */
 			e->dp->srt = dsr_rtc_find(e->dp->src, e->dp->dst);
 
 			if (e->dp->srt) {
 
 				if (dsr_srt_add(e->dp) < 0) {
-					DEBUG("Could not add source route\n");
+					LOG_DBG("Could not add source route\n");
 					dsr_pkt_free(e->dp);
 				} else
 					/* Send packet */
@@ -235,18 +235,18 @@ int NSCLASS send_buf_set_verdict(int verdict, struct in_addr dst)
 					e->okfn(e->dp);
 #endif
 			} else {
-				DEBUG("No source route found for %s!\n",
-				      print_ip(dst));
+				LOG_DBG("No source route found for %s!\n",
+                                        print_ip(dst));
 
 				dsr_pkt_free(e->dp);
 			}
 			pkts++;
 			kfree(e);
 		}
-		DEBUG("Sent %d queued packets to %s\n", pkts, print_ip(dst));
+		LOG_DBG("Sent %d queued packets to %s\n", pkts, print_ip(dst));
 
 		/*      if (pkts == 0) */
-/* 			DEBUG("No packets for dest %s\n", print_ip(dst)); */
+/* 			LOG_DBG("No packets for dest %s\n", print_ip(dst)); */
 		break;
 	}
 
@@ -363,7 +363,7 @@ void __exit NSCLASS send_buf_cleanup(void)
 
 	pkts = send_buf_flush(&send_buf);
 
-	DEBUG("Flushed %d packets\n", pkts);
+	LOG_DBG("Flushed %d packets\n", pkts);
 
 #ifdef __KERNEL__
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24))

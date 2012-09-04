@@ -50,7 +50,7 @@ NS_SRC_CPP = \
 RTC_SRC = \
 	link-cache.c
 
-DEFS=-DDEBUG
+DEFS=-DENABLE_DEBUG
 CC=gcc
 CXX=g++
 
@@ -68,7 +68,7 @@ OBJS_NS_CPP=$(NS_SRC_CPP:%.cc=%-ns.o)
 NS_DEFS= # DON'T CHANGE (overridden by NS Makefile)
 
 # Set extra DEFINES here. Link layer feedback is now a runtime option.
-EXTRA_NS_DEFS=-DDEBUG
+EXTRA_NS_DEFS=-DENABLE_DEBUG
 
 # Note: OPTS is overridden by NS Makefile
 NS_CFLAGS=$(OPTS) $(CPP_OPTS) $(DEBUG) $(NS_DEFS) $(EXTRA_NS_DEFS)

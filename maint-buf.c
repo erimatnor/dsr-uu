@@ -194,19 +194,19 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 		return -1;
 	
 	if (dp->srt) {
-		DEBUG("old internal source route exists\n");
+		LOG_DBG("old internal source route exists\n");
 		kfree(dp->srt);
 	}
 
 	alt_srt = dsr_rtc_find(my_addr(), dp->dst);
 	
 	if (!alt_srt) {
-		DEBUG("No alt. source route - cannot salvage packet\n");
+		LOG_DBG("No alt. source route - cannot salvage packet\n");
 		return -1;
 	}
 	
 	if (!dp->srt_opt) {
-		DEBUG("No old source route\n");
+		LOG_DBG("No old source route\n");
 		kfree(alt_srt);
 		return -1;
 	}
@@ -219,7 +219,7 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 		return -1;
 	}
 
-	DEBUG("opt_len old srt: %s\n", print_srt(old_srt));
+	LOG_DBG("opt_len old srt: %s\n", print_srt(old_srt));
 
 	/* Salvaging as described in the draft does not really make that much
 	 * sense to me... For example, why should the new source route be
@@ -248,8 +248,8 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 		
 		sleft = (srt->laddrs) / 4 - (srt_to_me->laddrs / 4) - 1;
 		
-		DEBUG("old_srt: %s\n", print_srt(old_srt));
-		DEBUG("alt_srt: %s\n", print_srt(alt_srt));
+		LOG_DBG("old_srt: %s\n", print_srt(old_srt));
+		LOG_DBG("alt_srt: %s\n", print_srt(alt_srt));
 		
 		kfree(alt_srt);
 		kfree(srt_to_me);
@@ -260,10 +260,10 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 	if (!srt)
 		return -1;
 	
-	DEBUG("Salvage packet sleft=%d srt: %s\n", sleft, print_srt(srt));
+	LOG_DBG("Salvage packet sleft=%d srt: %s\n", sleft, print_srt(srt));
 
 	if (dsr_srt_check_duplicate(srt)) {
-		DEBUG("Duplicate address in new source route, aborting salvage\n");
+		LOG_DBG("Duplicate address in new source route, aborting salvage\n");
 		kfree(srt);
 		return -1;
 	}
@@ -277,11 +277,11 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 	new_srt_opt_len = DSR_SRT_OPT_LEN(srt);
 	salv = dp->srt_opt->salv;
 
-	DEBUG("Salvage - source route length new=%d old=%d\n",
-	      new_srt_opt_len, old_srt_opt_len);
+	LOG_DBG("Salvage - source route length new=%d old=%d\n",
+                new_srt_opt_len, old_srt_opt_len);
 
 	if (old_srt_opt_len == new_srt_opt_len) {
-		DEBUG("new and old srt of same length\n");
+		LOG_DBG("new and old srt of same length\n");
 		
 		dp->srt_opt = dsr_srt_opt_add((char *)dp->srt_opt, 
 					      new_srt_opt_len, 0, 
@@ -292,13 +292,13 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 		char *old_srt_opt = (char *)dp->srt_opt;
 		char *buf;
 		
-		DEBUG("Creating new options header\n");
+		LOG_DBG("Creating new options header\n");
 		
 		old_opt_len = dsr_pkt_opts_len(dp);
 		new_opt_len = old_opt_len - old_srt_opt_len + new_srt_opt_len;
 		
-		DEBUG("opt_len old=%d new=%d srt: %s\n", 
-		      old_opt_len, new_opt_len, print_srt(srt));
+		LOG_DBG("opt_len old=%d new=%d srt: %s\n", 
+                        old_opt_len, new_opt_len, print_srt(srt));
 
 		/* Allocate new options space */
 		buf = dsr_pkt_alloc_opts(dp, new_opt_len);
@@ -336,7 +336,9 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 	
 	dp->nxt_hop = dsr_srt_next_hop(srt, dp->srt_opt->sleft);
 
-	DEBUG("Next hop=%s p_len=%d\n", print_ip(dp->nxt_hop), ntohs(dp->dh.opth->p_len));
+	LOG_DBG("Next hop=%s p_len=%d\n", 
+                print_ip(dp->nxt_hop), 
+                ntohs(dp->dh.opth->p_len));
 
 	dp->srt = srt;
 
@@ -363,19 +365,19 @@ void NSCLASS _maint_buf_timeout(unsigned long data)
 	m = (struct maint_entry *)__tbl_detach_first(&maint_buf);
 		
 	if (!m) {
-		DEBUG("Nothing in maint buf\n");
+		LOG_DBG("Nothing in maint buf\n");
 		return;
 	}
 
 	m->rexmt++;
 
-	DEBUG("nxt_hop=%s id=%u rexmt=%d\n",
-	      print_ip(m->nxt_hop), m->id, m->rexmt);
+	LOG_DBG("nxt_hop=%s id=%u rexmt=%d\n",
+                print_ip(m->nxt_hop), m->id, m->rexmt);
 
 	/* Increase the number of retransmits */
 	if (m->rexmt >= ConfVal(MaxMaintRexmt)) {
 
-		DEBUG("MaxMaintRexmt reached!\n");
+		LOG_DBG("MaxMaintRexmt reached!\n");
 
 		if (m->ack_req_sent) {
 			int n = 0;
@@ -414,9 +416,9 @@ void NSCLASS _maint_buf_timeout(unsigned long data)
 				kfree(m2);
 				n++;
 			}
-			DEBUG("Salvaged %d packets from maint_buf\n", n);
+			LOG_DBG("Salvaged %d packets from maint_buf\n", n);
 		} else {
-			DEBUG("No ACK REQ sent for this packet\n");
+			LOG_DBG("No ACK REQ sent for this packet\n");
 
 			if (m->dp) {
 #ifdef NS2
@@ -473,7 +475,7 @@ void NSCLASS _maint_buf_set_timeout(void)
 					     crit_ack_req_sent);
 
 	if (!m) {
-		DEBUG("No packet to set timeout for\n");
+		LOG_DBG("No packet to set timeout for\n");
 		return;
 	}
 
@@ -488,7 +490,7 @@ void NSCLASS _maint_buf_set_timeout(void)
 	if (timeval_diff(&now, &tx_time) > (int)rto)
 		_maint_buf_timeout(0);
 	else {
-		DEBUG("ACK Timer: exp=%ld.%06ld now=%ld.%06ld\n",
+		LOG_DBG("ACK Timer: exp=%ld.%06ld now=%ld.%06ld\n",
 		      expires.tv_sec, expires.tv_usec, now.tv_sec, now.tv_usec);
 /* 		ack_timer.data = (unsigned long)m; */
 		set_timer(&ack_timer, &expires);
@@ -504,7 +506,7 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 	struct maint_entry *m;
 
        	if (!dp) {
-		DEBUG("dp is NULL!?\n");
+		LOG_DBG("dp is NULL!?\n");
 		return -1;
 	}
 
@@ -513,7 +515,7 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 	res = neigh_tbl_query(dp->nxt_hop, &neigh_info);
 
 	if (!res) {
-		DEBUG("No neighbor info about %s\n", print_ip(dp->nxt_hop));
+		LOG_DBG("No neighbor info about %s\n", print_ip(dp->nxt_hop));
 		return -1;
 	}
 	
@@ -539,7 +541,7 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 		write_lock_bh(&maint_buf.lock);
 
 		if (__tbl_add_tail(&maint_buf, &m->l) < 0) {
-			DEBUG("Buffer full - not buffering!\n");
+			LOG_DBG("Buffer full - not buffering!\n");
 			dsr_pkt_free(m->dp);
 			kfree(m);
                         write_unlock_bh(&maint_buf.lock);
@@ -551,10 +553,10 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 		write_unlock_bh(&maint_buf.lock);
 	       
 	} else {
-		DEBUG("Delaying ACK REQ for %s since_last=%ld limit=%ld\n",
-		      print_ip(dp->nxt_hop), 
-		      timeval_diff(&now, &neigh_info.last_ack_req), 
-		      ConfValToUsecs(MaintHoldoffTime));
+		LOG_DBG("Delaying ACK REQ for %s since_last=%ld limit=%ld\n",
+                        print_ip(dp->nxt_hop), 
+                        timeval_diff(&now, &neigh_info.last_ack_req), 
+                        ConfValToUsecs(MaintHoldoffTime));
 	}
 	
 	return 1;

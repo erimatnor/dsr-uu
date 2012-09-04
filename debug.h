@@ -26,13 +26,12 @@ extern atomic_t num_pkts;
 #include <netinet/in.h>
 #endif				/* __KERNEL__ */
 
-#ifdef DEBUG
-#undef DEBUG
+#ifdef ENABLE_DEBUG
 #define DEBUG_PROC
-#define DEBUG(f, args...) do { if (get_confval(PrintDebug)) trace(__FUNCTION__, f, ## args); } while (0)
-//#define DEBUG(f, args...) trace(__FUNCTION__, f, ## args)
+#define LOG_DBG(f, args...) do { if (get_confval(PrintDebug)) trace(__FUNCTION__, f, ## args); } while (0)
+//#define LOG_DBG(f, args...) trace(__FUNCTION__, f, ## args)
 #else
-#define DEBUG(f, args...)
+#define LOG_DBG(f, args...)
 #endif
 
 #ifndef NO_GLOBALS

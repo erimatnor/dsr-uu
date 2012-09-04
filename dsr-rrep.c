@@ -230,7 +230,7 @@ int NSCLASS dsr_rrep_send(struct dsr_srt *srt, struct dsr_srt *srt_to_me)
 	dp = dsr_pkt_alloc(NULL);
 
 	if (!dp) {
-		DEBUG("Could not allocate DSR packet\n");
+		LOG_DBG("Could not allocate DSR packet\n");
 		return -1;
 	}
 
@@ -247,17 +247,16 @@ int NSCLASS dsr_rrep_send(struct dsr_srt *srt, struct dsr_srt *srt_to_me)
 
 	n = srt->laddrs / sizeof(struct in_addr);
 
-	DEBUG("srt: %s\n", print_srt(srt));
-	DEBUG("srt_to_me: %s\n", print_srt(srt_to_me));
-	DEBUG("next_hop=%s\n", print_ip(dp->nxt_hop));
-	DEBUG
-	    ("IP_HDR_LEN=%d DSR_OPT_HDR_LEN=%d DSR_SRT_OPT_LEN=%d DSR_RREP_OPT_LEN=%d DSR_OPT_PAD1_LEN=%d RREP len=%d\n",
-	     IP_HDR_LEN, DSR_OPT_HDR_LEN, DSR_SRT_OPT_LEN(srt),
-	     DSR_RREP_OPT_LEN(srt_to_me), DSR_OPT_PAD1_LEN, len);
-
+	LOG_DBG("srt: %s\n", print_srt(srt));
+	LOG_DBG("srt_to_me: %s\n", print_srt(srt_to_me));
+	LOG_DBG("next_hop=%s\n", print_ip(dp->nxt_hop));
+	LOG_DBG("IP_HDR_LEN=%d DSR_OPT_HDR_LEN=%d DSR_SRT_OPT_LEN=%d DSR_RREP_OPT_LEN=%d DSR_OPT_PAD1_LEN=%d RREP len=%d\n",
+		IP_HDR_LEN, DSR_OPT_HDR_LEN, DSR_SRT_OPT_LEN(srt),
+		DSR_RREP_OPT_LEN(srt_to_me), DSR_OPT_PAD1_LEN, len);
+	
 	ttl = n + 1;
 
-	DEBUG("TTL=%d, n=%d\n", ttl, n);
+	LOG_DBG("TTL=%d, n=%d\n", ttl, n);
 
 	buf = dsr_pkt_alloc_opts(dp, len);
 
@@ -268,14 +267,14 @@ int NSCLASS dsr_rrep_send(struct dsr_srt *srt, struct dsr_srt *srt_to_me)
 				  IP_HDR_LEN + len, IPPROTO_DSR, ttl);
 
 	if (!dp->nh.iph) {
-		DEBUG("Could not create IP header\n");
+		LOG_DBG("Could not create IP header\n");
 		goto out_err;
 	}
 
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, DSR_NO_NEXT_HDR_TYPE);
 
 	if (!dp->dh.opth) {
-		DEBUG("Could not create DSR options header\n");
+		LOG_DBG("Could not create DSR options header\n");
 		goto out_err;
 	}
 
@@ -286,7 +285,7 @@ int NSCLASS dsr_rrep_send(struct dsr_srt *srt, struct dsr_srt *srt_to_me)
 	dp->srt_opt = dsr_srt_opt_add(buf, len, 0, dp->salvage, srt);
 
 	if (!dp->srt_opt) {
-		DEBUG("Could not create Source Route option header\n");
+		LOG_DBG("Could not create Source Route option header\n");
 		goto out_err;
 	}
 
@@ -297,7 +296,7 @@ int NSCLASS dsr_rrep_send(struct dsr_srt *srt, struct dsr_srt *srt_to_me)
 	    dsr_rrep_opt_add(buf, len, srt_to_me);
 
 	if (!dp->rrep_opt[dp->num_rrep_opts - 1]) {
-		DEBUG("Could not create RREP option header\n");
+		LOG_DBG("Could not create RREP option header\n");
 		goto out_err;
 	}
 
@@ -385,7 +384,7 @@ int NSCLASS dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 /* 			kfree(rrep_opt_srt); */
 /* 			goto end_add_srt; */
 /* 		} */
-/* 		DEBUG("Adding split RREP SRT to cache: %s\n", print_srt(srt_split)); */
+/* 		LOG_DBG("Adding split RREP SRT to cache: %s\n", print_srt(srt_split)); */
 /* 		dsr_rtc_add(srt_split, ConfValToUsecs(RouteCacheTimeout), 0); */
 		
 /* 		kfree(srt_split); */
@@ -399,12 +398,12 @@ int NSCLASS dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 	if (dp->dst.s_addr == myaddr.s_addr) {
 		/*RREP for this node */
 
-		DEBUG("RREP for me!\n");
+		LOG_DBG("RREP for me!\n");
 
 		return DSR_PKT_SEND_BUFFERED;
 	}
 
-	DEBUG("I am not RREP destination\n");
+	LOG_DBG("I am not RREP destination\n");
 
 	/* Forward */
 	return DSR_PKT_FORWARD;

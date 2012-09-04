@@ -57,14 +57,14 @@ int NSCLASS dsr_recv(struct dsr_pkt *dp)
 			break;
 		case DSR_PKT_DROP:
 		case DSR_PKT_ERROR:
-			DEBUG("DSR_PKT_DROP or DSR_PKT_ERROR\n");
+			LOG_DBG("DSR_PKT_DROP or DSR_PKT_ERROR\n");
 			dsr_pkt_free(dp);
 			return 0;
 		case DSR_PKT_SEND_ACK:
 			/* Moved to dsr-ack.c */
 			break;
 		case DSR_PKT_SRT_REMOVE:
-			//DEBUG("Remove source route\n");
+			//LOG_DBG("Remove source route\n");
 			// Hmm, we remove the DSR options when we deliver a
 			//packet
 			//dsr_opt_remove(dp);
@@ -77,11 +77,11 @@ int NSCLASS dsr_recv(struct dsr_pkt *dp)
 			if (dp->nh.iph->ttl < 1)
 #endif
 			{
-				DEBUG("ttl=0, dropping!\n");
+				LOG_DBG("ttl=0, dropping!\n");
 				dsr_pkt_free(dp);
 				return 0;
 			} else {
-				DEBUG("Forwarding %s %s nh %s\n",
+				LOG_DBG("Forwarding %s %s nh %s\n",
 				      print_ip(dp->src),
 				      print_ip(dp->dst), print_ip(dp->nxt_hop));
 				XMIT(dp);
@@ -95,7 +95,7 @@ int NSCLASS dsr_recv(struct dsr_pkt *dp)
 			/* In dsr-rrep.c */
 			break;
 		case DSR_PKT_SEND_ICMP:
-			DEBUG("Send ICMP\n");
+			LOG_DBG("Send ICMP\n");
 			break;
 		case DSR_PKT_SEND_BUFFERED:
 			if (dp->rrep_opt) {
@@ -110,13 +110,13 @@ int NSCLASS dsr_recv(struct dsr_pkt *dp)
 			}
 				break;
 		case DSR_PKT_DELIVER:
-			DEBUG("Deliver to DSR device\n");
+			LOG_DBG("Deliver to DSR device\n");
 			DELIVER(dp);
 			return 0;
 		case 0:
 			break;
 		default:
-			DEBUG("Unknown pkt action\n");
+			LOG_DBG("Unknown pkt action\n");
 		}
 		mask = (mask << 1);
 	}
@@ -131,7 +131,7 @@ void NSCLASS dsr_start_xmit(struct dsr_pkt *dp)
 	int res;
 
 	if (!dp) {
-		DEBUG("Could not allocate DSR packet\n");
+		LOG_DBG("Could not allocate DSR packet\n");
 		return;
 	}
 
@@ -140,7 +140,7 @@ void NSCLASS dsr_start_xmit(struct dsr_pkt *dp)
 	if (dp->srt) {
 
 		if (dsr_srt_add(dp) < 0) {
-			DEBUG("Could not add source route\n");
+			LOG_DBG("Could not add source route\n");
 			goto out;
 		}
 		/* Send packet */
@@ -156,13 +156,13 @@ void NSCLASS dsr_start_xmit(struct dsr_pkt *dp)
 		res = send_buf_enqueue_packet(dp, &dsr_dev_xmit);
 #endif
 		if (res < 0) {
-			DEBUG("Queueing failed!\n");
+			LOG_DBG("Queueing failed!\n");
 			goto out;
 		}
 		res = dsr_rreq_route_discovery(dp->dst);
 
 		if (res < 0)
-			DEBUG("RREQ Transmission failed...");
+			LOG_DBG("RREQ Transmission failed...");
 
 		return;
 	}

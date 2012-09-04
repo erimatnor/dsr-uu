@@ -23,7 +23,7 @@
 #include "link-cache.h"
 
 #ifdef __KERNEL__
-#define DEBUG(f, args...)
+#define LC_DBG(f, args...)
 
 MODULE_AUTHOR("erik.nordstrom@it.uu.se");
 MODULE_DESCRIPTION("DSR link cache kernel module");
@@ -305,7 +305,7 @@ int NSCLASS __lc_link_add(struct in_addr src, struct in_addr dst,
 		sn = lc_node_create(src);
 
 		if (!sn) {
-			DEBUG("Could not allocate nodes\n");
+			LC_DBG("Could not allocate nodes\n");
 			return -1;
 		}
 		__tbl_add_tail(&LC.nodes, &sn->l);
@@ -316,7 +316,7 @@ int NSCLASS __lc_link_add(struct in_addr src, struct in_addr dst,
 	if (!dn) {
 		dn = lc_node_create(dst);
 		if (!dn) {
-			DEBUG("Could not allocate nodes\n");
+			LC_DBG("Could not allocate nodes\n");
 			return -1;
 		}
 		__tbl_add_tail(&LC.nodes, &dn->l);
@@ -335,7 +335,7 @@ int NSCLASS __lc_link_add(struct in_addr src, struct in_addr dst,
 #endif
 
 	} else if (res < 0)
-		DEBUG("Could not add new link\n");
+		LC_DBG("Could not add new link\n");
 
 	return 0;
 }
@@ -425,7 +425,7 @@ void NSCLASS __dijkstra(struct in_addr src)
 	int i = 0;
 
 	if (TBL_EMPTY(&LC.nodes)) {
-		DEBUG("No nodes in Link Cache\n");
+		LC_DBG("No nodes in Link Cache\n");
 		return;
 	}
 
@@ -472,14 +472,14 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 	dst_node = (struct lc_node *)__tbl_find(&LC.nodes, &dst, crit_addr);
 
 	if (!dst_node) {
-		DEBUG("%s not found\n", print_ip(dst));
+		LC_DBG("%s not found\n", print_ip(dst));
 		goto out;
 	}
 
 /* 	lc_print(&LC, lc_print_buf); */
-/* 	DEBUG("Find SR to node %s\n%s\n", print_ip(dst_node->addr), lc_print_buf); */
+/* 	LC_DBG("Find SR to node %s\n%s\n", print_ip(dst_node->addr), lc_print_buf); */
 
-/* 	DEBUG("Hops to %s: %u\n", print_ip(dst), dst_node->hops); */
+/* 	LC_DBG("Hops to %s: %u\n", print_ip(dst), dst_node->hops); */
 
 	if (dst_node->cost != LC_COST_INF && dst_node->pred) {
 		struct lc_node *d, *n;
@@ -492,7 +492,7 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 					     GFP_ATOMIC);
 
 		if (!srt) {
-			DEBUG("Could not allocate source route!!!\n");
+			LC_DBG("Could not allocate source route!!!\n");
 			goto out;
 		}
 
@@ -503,9 +503,9 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 		/*      l = __lc_link_find(&LC.links, dst_node->pred->addr, dst_node->addr); */
 
 /* 		if (!l) { */
-/* 			DEBUG("Link not found for timeout update!\n"); */
+/* 			LC_DBG("Link not found for timeout update!\n"); */
 /* 		} else { */
-/* 		/\* 	DEBUG("Updating timeout for link %s->%s\n",  *\/ */
+/* 		/\* 	LC_DBG("Updating timeout for link %s->%s\n",  *\/ */
 /* /\* 			      print_ip(l->src->addr),  *\/ */
 /* /\* 			      print_ip(l->dst->addr)); *\/ */
 /* 			gettime(&l->expires); */
@@ -520,9 +520,9 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 			/*      l = __lc_link_find(&LC.links, n->addr, d->addr); */
 
 /* 			if (!l) { */
-/* 				DEBUG("Link not found for timeout update!\n"); */
+/* 				LC_DBG("Link not found for timeout update!\n"); */
 /* 			} else { */
-/* 			/\* 	DEBUG("Updating timeout for link %s->%s\n",  *\/ */
+/* 			/\* 	LC_DBG("Updating timeout for link %s->%s\n",  *\/ */
 /* /\* 				      print_ip(l->src->addr),  *\/ */
 /* /\* 				      print_ip(l->dst->addr)); *\/ */
 /* 				gettime(&l->expires); */
@@ -533,7 +533,7 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 		}
 
 		if ((i + 1) != (int)dst_node->hops) {
-			DEBUG("hop count ERROR i+1=%d hops=%d!!!\n", i + 1,
+			LC_DBG("hop count ERROR i+1=%d hops=%d!!!\n", i + 1,
 			      dst_node->hops);
 			kfree(srt);
 			srt = NULL;

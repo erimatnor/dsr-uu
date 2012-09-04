@@ -80,7 +80,7 @@ struct sk_buff *dsr_skb_create(struct dsr_pkt *dp, struct net_device *dev)
 
 	tot_len = ip_len + dsr_opts_len + dp->payload_len;
 
-	DEBUG("ip_len=%d dsr_opts_len=%d payload_len=%d tot_len=%d\n",
+	LOG_DBG("ip_len=%d dsr_opts_len=%d payload_len=%d tot_len=%d\n",
 	      ip_len, dsr_opts_len, dp->payload_len, tot_len);
 #ifdef KERNEL26
 	skb = alloc_skb(tot_len + LL_RESERVED_SPACE(dev), GFP_ATOMIC);
@@ -88,7 +88,7 @@ struct sk_buff *dsr_skb_create(struct dsr_pkt *dp, struct net_device *dev)
 	skb = alloc_skb(dev->hard_header_len + 15 + tot_len, GFP_ATOMIC);
 #endif
 	if (!skb) {
-		DEBUG("alloc_skb failed\n");
+		LOG_DBG("alloc_skb failed\n");
 		return NULL;
 	}
 
@@ -142,8 +142,7 @@ int dsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb)
 	else {
 		/* Get hardware destination address */
 		if (neigh_tbl_query(dp->nxt_hop, &neigh_info) < 0) {
-			DEBUG
-			    ("Could not get hardware address for next hop %s\n",
+			LOG_DBG("Could not get hardware address for next hop %s\n",
 			     print_ip(dp->nxt_hop));
 			return -1;
 		}
@@ -154,7 +153,7 @@ int dsr_hw_header_create(struct dsr_pkt *dp, struct sk_buff *skb)
 		skb->dev->hard_header(skb, skb->dev, ETH_P_IP,
 				      neigh_info.hw_addr.sa_data, 0, skb->len);
 	} else {
-		DEBUG("Missing hard_header\n");
+		LOG_DBG("Missing hard_header\n");
 		return -1;
 	}
 #else
@@ -180,7 +179,7 @@ static int dsr_dev_inetaddr_event(struct notifier_block *this,
 
 	switch (event) {
 	case NETDEV_UP:
-		DEBUG("inetdev UP\n");
+		LOG_DBG("inetdev UP\n");
 
 		if (indev->dev == dsr_dev) {
 			struct dsr_node *dnode;
@@ -207,7 +206,7 @@ static int dsr_dev_inetaddr_event(struct notifier_block *this,
 			addr.s_addr = ifa->ifa_address;
 			bc.s_addr = ifa->ifa_broadcast;
 			
-			DEBUG("New ip=%s broadcast=%s\n",
+			LOG_DBG("New ip=%s broadcast=%s\n",
 			      print_ip(addr), print_ip(bc));
 		}
 		break;
@@ -229,11 +228,11 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 
 	switch (event) {
 	case NETDEV_REGISTER:
-		DEBUG("Netdev register %s\n", dev->name);
+		LOG_DBG("Netdev register %s\n", dev->name);
 		if (dnode->slave_dev == NULL && 
 		    strcmp(dev->name, dnode->slave_ifname) == 0) {
 			
-			DEBUG("Slave dev %s up\n", dev->name);
+			LOG_DBG("Slave dev %s up\n", dev->name);
 			
 			dsr_node_lock(dnode);
 			dnode->slave_dev = dev;
@@ -248,7 +247,7 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 			 * header. */
 			dsr_dev->mtu = dev->mtu - DSR_OPTS_MAX_SIZE;
 			
-			DEBUG("Registering packet type\n");
+			LOG_DBG("Registering packet type\n");
 			dsr_packet_type.func = dsr_dev_llrecv;
 			dsr_packet_type.dev = dev;
 			dev_add_pack(&dsr_packet_type);
@@ -257,19 +256,19 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 		}
 
 		if (slave_change)
-			DEBUG("New DSR slave interface %s\n", dev->name);
+			LOG_DBG("New DSR slave interface %s\n", dev->name);
 		break;
 	case NETDEV_CHANGE:
-		DEBUG("Netdev change\n");
+		LOG_DBG("Netdev change\n");
 		break;
 	case NETDEV_UP:
-		DEBUG("Netdev up %s\n", dev->name);
+		LOG_DBG("Netdev up %s\n", dev->name);
 		if (ConfVal(PromiscOperation) &&
 		    dev == dsr_dev && dnode->slave_dev)
 			dev_set_promiscuity(dnode->slave_dev, +1);
 		break;
 	case NETDEV_UNREGISTER:
-		DEBUG("Netdev unregister %s\n", dev->name);
+		LOG_DBG("Netdev unregister %s\n", dev->name);
 		
 		dsr_node_lock(dnode);
 		if (dev == dnode->slave_dev) {
@@ -282,11 +281,11 @@ static int dsr_dev_netdev_event(struct notifier_block *this,
 		dsr_node_unlock(dnode);
 
 		if (slave_change)
-			DEBUG("DSR slave interface %s unregisterd\n",
+			LOG_DBG("DSR slave interface %s unregisterd\n",
 			      dev->name);
 		break;
 	case NETDEV_DOWN:
-		DEBUG("Netdev down %s\n", dev->name);
+		LOG_DBG("Netdev down %s\n", dev->name);
 		if (dev == dsr_dev) {
 			if (dnode->slave_dev && ConfVal(PromiscOperation))
 				dev_set_promiscuity(dnode->slave_dev, -1);
@@ -356,7 +355,7 @@ static void dsr_dev_uninit(struct net_device *dev)
 	dsr_node_unlock(dnode);
 
 	if (dsr_packet_type.func) {
-		DEBUG("Removing pack\n");
+		LOG_DBG("Removing pack\n");
 		dev_remove_pack(&dsr_packet_type);
 		dsr_packet_type.func = NULL;
 	}
@@ -421,7 +420,7 @@ static void dsr_dev_setup(struct net_device *dev)
 #endif
 }
 
-#ifdef NOT_USED
+#ifdef ENABLE_DEBUG
 static char *pkt_type_str[] = {
 	"PACKET_HOST",
 	"PACKET_BROADCAST",
@@ -445,7 +444,7 @@ static int dsr_dev_llrecv(struct sk_buff *skb,
 			  struct net_device *orig_dev)
 #endif
 {
-	DEBUG("Packet recvd from ll skb->pkt_type is %s\n", 
+	LOG_DBG("Packet recvd from ll skb->pkt_type is %s\n", 
 	      (skb->pkt_type < 7 && skb->pkt_type >= 0) ? 
 	      pkt_type_str[skb->pkt_type] : "unknown");
 
@@ -511,7 +510,7 @@ int dsr_dev_deliver(struct dsr_pkt *dp)
 	skb = dsr_skb_create(dp, dsr_dev);
 
 	if (!skb) {
-		DEBUG("Could not allocate skb\n");
+		LOG_DBG("Could not allocate skb\n");
 		dsr_pkt_free(dp);
 		return -1;
 	}
@@ -568,13 +567,13 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 	skb = dsr_skb_create(dp, slave_dev);
 
 	if (!skb) {
-		DEBUG("Could not create skb!\n");
+		LOG_DBG("Could not create skb!\n");
 		goto out_err;
 	}
 
 	/* Create hardware header */
 	if (dsr_hw_header_create(dp, skb) < 0) {
-		DEBUG("Could not create hardware header\n");
+		LOG_DBG("Could not create hardware header\n");
 		dev_kfree_skb_any(skb);
 		goto out_err;
 	}
@@ -582,7 +581,7 @@ int dsr_dev_xmit(struct dsr_pkt *dp)
 	len = skb->len;
 	dst.s_addr = SKB_NETWORK_HDR_IPH(skb)->daddr;
 	
-	DEBUG("Sending %d bytes data_len=%d %s : %s\n",
+	LOG_DBG("Sending %d bytes data_len=%d %s : %s\n",
 	      len, skb->data_len,
 	      print_eth(SKB_MAC_HDR_RAW(skb)),
 	      print_ip(dst));
@@ -610,12 +609,12 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	struct dsr_node *dnode = netdev_priv(dev);
 	struct ethhdr *ethh;
 	struct dsr_pkt *dp;
-#ifdef DEBUG
+#ifdef ENABLE_DEBUG
 	atomic_inc(&num_pkts);
 #endif
 	if (dnode->slave_dev == NULL) {
 		dev_kfree_skb_any(skb);
-		DEBUG("Packet dropped\n");
+		LOG_DBG("Packet dropped\n");
 		return 0;
 	}
 
@@ -624,7 +623,7 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	switch (ntohs(ethh->h_proto)) {
 	case ETH_P_IP:
 
-		DEBUG("dst=%s len=%d\n",
+		LOG_DBG("dst=%s len=%d\n",
 		      print_ip(*((struct in_addr *)&SKB_NETWORK_HDR_IPH(skb)->daddr)),
 		      skb->len);
 
@@ -638,7 +637,7 @@ static int dsr_dev_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		dsr_start_xmit(dp);
 		break;
 	default:
-		DEBUG("Unknown packet type, dropping...\n");
+		LOG_DBG("Unknown packet type, dropping...\n");
 		dev_kfree_skb_any(skb);
 	}
 	return 0;
@@ -708,12 +707,12 @@ int dsr_dev_init(char *ifname)
 		}
 		read_unlock(&dev_base_lock);
 		
-		DEBUG("No preferred slave device found\n");
+		LOG_DBG("No preferred slave device found\n");
 		res = -1;
 		goto cleanup_netdev;
 	}
 dev_found:
-	DEBUG("Slave device is %s\n", dnode->slave_ifname);	
+	LOG_DBG("Slave device is %s\n", dnode->slave_ifname);	
 		
 	res = register_netdev(dsr_dev);
 

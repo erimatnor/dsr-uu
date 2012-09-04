@@ -163,11 +163,11 @@ void NSCLASS rreq_tbl_timeout(unsigned long data)
 
 	tbl_detach(&rreq_tbl, &e->l);
 
-	DEBUG("RREQ Timeout dst=%s timeout=%lu rexmts=%d \n",
-	      print_ip(e->node_addr), e->timeout, e->num_rexmts);
-
+	LOG_DBG("RREQ Timeout dst=%s timeout=%lu rexmts=%d \n",
+                print_ip(e->node_addr), e->timeout, e->num_rexmts);
+        
 	if (e->num_rexmts >= ConfVal(MaxRequestRexmt)) {
-		DEBUG("MAX RREQs reached for %s\n", print_ip(e->node_addr));
+		LOG_DBG("MAX RREQs reached for %s\n", print_ip(e->node_addr));
 
 		e->state = STATE_IDLE;
 
@@ -327,7 +327,7 @@ int NSCLASS rreq_tbl_route_discovery_cancel(struct in_addr dst)
 						     crit_addr);
 
 	if (!e) {
-		DEBUG("%s not in RREQ table\n", print_ip(dst));
+		LOG_DBG("%s not in RREQ table\n", print_ip(dst));
 		return -1;
 	}
 
@@ -368,11 +368,11 @@ int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
 	}
 
 	if (e->state == STATE_IN_ROUTE_DISC) {
-		DEBUG("Route discovery for %s already in progress\n",
-		      print_ip(target));
+		LOG_DBG("Route discovery for %s already in progress\n",
+                        print_ip(target));
 		goto out;
 	}
-	DEBUG("Route discovery for %s\n", print_ip(target));
+	LOG_DBG("Route discovery for %s\n", print_ip(target));
 
 	gettime(&e->last_used);
 	e->ttl = ttl = TTL_START;
@@ -447,7 +447,7 @@ int NSCLASS dsr_rreq_send(struct in_addr target, int ttl)
 	dp = dsr_pkt_alloc(NULL);
 
 	if (!dp) {
-		DEBUG("Could not allocate DSR packet\n");
+		LOG_DBG("Could not allocate DSR packet\n");
 		return -1;
 	}
 	dp->dst.s_addr = DSR_BROADCAST;
@@ -469,7 +469,7 @@ int NSCLASS dsr_rreq_send(struct in_addr target, int ttl)
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, DSR_NO_NEXT_HDR_TYPE);
 	
 	if (!dp->dh.opth) {
-		DEBUG("Could not create DSR opt header\n");
+		LOG_DBG("Could not create DSR opt header\n");
 		goto out_err;
 	}
 	
@@ -479,13 +479,13 @@ int NSCLASS dsr_rreq_send(struct in_addr target, int ttl)
 	dp->rreq_opt = dsr_rreq_opt_add(buf, len, target, ++rreq_seqno);
 
 	if (!dp->rreq_opt) {
-		DEBUG("Could not create RREQ opt\n");
+		LOG_DBG("Could not create RREQ opt\n");
 		goto out_err;
 	}
 #ifdef NS2
-	DEBUG("Sending RREQ src=%s dst=%s target=%s ttl=%d iph->saddr()=%d\n",
-	      print_ip(dp->src), print_ip(dp->dst), print_ip(target), ttl,
-	      dp->nh.iph->saddr());
+	LOG_DBG("Sending RREQ src=%s dst=%s target=%s ttl=%d iph->saddr()=%d\n",
+                print_ip(dp->src), print_ip(dp->dst), print_ip(target), ttl,
+                dp->nh.iph->saddr());
 #endif
 
 	dp->flags |= PKT_XMIT_JITTER;
@@ -508,14 +508,15 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 	int action = DSR_PKT_NONE;
 	int i, n;
 
-	DEBUG("DSR RREQ\n");
+	LOG_DBG("DSR RREQ\n");
+
 	if (!dp || !rreq_opt || dp->flags & PKT_PROMISC_RECV)
 		return DSR_PKT_DROP;
 	
 	dp->num_rreq_opts++;
 	
 	if (dp->num_rreq_opts > 1) {
-		DEBUG("More than one RREQ opt!!! - Ignoring\n");
+		LOG_DBG("More than one RREQ opt!!! - Ignoring\n");
 		return DSR_PKT_ERROR;
 	}
 
@@ -526,7 +527,7 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 	trg.s_addr = rreq_opt->target;
 
 	if (dsr_rreq_duplicate(dp->src, trg, ntohs(rreq_opt->id))) {
-		DEBUG("Duplicate RREQ from %s\n", print_ip(dp->src));
+		LOG_DBG("Duplicate RREQ from %s\n", print_ip(dp->src));
 		return DSR_PKT_DROP;
 	}
 
@@ -536,22 +537,22 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 			      (char *)rreq_opt->addrs);
 
 	if (!dp->srt) {
-		DEBUG("Could not extract source route\n");
+		LOG_DBG("Could not extract source route\n");
 		return DSR_PKT_ERROR;
 	}
-	DEBUG("RREQ target=%s src=%s dst=%s laddrs=%d\n",
-	      print_ip(trg), print_ip(dp->src),
-	      print_ip(dp->dst), DSR_RREQ_ADDRS_LEN(rreq_opt));
+	LOG_DBG("RREQ target=%s src=%s dst=%s laddrs=%d\n",
+                print_ip(trg), print_ip(dp->src),
+                print_ip(dp->dst), DSR_RREQ_ADDRS_LEN(rreq_opt));
 
 	/* Add reversed source route */
 	srt_rev = dsr_srt_new_rev(dp->srt);
 
 	if (!srt_rev) {
-		DEBUG("Could not reverse source route\n");
+		LOG_DBG("Could not reverse source route\n");
 		return DSR_PKT_ERROR;
 	}
-	DEBUG("srt: %s\n", print_srt(dp->srt));
-	DEBUG("srt_rev: %s\n", print_srt(srt_rev));
+	LOG_DBG("srt: %s\n", print_srt(dp->srt));
+	LOG_DBG("srt_rev: %s\n", print_srt(srt_rev));
 
 	dsr_rtc_add(srt_rev, ConfValToUsecs(RouteCacheTimeout), 0);
 
@@ -568,7 +569,7 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 
 	if (rreq_opt->target == myaddr.s_addr) {
 
-		DEBUG("RREQ OPT for me - Send RREP\n");
+		LOG_DBG("RREQ OPT for me - Send RREP\n");
 
 		/* According to the draft, the dest addr in the IP header must
 		 * be updated with the target address */
@@ -578,7 +579,7 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		dp->nh.iph->daddr = rreq_opt->target;
 #endif
 		dsr_rrep_send(srt_rev, dp->srt);
-
+                
 		action = DSR_PKT_NONE;
 		goto out;
 	} 
@@ -601,21 +602,21 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		struct dsr_srt *srt_cat;
 		/* Send cached route reply */
 		
-		DEBUG("Send cached RREP\n");
+		LOG_DBG("Send cached RREP\n");
 
 		srt_cat = dsr_srt_concatenate(dp->srt, srt_rc);
 		
 		kfree(srt_rc);
 
 		if (!srt_cat) {
-			DEBUG("Could not concatenate\n");
+			LOG_DBG("Could not concatenate\n");
 			goto rreq_forward;
 		}
 
-		DEBUG("srt_cat: %s\n", print_srt(srt_cat));
+		LOG_DBG("srt_cat: %s\n", print_srt(srt_cat));
 		
 		if (dsr_srt_check_duplicate(srt_cat) > 0) {
-			DEBUG("Duplicate address in source route!!!\n");
+			LOG_DBG("Duplicate address in source route!!!\n");
 			kfree(srt_cat);
 			goto rreq_forward;				
 		}
@@ -624,7 +625,7 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 #else
 		dp->nh.iph->daddr = rreq_opt->target;
 #endif
-		DEBUG("Sending cached RREP to %s\n", print_ip(dp->src));
+		LOG_DBG("Sending cached RREP to %s\n", print_ip(dp->src));
 		dsr_rrep_send(srt_rev, srt_cat);
 		
 		action = DSR_PKT_NONE;	

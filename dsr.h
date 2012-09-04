@@ -51,7 +51,7 @@
 				 * should probably be found... */
 
 enum confval {
-#ifdef DEBUG
+#ifdef ENABLE_DEBUG
 	PrintDebug,
 #endif
 	AutomaticRouteShortening,
@@ -102,7 +102,7 @@ static struct {
 	const unsigned int val;
 	enum confval_type type;
 } confvals_def[CONFVAL_MAX] = {
-#ifdef DEBUG
+#ifdef ENABLE_DEBUG
 	{
 		"PrintDebug", 0, BINARY},
 #endif

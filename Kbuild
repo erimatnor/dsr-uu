@@ -39,7 +39,7 @@ HDR = \
 RTC_SRC = \
 	link-cache.c
 
-EXTRA_CFLAGS =-DKERNEL26 -Wall -g
+EXTRA_CFLAGS =-DKERNEL26 -DENABLE_DEBUG -Wall -g
 
 obj-m += dsr.o 
 dsr-objs := $(SRC:%.c=%.o)

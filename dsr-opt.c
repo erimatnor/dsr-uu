@@ -142,7 +142,7 @@ int dsr_opt_parse(struct dsr_pkt *dp)
 				dp->rreq_opt = (struct dsr_rreq_opt *)dopt;
 #ifndef NS2
 			else
-				DEBUG("ERROR: More than one RREQ option!!\n");
+				LOG_DBG("ERROR: More than one RREQ option!!\n");
 #endif
 			break;
 		case DSR_OPT_RREP:
@@ -150,7 +150,7 @@ int dsr_opt_parse(struct dsr_pkt *dp)
 				dp->rrep_opt[dp->num_rrep_opts++] = (struct dsr_rrep_opt *)dopt;
 #ifndef NS2
 			else
-				DEBUG("Maximum RREP opts in one packet reached\n");
+				LOG_DBG("Maximum RREP opts in one packet reached\n");
 #endif
 			break;
 		case DSR_OPT_RERR:
@@ -158,7 +158,7 @@ int dsr_opt_parse(struct dsr_pkt *dp)
 				dp->rerr_opt[dp->num_rerr_opts++] = (struct dsr_rerr_opt *)dopt;
 #ifndef NS2
 			else
-				DEBUG("Maximum RERR opts in one packet reached\n");
+				LOG_DBG("Maximum RERR opts in one packet reached\n");
 #endif
 			break;
 		case DSR_OPT_PREV_HOP:
@@ -168,7 +168,7 @@ int dsr_opt_parse(struct dsr_pkt *dp)
 				dp->ack_opt[dp->num_ack_opts++] = (struct dsr_ack_opt *)dopt;
 #ifndef NS2
 			else
-				DEBUG("Maximum ACK opts in one packet reached\n");
+				LOG_DBG("Maximum ACK opts in one packet reached\n");
 #endif
 			break;
 		case DSR_OPT_SRT:
@@ -176,7 +176,7 @@ int dsr_opt_parse(struct dsr_pkt *dp)
 				dp->srt_opt = (struct dsr_srt_opt *)dopt;
 #ifndef NS2
 			else
-				DEBUG("More than one source route in packet\n");
+				LOG_DBG("More than one source route in packet\n");
 #endif
 			break;
 		case DSR_OPT_TIMEOUT:
@@ -188,7 +188,7 @@ int dsr_opt_parse(struct dsr_pkt *dp)
 				dp->ack_req_opt = (struct dsr_ack_req_opt *)dopt;
 #ifndef NS2
 			else
-				DEBUG("More than one ACK REQ in packet\n");
+				LOG_DBG("More than one ACK REQ in packet\n");
 #endif
 			break;
 		case DSR_OPT_PAD1:
@@ -197,7 +197,7 @@ int dsr_opt_parse(struct dsr_pkt *dp)
 			continue;
 #ifndef NS2
 		default:
-			DEBUG("Unknown DSR option type=%d\n", dopt->type);
+			LOG_DBG("Unknown DSR option type=%d\n", dopt->type);
 #endif
 		}
 		l += dopt->length + 2;
@@ -222,7 +222,7 @@ int NSCLASS dsr_opt_recv(struct dsr_pkt *dp)
 
 	/* Packet for us ? */
 #ifdef NS2
-	//DEBUG("Next header=%s\n", packet_info.name((packet_t)dp->dh.opth->nh));
+	//LOG_DBG("Next header=%s\n", packet_info.name((packet_t)dp->dh.opth->nh));
 
 	if (dp->dst.s_addr == myaddr.s_addr &&
 	    (DATA_PACKET(dp->dh.opth->nh) || dp->dh.opth->nh == PT_PING))
@@ -236,10 +236,10 @@ int NSCLASS dsr_opt_recv(struct dsr_pkt *dp)
 	l = DSR_OPT_HDR_LEN;
 	dopt = DSR_GET_OPT(dp->dh.opth);
 
-	//DEBUG("Parsing DSR packet l=%d dsr_len=%d\n", l, dsr_len);
+	//LOG_DBG("Parsing DSR packet l=%d dsr_len=%d\n", l, dsr_len);
 	
 	while (l < dsr_len && (dsr_len - l) > 2) {
-		//DEBUG("dsr_len=%d l=%d\n", dsr_len, l);
+		//LOG_DBG("dsr_len=%d l=%d\n", dsr_len, l);
 		switch (dopt->type) {
 		case DSR_OPT_PADN:
 			break;
@@ -297,7 +297,7 @@ int NSCLASS dsr_opt_recv(struct dsr_pkt *dp)
 			dopt++;
 			continue;
 		default:
-			DEBUG("Unknown DSR option type=%d\n", dopt->type);
+			LOG_DBG("Unknown DSR option type=%d\n", dopt->type);
 		}
 		l += dopt->length + 2;
 		dopt = DSR_GET_NEXT_OPT(dopt);

@@ -232,7 +232,7 @@ int NSCLASS neigh_tbl_add(struct in_addr neigh_addr, struct ethhdr *ethh)
 
 	inttoeth(&mac_src, (char *)&hw_addr);
 
-	DEBUG("ADD %s, %d\n", print_ip(neigh_addr), mac_src);
+	LOG_DBG("ADD %s, %d\n", print_ip(neigh_addr), mac_src);
 #else
 	memcpy(hw_addr.sa_data, ethh->h_source, ETH_ALEN);
 #endif
@@ -240,7 +240,7 @@ int NSCLASS neigh_tbl_add(struct in_addr neigh_addr, struct ethhdr *ethh)
 	neigh = neigh_tbl_create(neigh_addr, &hw_addr, 1);
 
 	if (!neigh) {
-		DEBUG("Could not create new neighbor entry\n");
+		LOG_DBG("Could not create new neighbor entry\n");
 		return -1;
 	}
 	tbl_add(&neigh_tbl, &neigh->l, crit_none);

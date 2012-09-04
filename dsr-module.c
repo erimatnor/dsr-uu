@@ -112,12 +112,12 @@ static int parse_mackill(void)
 				break;
 		}
 		if (j != ETH_ALEN) {
-			DEBUG("mackill: error in MAC addr %s\n", pa[i]);
+			LOG_DBG("mackill: error in MAC addr %s\n", pa[i]);
 			mackill_len--;
 			return -1;
 		}
 
-		DEBUG("mackill +%s\n", print_eth(mackill_list[i]));
+		LOG_DBG("mackill +%s\n", print_eth(mackill_list[i]));
 	}
 	return 0;
 }
@@ -136,15 +136,15 @@ int do_mackill(char *mac)
 int dsr_ip_recv(struct sk_buff *skb)
 {
 	struct dsr_pkt *dp;
-#ifdef DEBUG
+#ifdef ENABLE_DEBUG
 	atomic_inc(&num_pkts);
 #endif
-	DEBUG("Received DSR packet\n");
+	LOG_DBG("Received DSR packet\n");
 
 	dp = dsr_pkt_alloc(skb);
 
 	if (!dp) {
-		DEBUG("Could not allocate DSR packet\n");
+		LOG_DBG("Could not allocate DSR packet\n");
 		dev_kfree_skb_any(skb);
 		return 0;
 	}
@@ -153,14 +153,14 @@ int dsr_ip_recv(struct sk_buff *skb)
 		dp->flags |= PKT_PROMISC_RECV;
 	}
 	if ((skb->len + (dp->nh.iph->ihl << 2)) < ntohs(dp->nh.iph->tot_len)) {
-		DEBUG("Data to short! IP header len=%d tot_len=%d!\n", 
+		LOG_DBG("Data to short! IP header len=%d tot_len=%d!\n", 
 		      skb->len + (dp->nh.iph->ihl << 2), 
 		      ntohs(dp->nh.iph->tot_len));
 		dsr_pkt_free(dp);
 		return 0;
 	}
 
-/* 	DEBUG("iph_len=%d iph_totlen=%d dsr_opts_len=%d data_len=%d\n", */
+/* 	LOG_DBG("iph_len=%d iph_totlen=%d dsr_opts_len=%d data_len=%d\n", */
 /* 	      (dp->nh.iph->ihl << 2), ntohs(dp->nh.iph->tot_len), */
 /* 	      dsr_pkt_opts_len(dp), dp->payload_len); */
 
@@ -172,7 +172,7 @@ int dsr_ip_recv(struct sk_buff *skb)
 
 static void dsr_ip_recv_err(struct sk_buff *skb, u32 info)
 {
-	DEBUG("received error, info=%u\n", info);
+	LOG_DBG("received error, info=%u\n", info);
 
 	dev_kfree_skb_any(skb);
 }
@@ -246,12 +246,11 @@ static int dsr_config_proc_write(struct file *file, const char *buffer,
 
 			if (i == PromiscOperation && val_prev != val
 			    && dsr_node) {
-				if (val)
-					DEBUG
-					    ("Setting promiscuous operation\n");
-				else
-					DEBUG
-					    ("Disabling promiscuous operation\n");
+				if (val) {
+					LOG_DBG("Setting promiscuous operation\n");
+				} else {
+					LOG_DBG("Disabling promiscuous operation\n");
+                                }
 
 				dsr_node_lock(dsr_node);
 				dev_set_promiscuity(dsr_node->slave_dev,
@@ -267,7 +266,7 @@ static int dsr_config_proc_write(struct file *file, const char *buffer,
 			if (i == SendBufferSize)
 				send_buf_set_max_len(val);
 
-			DEBUG("Setting %s to %d\n", confvals_def[i].name, val);
+			LOG_DBG("Setting %s to %d\n", confvals_def[i].name, val);
 		}
 	}
 	return count;
@@ -370,7 +369,7 @@ static int __init dsr_module_init(void)
 	res = dsr_dev_init(ifname);
 
 	if (res < 0) {
-		DEBUG("dsr-dev init failed\n");
+		LOG_DBG("dsr-dev init failed\n");
 		return -EAGAIN;
 	}
 
@@ -425,17 +424,17 @@ static int __init dsr_module_init(void)
 
 #ifndef KERNEL26
 	inet_add_protocol(&dsr_inet_prot);
-	DEBUG("Setup finished\n");
+	LOG_DBG("Setup finished\n");
 	return 0;
 #else
 	res = inet_add_protocol(&dsr_inet_prot, IPPROTO_DSR);
 
 	if (res < 0) {
-		DEBUG("Could not register inet protocol\n");
+		LOG_DBG("Could not register inet protocol\n");
 		goto cleanup_proc;
 	}
 
-	DEBUG("Setup finished res=%d\n", res);
+	LOG_DBG("Setup finished res=%d\n", res);
 
 	return 0;
 cleanup_proc:

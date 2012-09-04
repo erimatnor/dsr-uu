@@ -49,7 +49,7 @@ int NSCLASS dsr_ack_send(struct in_addr dst, unsigned short id)
 	/* srt = dsr_rtc_find(my_addr(), dst); */
 
 /* 	if (!srt) { */
-/* 		DEBUG("No source route to %s\n", print_ip(dst.s_addr)); */
+/* 		LOG_DBG("No source route to %s\n", print_ip(dst.s_addr)); */
 /* 		return -1; */
 /* 	} */
 
@@ -71,14 +71,14 @@ int NSCLASS dsr_ack_send(struct in_addr dst, unsigned short id)
 				  IP_HDR_LEN + len, IPPROTO_DSR, IPDEFTTL);
 
 	if (!dp->nh.iph) {
-		DEBUG("Could not create IP header\n");
+		LOG_DBG("Could not create IP header\n");
 		goto out_err;
 	}
 
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, DSR_NO_NEXT_HDR_TYPE);
 
 	if (!dp->dh.opth) {
-		DEBUG("Could not create DSR opt header\n");
+		LOG_DBG("Could not create DSR opt header\n");
 		goto out_err;
 	}
 
@@ -88,7 +88,7 @@ int NSCLASS dsr_ack_send(struct in_addr dst, unsigned short id)
 	/* dp->srt_opt = dsr_srt_opt_add(buf, len, dp->srt); */
 
 /* 	if (!dp->srt_opt) { */
-/* 		DEBUG("Could not create Source Route option header\n"); */
+/* 		LOG_DBG("Could not create Source Route option header\n"); */
 /* 		goto out_err; */
 /* 	} */
 
@@ -98,11 +98,11 @@ int NSCLASS dsr_ack_send(struct in_addr dst, unsigned short id)
 	ack_opt = dsr_ack_opt_add(buf, len, dp->src, dp->dst, id);
 
 	if (!ack_opt) {
-		DEBUG("Could not create DSR ACK opt header\n");
+		LOG_DBG("Could not create DSR ACK opt header\n");
 		goto out_err;
 	}
 
-	DEBUG("Sending ACK to %s id=%u\n", print_ip(dst), id);
+	LOG_DBG("Sending ACK to %s id=%u\n", print_ip(dst), id);
 
 	dp->flags |= PKT_XMIT_JITTER;
 
@@ -166,7 +166,7 @@ dsr_ack_req_opt_add(struct dsr_pkt *dp, unsigned short id)
 		buf =
 		    dsr_pkt_alloc_opts(dp,
 				       DSR_OPT_HDR_LEN + DSR_ACK_REQ_HDR_LEN);
-		DEBUG("Allocating options for ACK REQ\n");
+		LOG_DBG("Allocating options for ACK REQ\n");
 		if (!buf)
 			return NULL;
 
@@ -187,7 +187,7 @@ dsr_ack_req_opt_add(struct dsr_pkt *dp, unsigned short id)
 	} else {
 		buf = dsr_pkt_alloc_opts_expand(dp, DSR_ACK_REQ_HDR_LEN);
 
-		DEBUG("Expanding options for ACK REQ p_len=%d\n",
+		LOG_DBG("Expanding options for ACK REQ p_len=%d\n",
 		      ntohs(dp->dh.opth->p_len));
 		if (!buf)
 			return NULL;
@@ -201,7 +201,7 @@ dsr_ack_req_opt_add(struct dsr_pkt *dp, unsigned short id)
 				    ntohs(dp->dh.opth->p_len) +
 				    DSR_ACK_REQ_HDR_LEN, dp->dh.opth->nh);
 	}
-	DEBUG("Added ACK REQ option id=%u\n", id, ntohs(dp->dh.opth->p_len));
+	LOG_DBG("Added ACK REQ option id=%u\n", id, ntohs(dp->dh.opth->p_len));
       end:
 	return dsr_ack_req_opt_create(buf, DSR_ACK_REQ_HDR_LEN, id);
 }
@@ -228,14 +228,14 @@ int NSCLASS dsr_ack_req_send(struct in_addr neigh_addr, unsigned short id)
 				  IP_HDR_LEN + len, IPPROTO_DSR, 1);
 
 	if (!dp->nh.iph) {
-		DEBUG("Could not create IP header\n");
+		LOG_DBG("Could not create IP header\n");
 		goto out_err;
 	}
 
 	dp->dh.opth = dsr_opt_hdr_add(buf, len, DSR_NO_NEXT_HDR_TYPE);
 
 	if (!dp->dh.opth) {
-		DEBUG("Could not create DSR opt header\n");
+		LOG_DBG("Could not create DSR opt header\n");
 		goto out_err;
 	}
 
@@ -245,11 +245,11 @@ int NSCLASS dsr_ack_req_send(struct in_addr neigh_addr, unsigned short id)
 	ack_req = dsr_ack_req_opt_create(buf, len, id);
 
 	if (!ack_req) {
-		DEBUG("Could not create ACK REQ opt\n");
+		LOG_DBG("Could not create ACK REQ opt\n");
 		goto out_err;
 	}
 
-	DEBUG("Sending ACK REQ for %s id=%u\n", print_ip(neigh_addr), id);
+	LOG_DBG("Sending ACK REQ for %s id=%u\n", print_ip(neigh_addr), id);
 
 	XMIT(dp);
 
@@ -274,8 +274,8 @@ int NSCLASS dsr_ack_req_opt_recv(struct dsr_pkt *dp, struct dsr_ack_req_opt *ack
 	if (!dp->srt_opt)
 		dp->prv_hop = dp->src;
 
-	DEBUG("src=%s prv=%s id=%u\n",
-	      print_ip(dp->src), print_ip(dp->prv_hop), id);
+	LOG_DBG("src=%s prv=%s id=%u\n",
+		print_ip(dp->src), print_ip(dp->prv_hop), id);
 
 	dsr_ack_send(dp->prv_hop, id);
 
@@ -297,7 +297,7 @@ int NSCLASS dsr_ack_opt_recv(struct dsr_ack_opt *ack)
 	src.s_addr = ack->src;
 	id = ntohs(ack->id);
 
-	DEBUG("ACK dst=%s src=%s id=%u\n", print_ip(dst), print_ip(src), id);
+	LOG_DBG("ACK dst=%s src=%s id=%u\n", print_ip(dst), print_ip(src), id);
 
 	if (dst.s_addr != myaddr.s_addr)
 		return DSR_PKT_ERROR;
@@ -305,7 +305,7 @@ int NSCLASS dsr_ack_opt_recv(struct dsr_ack_opt *ack)
 	/* Purge packets buffered for this next hop */
 	n = maint_buf_del_all_id(src, id);
 
-	DEBUG("Removed %d packets from maint buf\n", n);
+	LOG_DBG("Removed %d packets from maint buf\n", n);
 	
 	return DSR_PKT_NONE;
 }
