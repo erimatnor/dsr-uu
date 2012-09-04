@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 /* Copyright (C) Uppsala University
  *
  * This file is distributed under the terms of the GNU general Public
@@ -8,6 +9,7 @@
 #ifndef _DSR_H
 #define _DSR_H
 
+#include "platform.h"
 #ifdef __KERNEL__
 #include <linux/version.h>
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
@@ -143,10 +145,6 @@ struct dsr_node {
 };
 
 #ifdef __KERNEL__
-#define DSR_SPIN_LOCK(l)    spin_lock(l)
-#define DSR_SPIN_UNLOCK(l)  spin_unlock(l)
-#define MALLOC(s, p)        kmalloc(s, p)
-#define FREE(p)             kfree(p)
 #define NSCLASS
 #define XMIT(pkt)           dsr_dev_xmit(pkt)
 
@@ -168,10 +166,6 @@ struct dsr_node {
 #define SKB_SET_MAC_HDR(skb, offset) skb_set_mac_header(skb, offset)
 #define SKB_SET_NETWORK_HDR(skb, offset) skb_set_network_header(skb, offset)
 #endif
-
-#else
-#define DSR_SPIN_LOCK(l)
-#define DSR_SPIN_UNLOCK(l)
 #endif				/* __KERNEL__ */
 
 #ifdef __KERNEL__
@@ -186,9 +180,9 @@ static inline unsigned int get_confval(enum confval cv)
 	unsigned int val = 0;
 
 	if (dsr_node) {
-		DSR_SPIN_LOCK(&dsr_node->lock);
+		spin_lock_bh(&dsr_node->lock);
 		val = dsr_node->confvals[cv];
-		DSR_SPIN_UNLOCK(&dsr_node->lock);
+		spin_unlock_bh(&dsr_node->lock);
 	}
 	return val;
 }
@@ -196,9 +190,9 @@ static inline unsigned int get_confval(enum confval cv)
 static inline int set_confval(enum confval cv, unsigned int val)
 {
 	if (dsr_node) {
-		DSR_SPIN_LOCK(&dsr_node->lock);
+		spin_lock_bh(&dsr_node->lock);
 		dsr_node->confvals[cv] = val;
-		DSR_SPIN_UNLOCK(&dsr_node->lock);
+		spin_unlock_bh(&dsr_node->lock);
 	} else
 		return -1;
 
@@ -210,8 +204,11 @@ static inline void dsr_node_init(struct dsr_node *dn, char *ifname)
 	int i;
 	dn->slave_indev = NULL;
 	dn->slave_dev = NULL;
-	memcpy(dn->slave_ifname, ifname, IFNAMSIZ);
-	
+        dn->slave_ifname[0] - '\0';
+
+        if (ifname)
+                memcpy(dn->slave_ifname, ifname, IFNAMSIZ);
+
 	spin_lock_init(&dn->lock);
 
 	for (i = 0; i < CONFVAL_MAX; i++) {
@@ -223,9 +220,9 @@ static inline struct in_addr my_addr(void)
 {
 	static struct in_addr my_addr;
 	if (dsr_node) {
-		DSR_SPIN_LOCK(&dsr_node->lock);
+		spin_lock_bh(&dsr_node->lock);
 		my_addr = dsr_node->ifaddr;
-		DSR_SPIN_UNLOCK(&dsr_node->lock);
+		spin_unlock_bh(&dsr_node->lock);
 	}
 	return my_addr;
 }
@@ -245,22 +242,22 @@ static inline int get_slave_dev_ifindex(void)
 	int ifindex = -1;
 
 	if (dsr_node) {
-		DSR_SPIN_LOCK(&dsr_node->lock);
+                spin_lock_bh(&dsr_node->lock);
 		if (dsr_node->slave_dev)
 			ifindex = dsr_node->slave_dev->ifindex;
-		DSR_SPIN_UNLOCK(&dsr_node->lock);
+		spin_unlock_bh(&dsr_node->lock);
 	}
 	return ifindex;
 }
 
 static inline void dsr_node_lock(struct dsr_node *dnode)
 {
-	spin_lock(&dnode->lock);
+	spin_lock_bh(&dnode->lock);
 }
 
 static inline void dsr_node_unlock(struct dsr_node *dnode)
 {
-	spin_unlock(&dnode->lock);
+	spin_unlock_bh(&dnode->lock);
 }
 int dsr_ip_recv(struct sk_buff *skb);
 int do_mackill(char *mac);

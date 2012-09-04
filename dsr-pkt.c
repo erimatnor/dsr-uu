@@ -23,7 +23,7 @@ char *dsr_pkt_alloc_opts(struct dsr_pkt *dp, int len)
 	if (!dp)
 		return NULL;
 
-	dp->dh.raw = (char *)MALLOC(len + DEFAULT_TAILROOM, GFP_ATOMIC);
+	dp->dh.raw = (char *)kmalloc(len + DEFAULT_TAILROOM, GFP_ATOMIC);
 
 	if (!dp->dh.raw)
 		return NULL;
@@ -56,8 +56,8 @@ char *dsr_pkt_alloc_opts_expand(struct dsr_pkt *dp, int len)
 
 	memcpy(dp->dh.raw, tmp, old_len);
 
-	FREE(tmp);
-
+	kfree(tmp);
+	
 	return (dp->dh.raw + old_len);
 }
 
@@ -69,8 +69,8 @@ int dsr_pkt_free_opts(struct dsr_pkt *dp)
 		return -1;
 
 	len = dsr_pkt_opts_len(dp);
-
-	FREE(dp->dh.raw);
+	
+	kfree(dp->dh.raw);
 
 	dp->dh.raw = dp->dh.end = dp->dh.tail = NULL;
 	dp->srt_opt = NULL;
@@ -90,7 +90,7 @@ struct dsr_pkt *dsr_pkt_alloc(Packet * p)
 	struct hdr_cmn *cmh;
 	int dsr_opts_len = 0;
 
-	dp = (struct dsr_pkt *)MALLOC(sizeof(struct dsr_pkt), GFP_ATOMIC);
+	dp = (struct dsr_pkt *)kmalloc(sizeof(struct dsr_pkt), GFP_ATOMIC);
 
 	if (!dp)
 		return NULL;
@@ -117,7 +117,7 @@ struct dsr_pkt *dsr_pkt_alloc(Packet * p)
 			dsr_opts_len = opth->p_len + DSR_OPT_HDR_LEN;
 
 			if (!dsr_pkt_alloc_opts(dp, dsr_opts_len)) {
-				FREE(dp);
+				kfree(dp);
 				return NULL;
 			}
 
@@ -147,7 +147,7 @@ struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb)
 	struct dsr_pkt *dp;
 	int dsr_opts_len = 0;
 
-	dp = (struct dsr_pkt *)MALLOC(sizeof(struct dsr_pkt), GFP_ATOMIC);
+	dp = (struct dsr_pkt *)kmalloc(sizeof(struct dsr_pkt), GFP_ATOMIC);
 
 	if (!dp)
 		return NULL;
@@ -175,7 +175,7 @@ struct dsr_pkt *dsr_pkt_alloc(struct sk_buff *skb)
 			dsr_opts_len = ntohs(opth->p_len) + DSR_OPT_HDR_LEN;
 
 			if (!dsr_pkt_alloc_opts(dp, dsr_opts_len)) {
-				FREE(dp);
+				kfree(dp);
 				return NULL;
 			}
 
@@ -212,9 +212,9 @@ void dsr_pkt_free(struct dsr_pkt *dp)
 	dsr_pkt_free_opts(dp);
 
 	if (dp->srt)
-		FREE(dp->srt);
+		kfree(dp->srt);
 
-	FREE(dp);
+	kfree(dp);
 
 	return;
 }

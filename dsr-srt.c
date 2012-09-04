@@ -1,10 +1,12 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 /* Copyright (C) Uppsala University
  *
  * This file is distributed under the terms of the GNU general Public
  * License (GPL), see the file LICENSE
  *
- * Author: Erik Nordström, <erikn@it.uu.se>
+ * Author: Erik Nordström, <erik.nordstrom@gmail.com>
  */
+#include "platform.h"
 #ifdef __KERNEL__
 #include <linux/slab.h>
 #include <net/ip.h>
@@ -72,8 +74,8 @@ struct dsr_srt *dsr_srt_new(struct in_addr src, struct in_addr dst,
 {
 	struct dsr_srt *sr;
 
-	sr = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) + length,
-				      GFP_ATOMIC);
+	sr = (struct dsr_srt *)kmalloc(sizeof(struct dsr_srt) + length,
+				       GFP_ATOMIC);
 
 	if (!sr)
 		return NULL;
@@ -97,8 +99,8 @@ struct dsr_srt *dsr_srt_new_rev(struct dsr_srt *srt)
 	if (!srt)
 		return NULL;
 
-	srt_rev = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) +
-					   srt->laddrs, GFP_ATOMIC);
+	srt_rev = (struct dsr_srt *)kmalloc(sizeof(struct dsr_srt) +
+					    srt->laddrs, GFP_ATOMIC);
 
 	if (!srt_rev)
 		return NULL;
@@ -137,10 +139,10 @@ struct dsr_srt *dsr_srt_new_split(struct dsr_srt *srt, struct in_addr addr)
 	return NULL;
 
       split:
-	srt_split = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) +
-					     (i * sizeof(struct in_addr)),
-					     GFP_ATOMIC);
-
+	srt_split = (struct dsr_srt *)kmalloc(sizeof(struct dsr_srt) +
+					      (i * sizeof(struct in_addr)),
+					      GFP_ATOMIC);
+	
 	if (!srt_split)
 		return NULL;
 
@@ -164,7 +166,7 @@ struct dsr_srt *dsr_srt_new_split_rev(struct dsr_srt *srt, struct in_addr addr)
 
 	srt_split_rev = dsr_srt_new_rev(srt_split);
 
-	FREE(srt_split);
+	kfree(srt_split);
 
 	return srt_split_rev;
 }
@@ -198,10 +200,10 @@ struct dsr_srt *dsr_srt_shortcut(struct dsr_srt *srt, struct in_addr a1,
 
 	n_cut = n - (a2_num - a1_num - 1);
 
-	srt_cut = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) +
-					   (n_cut*sizeof(struct in_addr)),
-					   GFP_ATOMIC);
-
+	srt_cut = (struct dsr_srt *)kmalloc(sizeof(struct dsr_srt) +
+					    (n_cut*sizeof(struct in_addr)),
+					    GFP_ATOMIC);
+	
 	if (!srt_cut)
 		return NULL;
 
@@ -238,9 +240,9 @@ struct dsr_srt *dsr_srt_concatenate(struct dsr_srt *srt1, struct dsr_srt *srt2)
 	 * of the second. We therefore only count that node once. */
 	n = n1 + n2 + 1;
 	
-	srt_cat = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) +
-					   (n * sizeof(struct in_addr)),
-					   GFP_ATOMIC);
+	srt_cat = (struct dsr_srt *)kmalloc(sizeof(struct dsr_srt) +
+					    (n * sizeof(struct in_addr)),
+					    GFP_ATOMIC);
 	
 	if (!srt_cat)
 		return NULL;
@@ -264,8 +266,8 @@ int dsr_srt_check_duplicate(struct dsr_srt *srt)
 	
 	n = srt->laddrs / sizeof(struct in_addr);
 
-	buf = (struct in_addr *)MALLOC(sizeof(struct in_addr) * (n + 1), 
-				       GFP_ATOMIC);
+	buf = (struct in_addr *)kmalloc(sizeof(struct in_addr) * (n + 1), 
+					GFP_ATOMIC);
 	
 	if (!buf) 
 		return -1;
@@ -289,7 +291,7 @@ int dsr_srt_check_duplicate(struct dsr_srt *srt)
 			goto out;
 		}
  out:
-	FREE(buf);
+	kfree(buf);
 
 	return res;
 }
@@ -450,7 +452,7 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 		if (srt_split) {
 			DEBUG("Adding split SRT to cache: %s\n", print_srt(srt_split));
 			dsr_rtc_add(srt_split, ConfValToUsecs(RouteCacheTimeout), 0);
-			FREE(srt_split);
+			kfree(srt_split);
 		}
 	}
 	/* Automatic route shortening - Check if this node is the
@@ -480,7 +482,7 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 
 		if (!srt) {
 			DEBUG("No route to %s\n", print_ip(dp->src));
-			FREE(srt_cut);
+			kfree(srt_cut);
 			return DSR_PKT_DROP;
 		}
 		DEBUG("my srt: %s\n", print_srt(srt));
@@ -489,8 +491,8 @@ int NSCLASS dsr_srt_opt_recv(struct dsr_pkt *dp, struct dsr_srt_opt *srt_opt)
 
 		dsr_rrep_send(srt, srt_cut);
 
-		FREE(srt_cut);
-		FREE(srt);
+		kfree(srt_cut);
+		kfree(srt);
 	}
 
 	if (dp->flags & PKT_PROMISC_RECV)

@@ -74,12 +74,12 @@ void NSCLASS grat_rrep_tbl_timeout(unsigned long data)
 	struct grat_rrep_entry *e =
 	    (struct grat_rrep_entry *)tbl_detach_first(&grat_rrep_tbl);
 
-	FREE(e);
+	kfree(e);
 
 	if (tbl_empty(&grat_rrep_tbl))
 		return;
 
-	DSR_READ_LOCK(&grat_rrep_tbl.lock);
+	read_lock_bh(&grat_rrep_tbl.lock);
 
 	e = (struct grat_rrep_entry *)TBL_FIRST(&grat_rrep_tbl);
 
@@ -87,7 +87,7 @@ void NSCLASS grat_rrep_tbl_timeout(unsigned long data)
 
 	set_timer(&grat_rrep_tbl_timer, &e->expires);
 
-	DSR_READ_UNLOCK(&grat_rrep_tbl.lock);
+	read_unlock_bh(&grat_rrep_tbl.lock);
 }
 
 int NSCLASS grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop)
@@ -98,8 +98,8 @@ int NSCLASS grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop)
 	if (in_tbl(&grat_rrep_tbl, &q, crit_query))
 		return 0;
 
-	e = (struct grat_rrep_entry *)MALLOC(sizeof(struct grat_rrep_entry),
-					     GFP_ATOMIC);
+	e = (struct grat_rrep_entry *)kmalloc(sizeof(struct grat_rrep_entry),
+					      GFP_ATOMIC);
 
 	if (!e)
 		return -1;
@@ -116,12 +116,12 @@ int NSCLASS grat_rrep_tbl_add(struct in_addr src, struct in_addr prev_hop)
 
 	if (tbl_add(&grat_rrep_tbl, &e->l, crit_time)) {
 
-		DSR_READ_LOCK(&grat_rrep_tbl.lock);
+		read_lock_bh(&grat_rrep_tbl.lock);
 		e = (struct grat_rrep_entry *)TBL_FIRST(&grat_rrep_tbl);
 
 		grat_rrep_tbl_timer.function = &NSCLASS grat_rrep_tbl_timeout;
 		set_timer(&grat_rrep_tbl_timer, &e->expires);
-		DSR_READ_UNLOCK(&grat_rrep_tbl.lock);
+		read_unlock_bh(&grat_rrep_tbl.lock);
 	}
 	return 1;
 }
@@ -145,7 +145,7 @@ static int grat_rrep_tbl_print(struct tbl *t, char *buf)
 
 	gettime(&now);
 
-	DSR_READ_LOCK(&t->lock);
+	read_lock_bh(&t->lock);
 
 	len += sprintf(buf, "# %-15s %-15s Time\n", "Source", "Prev hop");
 
@@ -158,7 +158,7 @@ static int grat_rrep_tbl_print(struct tbl *t, char *buf)
 			       timeval_diff(&e->expires, &now) / 1000000);
 	}
 
-	DSR_READ_UNLOCK(&t->lock);
+	read_unlock_bh(&t->lock);
 
 	return len;
 }
@@ -366,7 +366,7 @@ int NSCLASS dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 /* 		srt_rev = dsr_srt_new_rev(rrep_opt_srt); */
 
 /* 		if (!srt_rev) { */
-/* 			FREE(rrep_opt_srt); */
+/* 			kfree(rrep_opt_srt); */
 /* 			goto end_add_srt; */
 /* 		} */
 
@@ -379,22 +379,22 @@ int NSCLASS dsr_rrep_opt_recv(struct dsr_pkt *dp, struct dsr_rrep_opt *rrep_opt)
 /* 		else */
 /* 			srt_split = dsr_srt_new_split(srt_rev, myaddr); */
 		
-/* 		FREE(srt_rev); */
+/* 		kfree(srt_rev); */
 
 /* 		if (!srt_split) { */
-/* 			FREE(rrep_opt_srt); */
+/* 			kfree(rrep_opt_srt); */
 /* 			goto end_add_srt; */
 /* 		} */
 /* 		DEBUG("Adding split RREP SRT to cache: %s\n", print_srt(srt_split)); */
 /* 		dsr_rtc_add(srt_split, ConfValToUsecs(RouteCacheTimeout), 0); */
 		
-/* 		FREE(srt_split); */
+/* 		kfree(srt_split); */
 /* 	} */
 /*  end_add_srt: */
 	/* Remove pending RREQs */
 	rreq_tbl_route_discovery_cancel(rrep_opt_srt->dst);
 
-	FREE(rrep_opt_srt);
+	kfree(rrep_opt_srt);
 
 	if (dp->dst.s_addr == myaddr.s_addr) {
 		/*RREP for this node */

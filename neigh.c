@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 /* Copyright (C) Uppsala University
  *
  * This file is distributed under the terms of the GNU general Public
@@ -180,7 +181,7 @@ static struct neighbor *neigh_tbl_create(struct in_addr addr,
 {
 	struct neighbor *neigh;
 
-	neigh = (struct neighbor *)MALLOC(sizeof(struct neighbor), GFP_ATOMIC);
+	neigh = (struct neighbor *)kmalloc(sizeof(struct neighbor), GFP_ATOMIC);
 
 	if (!neigh)
 		return NULL;
@@ -290,7 +291,7 @@ static int neigh_tbl_print(char *buf)
 	list_t *pos;
 	int len = 0;
 
-	DSR_READ_LOCK(&neigh_tbl.lock);
+	read_lock_bh(&neigh_tbl.lock);
 
 	len +=
 	    sprintf(buf, "# %-15s %-17s %-10s %-6s\n", "Addr", "HwAddr",
@@ -305,7 +306,7 @@ static int neigh_tbl_print(char *buf)
 			       neigh->t_rxtcur, neigh->id);
 	}
 
-	DSR_READ_UNLOCK(&neigh_tbl.lock);
+	read_unlock_bh(&neigh_tbl.lock);
 	return len;
 }
 

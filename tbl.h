@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 /* Copyright (C) Uppsala University
  *
  * This file is distributed under the terms of the GNU general Public
@@ -8,77 +9,35 @@
 #ifndef _TBL_H
 #define _TBL_H
 
-#ifdef __KERNEL__
-#include <linux/list.h>
-#include <linux/slab.h>
-#include <linux/errno.h>
-#include <linux/spinlock.h>
-#include <linux/interrupt.h>
-#include <linux/version.h>
-#else
-#include <stdlib.h>
-#include <errno.h>
-#include "list.h"
-#endif
+#include "platform.h"
 
 #define TBL_FIRST(tbl) (tbl)->head.next
 #define TBL_EMPTY(tbl) (TBL_FIRST(tbl) == &(tbl)->head)
 #define TBL_FULL(tbl) ((tbl)->len >= (tbl)->max_len)
 #define tbl_is_first(tbl, e) (&e->l == TBL_FIRST(tbl))
 
-#ifdef __KERNEL__
-
 typedef struct list_head list_t;
 #define LIST_INIT_HEAD(name) LIST_HEAD_INIT(name)
 
-#define TBL_INIT(name, max_len) { LIST_INIT_HEAD(name.head), \
-                                 0, \
-                                 max_len, \
-                                 RW_LOCK_UNLOCKED }
-#define INIT_TBL(ptr, max_length) do { \
-        (ptr)->head.next = (ptr)->head.prev = &((ptr)->head); \
-        (ptr)->len = 0; (ptr)->max_len = max_length; \
-        (ptr)->lock = RW_LOCK_UNLOCKED; \
-} while (0)
+#define INIT_TBL(ptr, max_length) do {                                  \
+                (ptr)->head.next = (ptr)->head.prev = &((ptr)->head);   \
+                (ptr)->len = 0; (ptr)->max_len = max_length;            \
+                (ptr)->lock = __RW_LOCK_UNLOCKED(&(ptr)->lock);         \
+        } while (0)
 
-#define DSR_WRITE_LOCK(l)   write_lock_bh(l)
-#define DSR_WRITE_UNLOCK(l) write_unlock_bh(l)
-#define DSR_READ_LOCK(l)    read_lock_bh(l)
-#define DSR_READ_UNLOCK(l)  read_unlock_bh(l)
-
-#define MALLOC(s, p)        kmalloc(s, p)
-#define FREE(p)             kfree(p)
-
-
-#else				/* __KERNEL__ */
-
-#define TBL_INIT(name, max_len) { LIST_INIT_HEAD(name.head), \
-                                 0, \
-                                 max_len }
-#define INIT_TBL(ptr, max_length) do { \
-        (ptr)->head.next = (ptr)->head.prev = &((ptr)->head); \
-        (ptr)->len = 0; (ptr)->max_len = max_length; \
-} while (0)
-
-#define DSR_WRITE_LOCK(l)
-#define DSR_WRITE_UNLOCK(l)
-#define DSR_READ_LOCK(l)
-#define DSR_READ_UNLOCK(l)
-#define MALLOC(s, p)        malloc(s)
-#define FREE(p)             free(p)
-
-#endif				/* __KERNEL__ */
-
-#define TBL(name, max_len) \
-	struct tbl name = TBL_INIT(name, max_len)
+#define TBL(_name, _max_len)                                      \
+	struct tbl _name = {                                      \
+                .head = { &(_name).head, &(_name).head },         \
+                .len = 0,                                         \
+                .max_len = _max_len,                              \
+                .lock = __RW_LOCK_UNLOCKED(&(_name).lock)         \
+        }
 
 struct tbl {
-	list_t head;
-	volatile unsigned int len;
-	volatile unsigned int max_len;
-#ifdef __KERNEL__
+        list_t head;
+        unsigned int len;
+        unsigned int max_len;
 	rwlock_t lock;
-#endif
 };
 
 /* Criteria function should return 1 if the criteria is fulfilled or 0 if not
@@ -144,9 +103,9 @@ static inline int __tbl_add_tail(struct tbl *t, list_t * l)
 static inline int tbl_add_tail(struct tbl *t, list_t * l)
 {
 	int len;
-	DSR_WRITE_LOCK(&t->lock);
+	write_lock_bh(&t->lock);
 	len = __tbl_add_tail(t, l);
-	DSR_WRITE_UNLOCK(&t->lock);
+	write_unlock_bh(&t->lock);
 	return len;
 }
 
@@ -181,7 +140,7 @@ static inline int __tbl_del(struct tbl *t, list_t * l)
 	if (!__tbl_detach(t, l))
 		return -1;
 
-	FREE(l);
+	kfree(l);
 
 	return 1;
 }
@@ -201,9 +160,9 @@ static inline int tbl_find_do(struct tbl *t, void *data, do_t func)
 {
 	int res;
 
-	DSR_WRITE_LOCK(&t->lock);
+	write_lock_bh(&t->lock);
 	res = __tbl_find_do(t, data, func);
-	DSR_WRITE_UNLOCK(&t->lock);
+	write_unlock_bh(&t->lock);
 
 	return res;
 }
@@ -223,9 +182,9 @@ static inline int tbl_do_for_each(struct tbl *t, void *data, do_t func)
 {
 	int res;
 
-	DSR_WRITE_LOCK(&t->lock);
+	write_lock_bh(&t->lock);
 	res = __tbl_do_for_each(t, data, func);
-	DSR_WRITE_UNLOCK(&t->lock);
+	write_unlock_bh(&t->lock);
 
 	return res;
 }
@@ -250,9 +209,9 @@ static inline void *tbl_find_detach(struct tbl *t, void *id, criteria_t crit)
 {
 	list_t *e;
 
-	DSR_WRITE_LOCK(&t->lock);
+	write_lock_bh(&t->lock);
 	e = __tbl_find_detach(t, id, crit);
-	DSR_WRITE_UNLOCK(&t->lock);
+	write_unlock_bh(&t->lock);
 
 	return e;
 }
@@ -261,9 +220,9 @@ static inline void *tbl_detach(struct tbl *t, list_t * l)
 {
 	void *e;
 
-	DSR_WRITE_LOCK(&t->lock);
+	write_lock_bh(&t->lock);
 	e = __tbl_detach(t, l);
-	DSR_WRITE_UNLOCK(&t->lock);
+	write_unlock_bh(&t->lock);
 	return e;
 }
 
@@ -287,9 +246,9 @@ static inline void *tbl_detach_first(struct tbl *t)
 {
 	list_t *e;
 
-	DSR_WRITE_LOCK(&t->lock);
+	write_lock_bh(&t->lock);
 	e = __tbl_detach_first(t);
-	DSR_WRITE_UNLOCK(&t->lock);
+	write_unlock_bh(&t->lock);
 
 	return e;
 }
@@ -298,9 +257,9 @@ static inline int tbl_add(struct tbl *t, list_t * l, criteria_t crit)
 {
 	int len;
 
-	DSR_WRITE_LOCK(&t->lock);
+	write_lock_bh(&t->lock);
 	len = __tbl_add(t, l, crit);
-	DSR_WRITE_UNLOCK(&t->lock);
+	write_unlock_bh(&t->lock);
 	return len;
 }
 
@@ -308,11 +267,9 @@ static inline int tbl_del(struct tbl *t, list_t * l)
 {
 	int res;
 
-	DSR_WRITE_LOCK(&t->lock);
-
+	write_lock_bh(&t->lock);
 	res = __tbl_del(t, l);
-
-	DSR_WRITE_UNLOCK(&t->lock);
+	write_unlock_bh(&t->lock);
 
 	return res;
 }
@@ -320,19 +277,19 @@ static inline int tbl_find_del(struct tbl *t, void *id, criteria_t crit)
 {
 	list_t *e;
 
-	DSR_WRITE_LOCK(&t->lock);
+	write_lock_bh(&t->lock);
 
 	e = (list_t *) __tbl_find(t, id, crit);
 
 	if (!e) {
-		DSR_WRITE_UNLOCK(&t->lock);
+		write_unlock_bh(&t->lock);
 		return -1;
 	}
 	list_del(e);
 	t->len--;
-	FREE(e);
+	kfree(e);
 
-	DSR_WRITE_UNLOCK(&t->lock);
+	write_unlock_bh(&t->lock);
 
 	return 1;
 }
@@ -344,7 +301,7 @@ static inline int tbl_del_first(struct tbl *t)
 
 	l = (list_t *) tbl_detach_first(t);
 
-	FREE(l);
+	kfree(l);
 
 	return n;
 }
@@ -359,7 +316,7 @@ static inline int __tbl_for_each_del(struct tbl *t, void *id, criteria_t crit)
 			list_del(pos);
 			t->len--;
 			n++;
-			FREE(pos);
+			kfree(pos);
 		}
 	}
 
@@ -370,23 +327,21 @@ static inline int tbl_for_each_del(struct tbl *t, void *id, criteria_t crit)
 {
 	int n;
 
-	DSR_WRITE_LOCK(&t->lock);
-
+	write_lock_bh(&t->lock);
 	n = __tbl_for_each_del(t, id, crit);
-
-	DSR_WRITE_UNLOCK(&t->lock);
+	write_unlock_bh(&t->lock);
 
 	return n;
 }
 
 static inline int in_tbl(struct tbl *t, void *id, criteria_t crit)
 {
-	DSR_READ_LOCK(&t->lock);
+	read_lock_bh(&t->lock);
 	if (__tbl_find(t, id, crit)) {
-		DSR_READ_UNLOCK(&t->lock);
+		read_unlock_bh(&t->lock);
 		return 1;
 	}
-	DSR_READ_UNLOCK(&t->lock);
+	read_unlock_bh(&t->lock);
 	return 0;
 }
 
@@ -401,15 +356,15 @@ static inline void __tbl_flush(struct tbl *t, do_t at_flush)
 			at_flush(pos, NULL);
 
 		t->len--;
-		FREE(pos);
+		kfree(pos);
 	}
 }
 
 static inline void tbl_flush(struct tbl *t, do_t at_flush)
 {
-	DSR_WRITE_LOCK(&t->lock);
+	write_lock_bh(&t->lock);
 	__tbl_flush(t, at_flush);
-	DSR_WRITE_UNLOCK(&t->lock);
+	write_unlock_bh(&t->lock);
 }
 
 #endif				/* _TBL_H */

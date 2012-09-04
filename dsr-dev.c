@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 /* Copyright (C) Uppsala University
  *
  * This file is distributed under the terms of the GNU general Public
@@ -365,10 +366,11 @@ static void dsr_dev_uninit(struct net_device *dev)
 }
 
 /* fake multicast ability */
+/*
 static void dsr_dev_set_multicast_list(struct net_device *dev)
 {
 }
-
+*/
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,28)
 static const struct net_device_ops dsr_netdev_ops = {
 	.ndo_get_stats = dsr_dev_get_stats,
@@ -377,7 +379,7 @@ static const struct net_device_ops dsr_netdev_ops = {
 	.ndo_stop = dsr_dev_stop,
 	.ndo_start_xmit = dsr_dev_start_xmit,
 	.ndo_set_mac_address = dsr_dev_set_address,
-	.ndo_set_multicast_list = dsr_dev_set_multicast_list,
+	/* .ndo_set_multicast_list = dsr_dev_set_multicast_list, */
 };
 #endif
 
@@ -419,6 +421,7 @@ static void dsr_dev_setup(struct net_device *dev)
 #endif
 }
 
+#ifdef NOT_USED
 static char *pkt_type_str[] = {
 	"PACKET_HOST",
 	"PACKET_BROADCAST",
@@ -429,6 +432,7 @@ static char *pkt_type_str[] = {
 	"PACKET_FASTROUTE",
         NULL
 };
+#endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,14)
 static int dsr_dev_llrecv(struct sk_buff *skb,
@@ -680,9 +684,7 @@ int dsr_dev_init(char *ifname)
 
 	dsr_node_init(dnode, ifname);
 
-	if (ifname) {
-		memcpy(dnode->slave_ifname, ifname, IFNAMSIZ);
-	} else {
+	if (!ifname) {
 		struct net_device *dev;
 		int is_wireless = 0;
 		
@@ -697,7 +699,8 @@ int dsr_dev_init(char *ifname)
 				is_wireless = 1;
 #endif
 			if (is_wireless) {
-				memcpy(dnode->slave_ifname, dev->name, IFNAMSIZ);
+				memcpy(dnode->slave_ifname, 
+                                       dev->name, IFNAMSIZ);
 				
 				read_unlock(&dev_base_lock);
 				goto dev_found;
@@ -733,11 +736,11 @@ dev_found:
 	dev_hold(dsr_dev);
 
 	return 0;
-      cleanup_netdevice_notifier:
+ cleanup_netdevice_notifier:
 	unregister_netdevice_notifier(&netdev_notifier);
-      cleanup_netdev_register:
+ cleanup_netdev_register:
 	unregister_netdev(dsr_dev);
-      cleanup_netdev:
+ cleanup_netdev:
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 	free_netdev(dsr_dev);
 #else

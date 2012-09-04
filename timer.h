@@ -1,9 +1,10 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 /* Copyright (C) Uppsala University
  *
  * This file is distributed under the terms of the GNU general Public
  * License (GPL), see the file LICENSE
  *
- * Author: Erik Nordström, <erikn@it.uu.se>
+ * Author: Erik Nordström, <erik.nordstrom@gmail.com>
  */
 #ifndef _TIMER_H
 #define _TIMER_H

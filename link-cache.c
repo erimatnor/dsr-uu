@@ -1,9 +1,10 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 /* Copyright (C) Uppsala University
  *
  * This file is distributed under the terms of the GNU general Public
  * License (GPL), see the file LICENSE
  *
- * Author: Erik Nordström, <erikn@it.uu.se>
+ * Author: Erik Nordström, <erik.nordstrom@gmail.com>
  */
 #ifdef __KERNEL__
 #include <linux/proc_fs.h>
@@ -194,14 +195,14 @@ void NSCLASS lc_garbage_collect(unsigned long data)
 /* 	printf("#end\n"); */
 /* 	fflush(stdout); */
 
-	DSR_WRITE_LOCK(&LC.lock);
+	write_lock_bh(&LC.lock);
 
 	__tbl_do_for_each(&LC.links, &LC, crit_expire);
 
 	if (!__tbl_empty(&LC.links))
 		lc_garbage_collect_set();
 
-	DSR_WRITE_UNLOCK(&LC.lock);
+	write_unlock_bh(&LC.lock);
 }
 
 void NSCLASS lc_garbage_collect_set(void)
@@ -230,7 +231,7 @@ static inline struct lc_node *lc_node_create(struct in_addr addr)
 {
 	struct lc_node *n;
 
-	n = (struct lc_node *)MALLOC(sizeof(struct lc_node), GFP_ATOMIC);
+	n = (struct lc_node *)kmalloc(sizeof(struct lc_node), GFP_ATOMIC);
 
 	if (!n)
 		return NULL;
@@ -264,7 +265,7 @@ static int __lc_link_tbl_add(struct tbl *t, struct lc_node *src,
 	link = (struct lc_link *)__lc_link_find(t, src->addr, dst->addr);
 
 	if (!link) {
-		link = (struct lc_link *)MALLOC(sizeof(struct lc_link),
+		link = (struct lc_link *)kmalloc(sizeof(struct lc_link),
 						GFP_ATOMIC);
 
 		if (!link)
@@ -344,9 +345,9 @@ int NSCLASS lc_link_add(struct in_addr src, struct in_addr dst,
 {
 	int res;
 
-	DSR_WRITE_LOCK(&LC.lock);
+	write_lock_bh(&LC.lock);
 	res = __lc_link_add(src, dst, timeout, status, cost);
-	DSR_WRITE_UNLOCK(&LC.lock);
+	write_unlock_bh(&LC.lock);
 
 	return res;
 }
@@ -357,7 +358,7 @@ int NSCLASS lc_link_del(struct in_addr src, struct in_addr dst)
 	struct lc_link *link;
 	int res = 1;
 
-	DSR_WRITE_LOCK(&LC.lock);
+	write_lock_bh(&LC.lock);
 
 	link = __lc_link_find(&LC.links, src, dst);
 
@@ -379,7 +380,7 @@ int NSCLASS lc_link_del(struct in_addr src, struct in_addr dst)
 	__lc_link_del(&LC, link);
       out:
 	LC.src = NULL;
-	DSR_WRITE_UNLOCK(&LC.lock);
+	write_unlock_bh(&LC.lock);
 
 	return res;
 }
@@ -463,7 +464,7 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 	if (src.s_addr == dst.s_addr)
 		return NULL;
 
-	DSR_WRITE_LOCK(&LC.lock);
+	write_lock_bh(&LC.lock);
 
 /* 	if (!LC.src || LC.src->addr.s_addr != src.s_addr) */
 	__dijkstra(src);
@@ -486,7 +487,7 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 		int k = (dst_node->hops - 1);
 		int i = 0;
 
-		srt = (struct dsr_srt *)MALLOC(sizeof(struct dsr_srt) +
+		srt = (struct dsr_srt *)kmalloc(sizeof(struct dsr_srt) +
 					     (k * sizeof(struct in_addr)),
 					     GFP_ATOMIC);
 
@@ -534,12 +535,12 @@ struct dsr_srt *NSCLASS lc_srt_find(struct in_addr src, struct in_addr dst)
 		if ((i + 1) != (int)dst_node->hops) {
 			DEBUG("hop count ERROR i+1=%d hops=%d!!!\n", i + 1,
 			      dst_node->hops);
-			FREE(srt);
+			kfree(srt);
 			srt = NULL;
 		}
 	}
       out:
-	DSR_WRITE_UNLOCK(&LC.lock);
+	write_unlock_bh(&LC.lock);
 
 	return srt;
 }
@@ -557,7 +558,7 @@ lc_srt_add(struct dsr_srt *srt, usecs_t timeout, unsigned short flags)
 
 	addr1 = srt->src;
 
-	DSR_WRITE_LOCK(&LC.lock);
+	write_lock_bh(&LC.lock);
 
 	for (i = 0; i < n; i++) {
 		addr2 = srt->addrs[i];
@@ -581,7 +582,7 @@ lc_srt_add(struct dsr_srt *srt, usecs_t timeout, unsigned short flags)
 		links++;
 	}
 
-	DSR_WRITE_UNLOCK(&LC.lock);
+	write_unlock_bh(&LC.lock);
 
 	return links;
 }
@@ -593,7 +594,7 @@ int lc_srt_del(struct in_addr src, struct in_addr dst)
 
 void NSCLASS lc_flush(void)
 {
-	DSR_WRITE_LOCK(&LC.lock);
+        write_lock_bh(&LC.lock);
 #ifdef LC_TIMER
 #ifdef NS2
 	if (timer_pending(&lc_timer))
@@ -608,7 +609,7 @@ void NSCLASS lc_flush(void)
 
 	LC.src = NULL;
 
-	DSR_WRITE_UNLOCK(&LC.lock);
+	write_unlock_bh(&LC.lock);
 }
 
 #ifdef __KERNEL__
@@ -645,7 +646,7 @@ static int lc_print(struct lc_graph *LC, char *buf)
 
 	gettime(&now);
 
-	DSR_READ_LOCK(&LC->lock);
+	read_lock_bh(&LC->lock);
 
 	len += sprintf(buf, "# %-15s %-15s %-4s Timeout\n", "Src Addr", 
 		       "Dst Addr", "Cost");
@@ -674,7 +675,7 @@ static int lc_print(struct lc_graph *LC, char *buf)
 			       (unsigned long)n, (unsigned long)n->pred);
 	}
 
-	DSR_READ_UNLOCK(&LC->lock);
+	read_unlock_bh(&LC->lock);
 	return len;
 
 }
@@ -711,7 +712,7 @@ int __init NSCLASS lc_init(void)
 #ifdef __KERNEL__
 	struct proc_dir_entry *proc;
 
-	LC.lock = RW_LOCK_UNLOCKED;
+        rwlock_init(&LC.lock);
 #ifdef LC_TIMER
 	init_timer(&LC.timer);
 #endif

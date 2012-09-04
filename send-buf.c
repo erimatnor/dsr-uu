@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 /* Copyright (C) Uppsala University
  *
  * This file is distributed under the terms of the GNU general Public
@@ -82,7 +83,7 @@ void NSCLASS send_buf_timeout(unsigned long data)
 	int pkts;
 	struct timeval expires, now;
 /* 	char buf[2048]; */
-
+	
 	gettime(&now);
 
 /* 	send_buf_print(&send_buf, buf); */
@@ -92,21 +93,26 @@ void NSCLASS send_buf_timeout(unsigned long data)
 
 	DEBUG("%d packets garbage collected\n", pkts);
 
-	DSR_READ_LOCK(&send_buf.lock);
+	read_lock_bh(&send_buf.lock);
+	
 	/* Get first packet in maintenance buffer */
 	e = (struct send_buf_entry *)__tbl_find(&send_buf, NULL, crit_none);
 
 	if (!e) {
 		DEBUG("No packet to set timeout for\n");
-		DSR_READ_UNLOCK(&send_buf.lock);
+		read_unlock_bh(&send_buf.lock);
 		return;
 	}
 	expires = e->qtime;
 
 	timeval_add_usecs(&expires, ConfValToUsecs(SendBufferTimeout));
 
-	DEBUG("now=%s qtime=%s exp=%s\n", print_timeval(&now), print_timeval(&e->qtime), print_timeval(&expires));
-	DSR_READ_UNLOCK(&send_buf.lock);
+	DEBUG("now=%s qtime=%s exp=%s\n", 
+	      print_timeval(&now), 
+	      print_timeval(&e->qtime), 
+	      print_timeval(&expires));
+
+	read_unlock_bh(&send_buf.lock);
 
 	set_timer(&send_buf_timer, &expires);
 }
@@ -116,7 +122,7 @@ static struct send_buf_entry *send_buf_entry_create(struct dsr_pkt *dp,
 {
 	struct send_buf_entry *e;
 
-	e = (struct send_buf_entry *)MALLOC(sizeof(*e), GFP_ATOMIC);
+	e = (struct send_buf_entry *)kmalloc(sizeof(*e), GFP_ATOMIC);
 
 	if (!e)
 		return NULL;
@@ -133,10 +139,7 @@ int NSCLASS send_buf_enqueue_packet(struct dsr_pkt *dp, xmit_fct_t okfn)
 	struct send_buf_entry *e;
 	struct timeval expires;
 	int res, empty = 0;
-
-	if (tbl_empty(&send_buf))
-		empty = 1;
-
+	
 	e = send_buf_entry_create(dp, okfn);
 
 	if (!e)
@@ -144,27 +147,35 @@ int NSCLASS send_buf_enqueue_packet(struct dsr_pkt *dp, xmit_fct_t okfn)
 
 	DEBUG("enqueing packet to %s\n", print_ip(dp->dst));
 
-	res = tbl_add_tail(&send_buf, &e->l);
+	write_lock_bh(&send_buf.lock);
+	
+	if (tbl_empty(&send_buf))
+		empty = 1;
+
+	res = __tbl_add_tail(&send_buf, &e->l);
 
 	if (res < 0) {
 		struct send_buf_entry *f;
 
 		DEBUG("buffer full, removing first\n");
-		f = (struct send_buf_entry *)tbl_detach_first(&send_buf);
+		f = (struct send_buf_entry *)__tbl_detach_first(&send_buf);
 
 		if (f) {
 			dsr_pkt_free(f->dp);
-			FREE(f);
+			kfree(f);
 		}
 
 		res = tbl_add_tail(&send_buf, &e->l);
 
 		if (res < 0) {
 			DEBUG("Could not buffer packet\n");
-			FREE(e);
-			return -1;
+			kfree(e);
+			write_unlock_bh(&send_buf.lock);
+			return -ENOSPC;
 		}
 	}
+
+	write_unlock_bh(&send_buf.lock);
 
 	if (empty) {
 		gettime(&expires);
@@ -180,13 +191,15 @@ int NSCLASS send_buf_set_verdict(int verdict, struct in_addr dst)
 	struct send_buf_entry *e;
 	int pkts = 0;
 
+	write_lock_bh(&send_buf.lock);
+
 	switch (verdict) {
 	case SEND_BUF_DROP:
 
 		while ((e =
-			(struct send_buf_entry *)tbl_find_detach(&send_buf,
-								 &dst,
-								 crit_addr))) {
+			(struct send_buf_entry *)__tbl_find_detach(&send_buf,
+								   &dst,
+								   crit_addr))) {
 			/* Only send one ICMP message */
 #ifdef __KERNEL__
 			if (pkts == 0)
@@ -194,19 +207,19 @@ int NSCLASS send_buf_set_verdict(int verdict, struct in_addr dst)
 					  ICMP_HOST_UNREACH, 0);
 #endif
 			dsr_pkt_free(e->dp);
-			FREE(e);
+			kfree(e);
 			pkts++;
 		}
 		DEBUG("Dropped %d queued pkts for %s\n", pkts, print_ip(dst));
 		break;
 	case SEND_BUF_SEND:
 
-		while ((e =
-			(struct send_buf_entry *)tbl_find_detach(&send_buf,
-								 &dst,
-								 crit_addr))) {
-			DEBUG("Send packet\n");
-			/* Get source route */
+	  while ((e =
+		  (struct send_buf_entry *)__tbl_find_detach(&send_buf,
+							     &dst,
+							     crit_addr))) {
+	    DEBUG("Send packet\n");
+	    /* Get source route */
 			e->dp->srt = dsr_rtc_find(e->dp->src, e->dp->dst);
 
 			if (e->dp->srt) {
@@ -228,7 +241,7 @@ int NSCLASS send_buf_set_verdict(int verdict, struct in_addr dst)
 				dsr_pkt_free(e->dp);
 			}
 			pkts++;
-			FREE(e);
+			kfree(e);
 		}
 		DEBUG("Sent %d queued packets to %s\n", pkts, print_ip(dst));
 
@@ -236,6 +249,9 @@ int NSCLASS send_buf_set_verdict(int verdict, struct in_addr dst)
 /* 			DEBUG("No packets for dest %s\n", print_ip(dst)); */
 		break;
 	}
+
+	write_unlock_bh(&send_buf.lock);
+
 	return pkts;
 }
 
@@ -244,12 +260,14 @@ static inline int send_buf_flush(struct tbl *t)
 	struct send_buf_entry *e;
 	int pkts = 0;
 	/* Flush send buffer */
-	while ((e =
-		(struct send_buf_entry *)tbl_find_detach(t, NULL, crit_none))) {
+	write_lock_bh(&t->lock);
+	while ((e = (struct send_buf_entry *)
+		__tbl_find_detach(t, NULL, crit_none))) {
 		dsr_pkt_free(e->dp);
-		FREE(e);
+		kfree(e);
 		pkts++;
 	}
+	write_unlock_bh(&t->lock);
 	return pkts;
 }
 
@@ -264,7 +282,7 @@ static int send_buf_print(struct tbl *t, char *buffer)
 
 	len = sprintf(buffer, "# %-15s %-8s\n", "IPAddr", "Age (s)");
 
-	DSR_READ_LOCK(&t->lock);
+	read_lock_bh(&t->lock);
 
 	list_for_each(p, &t->head) {
 		struct send_buf_entry *e = (struct send_buf_entry *)p;
@@ -279,13 +297,14 @@ static int send_buf_print(struct tbl *t, char *buffer)
 		       "\nQueue length      : %u\n"
 		       "Queue max. length : %u\n", t->len, t->max_len);
 
-	DSR_READ_UNLOCK(&t->lock);
+	read_unlock_bh(&t->lock);
 
 	return len;
 }
 
 static int
-send_buf_get_info(char *buffer, char **start, off_t offset, int length, int *eof, void *data)
+send_buf_get_info(char *buffer, char **start, off_t offset, 
+		  int length, int *eof, void *data)
 {
 	int len;
 
@@ -311,7 +330,8 @@ int __init NSCLASS send_buf_init(void)
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,23))
 #define proc_net init_net.proc_net
 #endif
-	proc = create_proc_read_entry(SEND_BUF_PROC_FS_NAME, 0, proc_net, send_buf_get_info, NULL);
+	proc = create_proc_read_entry(SEND_BUF_PROC_FS_NAME, 0, 
+				      proc_net, send_buf_get_info, NULL);
 
 	if (!proc) {
 		printk(KERN_ERR "send_buf: failed to create proc entry\n");
@@ -323,7 +343,6 @@ int __init NSCLASS send_buf_init(void)
 #endif
 
 #endif
-
 	INIT_TBL(&send_buf, SEND_BUF_MAX_LEN);
 
 	init_timer(&send_buf_timer);

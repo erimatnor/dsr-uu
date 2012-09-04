@@ -50,37 +50,13 @@ NS_SRC_CPP = \
 RTC_SRC = \
 	link-cache.c
 
-DEFS=-DDEBUG 
-
-MODNAME=dsr
-RTC_TRG=linkcache
-
-
-ifneq (,$(findstring 2.6,$(KERNELRELEASE)))
-
-EXTRA_CFLAGS += -DKERNEL26 $(DEFS)
-
-obj-m += $(MODNAME).o 
-$(MODNAME)-objs := $(LINUX_SRC:%.c=%.o)
-
-obj-m += $(RTC_TRG).o
-$(RTC_TRG)-objs := $(RTC_SRC:%.c=%.o)
-
-clean-files := *~
-clean-dirs := .tmp_versions
-
-else
-
-export-objs := link-cache.o
-
-KOBJS := $(LINUX_SRC:%.c=%.o)
+DEFS=-DDEBUG
+CC=gcc
+CXX=g++
 
 KERNEL=$(shell uname -r)
 KERNEL_DIR=/lib/modules/$(KERNEL)/build
 KERNEL_INC=$(KERNEL_DIR)/include
-
-CC=gcc
-CXX=g++
 
 MIPS_CC=mipsel-linux-gcc
 MIPS_LD=mipsel-linux-ld
@@ -104,56 +80,24 @@ NS_TARGET=dsr-uu.o
 AR=ar
 AR_FLAGS=rc
 
-#######
-VERSION=$(shell if [ ! -d $(KERNEL_DIR) ]; then echo "No linux source found!!! Check your setup..."; exit; fi; grep ^VERSION $(KERNEL_DIR)/Makefile | cut -d' ' -f 3)
-PATCHLEVEL=$(shell grep ^PATCHLEVEL $(KERNEL_DIR)/Makefile | cut -d' ' -f 3)
-SUBLEVEL=$(shell grep ^SUBLEVEL $(KERNEL_DIR)/Makefile | cut -d' ' -f 3)
-#######
-
-KDEFS=-D__KERNEL__ -DMODULE $(DEFS) -DEXPORT_SYMTAB -DCONFIG_MODVERSIONS -DMODVERSIONS -include $(KERNEL_INC)/linux/modversions.h 
-
-KINC=-nostdinc $(shell $(CC) -print-search-dirs | sed -ne 's/install: \(.*\)/-I \1include/gp') -I$(KERNEL_INC)
-KCFLAGS=-Wall -fno-strict-aliasing -O2 $(KDEFS) $(KINC)
 MIPSDEFS=-mips2 -fno-pic -mno-abicalls -mlong-calls -G0 -msoft-float $(KDEFS)
 
-ifeq ($(PATCHLEVEL), 6)
-MODPREFIX=ko
-else
-MODPREFIX=o
-endif
-
-.PHONY: mips default depend clean ns clean-2.4 clean-2.6 indent
+.PHONY: mips default depend clean ns clean clean-kernel indent
 
 # Check for kernel version
-ifeq ($(PATCHLEVEL),6)
-default: $(MODNAME).ko $(RTC_TRG).ko TODO $(BASE_HDR)
-clean: clean-2.6
-else 
-# Assume kernel 2.4
-default: $(MODNAME).o $(RTC_TRG).o TODO $(BASE_HDR)
-clean: clean-2.4
-endif
+default: dsr.ko linkcache.ko TODO $(BASE_HDR)
+clean: clean-kernel
 
 mips:  
 	@echo "Compiling for MIPS"
 	$(MAKE) default CC=$(MIPS_CC) LD=$(MIPS_LD) KDEFS="$(MIPSDEFS)"
 
-$(MODNAME).ko: $(LINUX_SRC) $(BASE_HDR) Makefile
+dsr.ko: $(LINUX_SRC) $(BASE_HDR) Makefile
 	@echo "Compiling for $(PWD)"
-	$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) modules
+	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) modules
 
-$(RTC_TRG).ko: $(RTC_SRC) $(BASE_HDR) Makefile 
-	$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) modules
-
-$(KOBJS): %.o: %.c Makefile
-	@echo "Compiling for $(PWD)"
-	$(CC) $(KCFLAGS) -c -o $@ $<
-
-$(MODNAME).o: $(KOBJS)
-	$(LD) -r $^ -o $@
-
-$(RTC_TRG).o: $(RTC_SRC) Makefile
-	$(CC) $(KCFLAGS) -c -o $@ $<
+linkcache.ko: $(RTC_SRC) $(BASE_HDR) Makefile 
+	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) modules
 
 $(OBJS_NS_CPP): %-ns.o: %.cc Makefile
 	$(CXX) $(NS_CFLAGS) $(NS_INC) -c -o $@ $<
@@ -182,13 +126,10 @@ TAGS: *.c *.h
 indent:
 	indent -kr -i8 -ts8 -sob -l80 -ss -ncs *.c *.h
 
-clean-2.6:
+clean-kernel:
 	@if [ -d $(KERNEL_DIR) ]; then \
 		$(MAKE) -C $(KERNEL_DIR) SUBDIRS=$(PWD) clean; \
 	fi
-	rm -rf *~ *.o Makefile.bak TAGS TODO endian endian.h $(NS_TARGET)
-
-clean-2.4:
 	rm -rf *~ *.o Makefile.bak TAGS TODO endian endian.h $(NS_TARGET)
 
 clean-ns:
@@ -204,7 +145,6 @@ uninstall:
 	rm -rf /lib/modules/$(KERNEL)/dsr
 	/sbin/depmod -a
 
-endif
 # DO NOT DELETE
 
 dsr-module.o: dsr.h dsr-pkt.h timer.h dsr-dev.h dsr-io.h debug.h neigh.h

@@ -9,17 +9,16 @@
 #define _DEBUG_H
 
 #ifdef __KERNEL__
-#include <stdarg.h>
-#include <linux/types.h>
+#include <linux/kernel.h>
 #include <linux/string.h>
 #include <linux/ctype.h>
-#include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/if_ether.h>
 #include <linux/in.h>
 #include <linux/init.h>
 extern atomic_t num_pkts;
 #else
+#include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>

@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 /* Copyright (C) Uppsala University
  *
  * This file is distributed under the terms of the GNU general Public
@@ -5,7 +6,6 @@
  *
  * Author: Erik Nordström, <erikn@it.uu.se>
  */
-
 #include <linux/version.h>
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 #include <linux/config.h>
@@ -13,7 +13,6 @@
 #include <linux/poll.h>
 #include <linux/fs.h>
 #include <linux/init.h>
-#include <linux/spinlock.h>
 #include <linux/kernel.h>
 #include <linux/proc_fs.h>
 #include <linux/module.h>
@@ -23,6 +22,7 @@
 #include <asm/uaccess.h>
 #include <asm/io.h>
 
+#include "platform.h"
 #include "debug.h"
 #include "dsr.h"
 #include "timer.h"
@@ -33,7 +33,7 @@ atomic_t num_pkts = ATOMIC_INIT(0);
 #define DBG_LOG_BUF_LEN	(16384)
 //#define DBG_LOG_BUF_LEN (1 << CONFIG_LOG_BUF_SHIFT)
 
-static spinlock_t dbg_logbuf_lock = SPIN_LOCK_UNLOCKED;
+static spinlock_t dbg_logbuf_lock;
 
 static char __dbg_log_buf[DBG_LOG_BUF_LEN];
 static char *dbg_log_buf = __dbg_log_buf;
@@ -261,6 +261,8 @@ struct file_operations proc_dbg_operations = {
 int __init dbg_init(void)
 {
 	struct proc_dir_entry *entry;
+
+	spin_lock_init(&dbg_logbuf_lock);
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,23))
 #define proc_net init_net.proc_net

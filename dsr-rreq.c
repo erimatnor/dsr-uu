@@ -1,9 +1,10 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 /* Copyright (C) Uppsala University
  *
  * This file is distributed under the terms of the GNU general Public
  * License (GPL), see the file LICENSE
  *
- * Author: Erik Nordström, <erikn@it.uu.se>
+ * Author: Erik Nordström, <erik.nordstrom@gmail.com>
  */
 #ifdef __KERNEL__
 #include <linux/proc_fs.h>
@@ -112,8 +113,8 @@ static int rreq_tbl_print(struct tbl *t, char *buf)
 
 	gettime(&now);
 
-	DSR_READ_LOCK(&t->lock);
-
+	read_lock_bh(&t->lock);
+	
 	len +=
 	    sprintf(buf, "# %-15s %-6s %-8s %15s:%s\n", "IPAddr", "TTL", "Used",
 		    "TargetIPAddr", "ID");
@@ -146,7 +147,7 @@ static int rreq_tbl_print(struct tbl *t, char *buf)
 		}
 	}
 
-	DSR_READ_UNLOCK(&t->lock);
+	read_unlock_bh(&t->lock);
 	return len;
 
 }
@@ -170,7 +171,6 @@ void NSCLASS rreq_tbl_timeout(unsigned long data)
 
 		e->state = STATE_IDLE;
 
-/* 		DSR_WRITE_UNLOCK(&rreq_tbl); */
 		tbl_add_tail(&rreq_tbl, &e->l);
 		return;
 	}
@@ -207,8 +207,8 @@ struct rreq_tbl_entry *NSCLASS __rreq_tbl_entry_create(struct in_addr node_addr)
 {
 	struct rreq_tbl_entry *e;
 
-	e = (struct rreq_tbl_entry *)MALLOC(sizeof(struct rreq_tbl_entry),
-					    GFP_ATOMIC);
+	e = (struct rreq_tbl_entry *)kmalloc(sizeof(struct rreq_tbl_entry),
+                                             GFP_ATOMIC);
 
 	if (!e)
 		return NULL;
@@ -222,11 +222,11 @@ struct rreq_tbl_entry *NSCLASS __rreq_tbl_entry_create(struct in_addr node_addr)
 #ifdef NS2
 	e->timer = new DSRUUTimer(this, "RREQTblTimer");
 #else
-	e->timer = MALLOC(sizeof(DSRUUTimer), GFP_ATOMIC);
+	e->timer = kmalloc(sizeof(DSRUUTimer), GFP_ATOMIC);
 #endif
 
 	if (!e->timer) {
-		FREE(e);
+		kfree(e);
 		return NULL;
 	}
 
@@ -260,11 +260,11 @@ struct rreq_tbl_entry *NSCLASS __rreq_tbl_add(struct in_addr node_addr)
 #ifdef NS2
 		delete f->timer;
 #else
-		FREE(f->timer);
+		kfree(f->timer);
 #endif
 		tbl_flush(&f->rreq_id_tbl, NULL);
 
-		FREE(f);
+		kfree(f);
 	}
 	__tbl_add_tail(&rreq_tbl, &e->l);
 
@@ -279,7 +279,7 @@ rreq_tbl_add_id(struct in_addr initiator, struct in_addr target,
 	struct id_entry *id_e;
 	int res = 0;
 
-	DSR_WRITE_LOCK(&rreq_tbl.lock);
+	write_lock_bh(&rreq_tbl.lock);
 
 	e = (struct rreq_tbl_entry *)__tbl_find(&rreq_tbl, &initiator,
 						crit_addr);
@@ -302,7 +302,7 @@ rreq_tbl_add_id(struct in_addr initiator, struct in_addr target,
 	if (TBL_FULL(&e->rreq_id_tbl))
 		tbl_del_first(&e->rreq_id_tbl);
 
-	id_e = (struct id_entry *)MALLOC(sizeof(struct id_entry), GFP_ATOMIC);
+	id_e = (struct id_entry *)kmalloc(sizeof(struct id_entry), GFP_ATOMIC);
 
 	if (!id_e) {
 		res = -ENOMEM;
@@ -314,7 +314,7 @@ rreq_tbl_add_id(struct in_addr initiator, struct in_addr target,
 
 	tbl_add_tail(&e->rreq_id_tbl, &id_e->l);
       out:
-	DSR_WRITE_UNLOCK(&rreq_tbl.lock);
+	write_unlock_bh(&rreq_tbl.lock);
 
 	return 1;
 }
@@ -350,7 +350,7 @@ int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
 
 #define	TTL_START 1
 
-	DSR_WRITE_LOCK(&rreq_tbl.lock);
+	write_lock_bh(&rreq_tbl.lock);
 
 	e = (struct rreq_tbl_entry *)__tbl_find(&rreq_tbl, &target, crit_addr);
 
@@ -392,13 +392,13 @@ int NSCLASS dsr_rreq_route_discovery(struct in_addr target)
 
 	set_timer(e->timer, &expires);
 
-	DSR_WRITE_UNLOCK(&rreq_tbl.lock);
+	write_unlock_bh(&rreq_tbl.lock);
 
 	dsr_rreq_send(target, ttl);
 
 	return 1;
       out:
-	DSR_WRITE_UNLOCK(&rreq_tbl.lock);
+	write_unlock_bh(&rreq_tbl.lock);
 
 	return res;
 }
@@ -605,7 +605,7 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 
 		srt_cat = dsr_srt_concatenate(dp->srt, srt_rc);
 		
-		FREE(srt_rc);
+		kfree(srt_rc);
 
 		if (!srt_cat) {
 			DEBUG("Could not concatenate\n");
@@ -616,7 +616,7 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		
 		if (dsr_srt_check_duplicate(srt_cat) > 0) {
 			DEBUG("Duplicate address in source route!!!\n");
-			FREE(srt_cat);
+			kfree(srt_cat);
 			goto rreq_forward;				
 		}
 #ifdef NS2
@@ -629,7 +629,7 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		
 		action = DSR_PKT_NONE;	
 		
-		FREE(srt_cat);
+		kfree(srt_cat);
 	} else {
 
 	rreq_forward:	
@@ -658,7 +658,7 @@ int NSCLASS dsr_rreq_opt_recv(struct dsr_pkt *dp, struct dsr_rreq_opt *rreq_opt)
 		action = DSR_PKT_FORWARD_RREQ;
 	}
       out:
-	FREE(srt_rev);
+	kfree(srt_rev);
 	return action;
 }
 
@@ -713,7 +713,7 @@ void __exit NSCLASS rreq_tbl_cleanup(void)
 #ifdef NS2
 		delete e->timer;
 #else
-		FREE(e->timer);
+		kfree(e->timer);
 #endif
 		tbl_flush(&e->rreq_id_tbl, crit_none);
 	}

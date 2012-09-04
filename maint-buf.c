@@ -1,9 +1,10 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 /* Copyright (C) Uppsala University
  *
  * This file is distributed under the terms of the GNU general Public
  * License (GPL), see the file LICENSE
  *
- * Author: Erik Nordström, <erikn@it.uu.se>
+ * Author: Erik Nordström, <erik.nordstrom@gmail.com>
  */
 #ifdef __KERNEL__
 #include <linux/proc_fs.h>
@@ -33,7 +34,7 @@ TBL(maint_buf, MAINT_BUF_MAX_LEN);
 
 static DSRUUTimer ack_timer;
 
-#endif				/* NS2 */
+#endif /* NS2 */
 
 struct maint_entry {
 	list_t l;
@@ -155,8 +156,8 @@ static struct maint_entry *maint_entry_create(struct dsr_pkt *dp,
 {
 	struct maint_entry *m;
 
-	m = (struct maint_entry *)MALLOC(sizeof(struct maint_entry),
-					 GFP_ATOMIC);
+	m = (struct maint_entry *)kmalloc(sizeof(struct maint_entry),
+                                          GFP_ATOMIC);
 
 	if (!m)
 		return NULL;
@@ -176,7 +177,7 @@ static struct maint_entry *maint_entry_create(struct dsr_pkt *dp,
 	m->dp = dsr_pkt_alloc(skb_copy(dp->skb, GFP_ATOMIC));
 #endif
 	if (!m->dp) {
-		FREE(m);
+		kfree(m);
 		return NULL;
 	}
 	m->dp->nxt_hop = dp->nxt_hop;
@@ -194,7 +195,7 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 	
 	if (dp->srt) {
 		DEBUG("old internal source route exists\n");
-		FREE(dp->srt);
+		kfree(dp->srt);
 	}
 
 	alt_srt = dsr_rtc_find(my_addr(), dp->dst);
@@ -206,7 +207,7 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 	
 	if (!dp->srt_opt) {
 		DEBUG("No old source route\n");
-		FREE(alt_srt);
+		kfree(alt_srt);
 		return -1;
 	}
 
@@ -214,7 +215,7 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 			      (char *)dp->srt_opt->addrs);
 
 	if (!old_srt) {
-		FREE(alt_srt);
+		kfree(alt_srt);
 		return -1;
 	}
 
@@ -239,8 +240,8 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 		srt_to_me = dsr_srt_new_split(old_srt, my_addr());
 		
 		if (!srt_to_me) { 
-			FREE(alt_srt);
-			FREE(old_srt);
+			kfree(alt_srt);
+			kfree(old_srt);
 			return -1;
 		}
 		srt = dsr_srt_concatenate(srt_to_me, alt_srt);
@@ -250,11 +251,11 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 		DEBUG("old_srt: %s\n", print_srt(old_srt));
 		DEBUG("alt_srt: %s\n", print_srt(alt_srt));
 		
-		FREE(alt_srt);
-		FREE(srt_to_me);
+		kfree(alt_srt);
+		kfree(srt_to_me);
 	}
 
-	FREE(old_srt);
+	kfree(old_srt);
 		
 	if (!srt)
 		return -1;
@@ -263,7 +264,7 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 
 	if (dsr_srt_check_duplicate(srt)) {
 		DEBUG("Duplicate address in new source route, aborting salvage\n");
-		FREE(srt);
+		kfree(srt);
 		return -1;
 	}
 	
@@ -303,7 +304,7 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 		buf = dsr_pkt_alloc_opts(dp, new_opt_len);
 		
 		if (!buf) {
-			FREE(srt);
+			kfree(srt);
 			return -1;
 		}
 				
@@ -324,7 +325,7 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 		       old_opt + old_opt_len - 
 		       (old_srt_opt + old_srt_opt_len));
 
-		FREE(old_opt);	
+		kfree(old_opt);	
 		
 		/* Set new length in DSR header */
 		dp->dh.opth->p_len = htons(new_opt_len - DSR_OPT_HDR_LEN);
@@ -346,11 +347,9 @@ int NSCLASS maint_buf_salvage(struct dsr_pkt *dp)
 
 void NSCLASS maint_buf_timeout(unsigned long data)
 {
-	DSR_WRITE_LOCK(&maint_buf.lock);
-	
+        write_lock_bh(&maint_buf.lock);
 	_maint_buf_timeout(data);
-	
-	DSR_WRITE_UNLOCK(&maint_buf.lock);
+	write_unlock_bh(&maint_buf.lock);
 }
 
 void NSCLASS _maint_buf_timeout(unsigned long data)
@@ -412,7 +411,7 @@ void NSCLASS _maint_buf_timeout(unsigned long data)
 #endif
 					dsr_pkt_free(m2->dp);
 				}
-				FREE(m2);
+				kfree(m2);
 				n++;
 			}
 			DEBUG("Salvaged %d packets from maint_buf\n", n);
@@ -428,7 +427,7 @@ void NSCLASS _maint_buf_timeout(unsigned long data)
 			}			
 		}		
 		
-		FREE(m);
+		kfree(m);
 		goto out;
 	}
 
@@ -451,11 +450,11 @@ void NSCLASS _maint_buf_timeout(unsigned long data)
 
 void NSCLASS maint_buf_set_timeout(void)
 {
-	DSR_WRITE_LOCK(&maint_buf.lock);
+	write_lock_bh(&maint_buf.lock);
 	
 	_maint_buf_set_timeout();
 	
-	DSR_WRITE_UNLOCK(&maint_buf.lock);
+        write_unlock_bh(&maint_buf.lock);
 }
 
 void NSCLASS _maint_buf_set_timeout(void)
@@ -537,18 +536,19 @@ int NSCLASS maint_buf_add(struct dsr_pkt *dp)
 			dsr_ack_req_opt_add(dp, m->id);
 		}
 		
-		DSR_WRITE_LOCK(&maint_buf.lock);
+		write_lock_bh(&maint_buf.lock);
 
 		if (__tbl_add_tail(&maint_buf, &m->l) < 0) {
 			DEBUG("Buffer full - not buffering!\n");
 			dsr_pkt_free(m->dp);
-			FREE(m);
+			kfree(m);
+                        write_unlock_bh(&maint_buf.lock);
 			return -1;
 		}
 		
 		_maint_buf_set_timeout();
 
-		DSR_WRITE_UNLOCK(&maint_buf.lock);
+		write_unlock_bh(&maint_buf.lock);
 	       
 	} else {
 		DEBUG("Delaying ACK REQ for %s since_last=%ld limit=%ld\n",
@@ -570,7 +570,7 @@ int NSCLASS maint_buf_del_all(struct in_addr nxt_hop)
 	q.nxt_hop = &nxt_hop;
 	q.rtt = 0;
 
-	DSR_WRITE_LOCK(&maint_buf.lock);
+	write_lock_bh(&maint_buf.lock);
 	
 	if (timer_pending(&ack_timer))
 		del_timer_sync(&ack_timer);
@@ -579,9 +579,8 @@ int NSCLASS maint_buf_del_all(struct in_addr nxt_hop)
 
 	_maint_buf_set_timeout();
 
-	DSR_WRITE_UNLOCK(&maint_buf.lock);
-	
-	return n;
+	write_unlock_bh(&maint_buf.lock);
+        return n;
 }
 
 /* Remove packets for a next hop with a specific ID */
@@ -594,7 +593,7 @@ int NSCLASS maint_buf_del_all_id(struct in_addr nxt_hop, unsigned short id)
 	q.nxt_hop = &nxt_hop;
 	q.rtt = 0;
 
-	DSR_WRITE_LOCK(&maint_buf.lock);
+	write_lock_bh(&maint_buf.lock);
 
 	if (timer_pending(&ack_timer))
 		del_timer_sync(&ack_timer);
@@ -612,7 +611,7 @@ int NSCLASS maint_buf_del_all_id(struct in_addr nxt_hop, unsigned short id)
 
 	_maint_buf_set_timeout();
 
-	DSR_WRITE_UNLOCK(&maint_buf.lock);
+	write_unlock_bh(&maint_buf.lock);
 
 	return n;
 }
@@ -625,7 +624,7 @@ int NSCLASS maint_buf_del_addr(struct in_addr nxt_hop)
 	q.nxt_hop = &nxt_hop;
 	q.rtt = 0;
 
-	DSR_WRITE_LOCK(&maint_buf.lock);
+        write_lock_bh(&maint_buf.lock);
 
 	if (timer_pending(&ack_timer))
 		del_timer_sync(&ack_timer);
@@ -643,7 +642,7 @@ int NSCLASS maint_buf_del_addr(struct in_addr nxt_hop)
 
 	_maint_buf_set_timeout();
 
-	DSR_WRITE_UNLOCK(&maint_buf.lock);
+        write_unlock_bh(&maint_buf.lock);
 
 	return n;
 }
@@ -660,7 +659,7 @@ static int maint_buf_print(struct tbl *t, char *buffer)
 	len = sprintf(buffer, "# %-15s %-5s %-6s %-2s %-8s %-15s %-15s\n",
 		      "NeighAddr", "Rexmt", "Id", "AR", "RTO", "TxTime", "Expires");
 
-	DSR_READ_LOCK(&t->lock);
+	read_lock_bh(&t->lock);
 
 	list_for_each(p, &t->head) {
 		struct maint_entry *e = (struct maint_entry *)p;
@@ -679,7 +678,7 @@ static int maint_buf_print(struct tbl *t, char *buffer)
 		       "\nQueue length      : %u\n"
 		       "Queue max. length : %u\n", t->len, t->max_len);
 
-	DSR_READ_UNLOCK(&t->lock);
+	read_unlock_bh(&t->lock);
 
 	return len;
 }
@@ -735,7 +734,7 @@ void NSCLASS maint_buf_cleanup(void)
 {
 	struct maint_entry *m;
 
-	DSR_WRITE_LOCK(&maint_buf.lock);
+	write_lock_bh(&maint_buf.lock);
 
 	del_timer_sync(&ack_timer);
 
@@ -746,10 +745,10 @@ void NSCLASS maint_buf_cleanup(void)
 #endif
 		dsr_pkt_free(m->dp);
 
-		FREE(m);
+		kfree(m);
 	}
 
-	DSR_WRITE_UNLOCK(&maint_buf.lock);
+	write_unlock_bh(&maint_buf.lock);
 
 #ifdef __KERNEL__
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24))
